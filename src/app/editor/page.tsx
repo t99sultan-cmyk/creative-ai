@@ -48,6 +48,10 @@ export default function Home() {
   const [format, setFormat] = useState<Format>("9:16");
   const [isAnimated, setIsAnimated] = useState<boolean>(true);
   
+  // TODO: Fetch real user plan from DB/Clerk metadata
+  const userPlan = 'start'; // 'trial', 'start', 'creator', 'studio', 'business'
+  const currentCost = isAnimated ? (userPlan === 'trial' ? 2 : 4) : (userPlan === 'trial' ? 1 : 3);
+  
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);
   
@@ -669,7 +673,7 @@ export default function Home() {
                   Создать Креатив
                 </span>
                 <span className="text-[10px] uppercase font-bold opacity-80 flex items-center justify-center gap-1">
-                  (Спишется 1 ⚡)
+                  (Спишется {currentCost} ⚡)
                 </span>
               </span>
             )}
@@ -801,7 +805,7 @@ export default function Home() {
             )}
           </button>
           {!isLoading && prompt.trim() && mobileTab === 'controls' && (
-             <span className="absolute -top-1 -right-1 bg-hermes-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce ring-2 ring-white">1</span>
+             <span className="absolute -top-1 -right-1 bg-hermes-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce ring-2 ring-white">{currentCost}</span>
           )}
         </div>
 
