@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Sparkles, ArrowRight, Upload, Wand2, Download, CheckCircle2, Zap, Target, BarChart3, TrendingUp, Key, Gem, XCircle, ChevronDown } from "lucide-react";
+import { Sparkles, ArrowRight, Upload, Wand2, Download, CheckCircle2, Zap, Target, BarChart3, TrendingUp, Key, XCircle, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import { motion } from "framer-motion";
 
@@ -105,7 +105,7 @@ export default function LandingPage() {
             </Link>
           </motion.div>
           <motion.p variants={fadeUp} className="mt-4 text-xs text-neutral-400">
-            Свободный демо-доступ. Дарим <b className="text-neutral-600">10 💎 Искр</b>.
+            Свободный демо-доступ. Дарим <b className="text-neutral-600">17 ⚡ Пульсов</b>.
           </motion.p>
         </motion.div>
       </section>
@@ -245,7 +245,7 @@ export default function LandingPage() {
                   Пока конкуренты ждут ответа от агентства, вы создаете 20-30 вариаций креативов и запускаете их в сплит-тест (A/B тест). Больше тестов — ниже стоимость привлечения клиента.
                 </p>
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-hermes-50 border border-hermes-200 font-semibold text-hermes-700 mt-2 shadow-sm">
-                   1 Генерация = 1 Кредит (💎)
+                   1 Генерация = 1 Пульс (⚡)
                 </div>
               </motion.div>
             </div>
@@ -381,8 +381,8 @@ export default function LandingPage() {
           >
             <h2 className="text-3xl md:text-5xl font-bold mb-4">Цены без сюрпризов (в Тенге)</h2>
             <p className="text-neutral-500 text-lg max-w-2xl mx-auto">
-              Мы используем внутреннюю валюту — Искры 💎. <br />
-              <b>1 генерация дизайна или удаление фона = 1 Искра.</b> Вы платите ровно за тот объем, который нужен для запуска рекламы.
+              Мы используем внутреннюю валюту — Пульсы ⚡. <br />
+              <b>1 генерация дизайна или удаление фона = 1 Пульс.</b> Вы платите ровно за тот объем, который нужен для запуска рекламы.
             </p>
           </motion.div>
 
@@ -397,7 +397,7 @@ export default function LandingPage() {
             <motion.div variants={fadeUp} className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-2">
-                  <Gem className="w-5 h-5 text-neutral-400" />
+                  <Zap className="w-5 h-5 text-neutral-400" />
                   <h3 className="text-xl font-bold">Старт</h3>
                 </div>
                 <p className="text-neutral-500 text-sm h-10">Идеально для тестовых запусков рекламы.</p>
@@ -406,7 +406,7 @@ export default function LandingPage() {
                 </div>
                 <div className="py-3 px-4 bg-neutral-50 rounded-xl border border-neutral-100 flex items-center justify-between text-sm font-bold">
                   <span>Вы получаете:</span>
-                  <span className="text-hermes-600 flex items-center gap-1.5"><Gem className="w-4 h-4"/> 50 Искр</span>
+                  <span className="text-hermes-600 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 50 Пульсов</span>
                 </div>
               </div>
               <ul className="space-y-4 mb-8 flex-1">
@@ -435,7 +435,7 @@ export default function LandingPage() {
               </div>
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-2">
-                  <Gem className="w-5 h-5 text-hermes-400" />
+                  <Zap className="w-5 h-5 text-hermes-400" />
                   <h3 className="text-xl font-bold text-white">Студия</h3>
                 </div>
                 <p className="text-neutral-400 text-sm h-10">Оптимально для ежедневного запуска рекламных кампаний.</p>
@@ -444,7 +444,7 @@ export default function LandingPage() {
                 </div>
                 <div className="py-3 px-4 bg-neutral-800 rounded-xl border border-neutral-700 flex items-center justify-between text-sm font-bold text-white group-hover:bg-neutral-700 transition-colors">
                   <span>Вы получаете:</span>
-                  <span className="text-hermes-400 flex items-center gap-1.5"><Gem className="w-4 h-4"/> 400 Искр</span>
+                  <span className="text-hermes-400 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 400 Пульсов</span>
                 </div>
               </div>
               <ul className="space-y-4 mb-8 flex-1">
@@ -470,7 +470,7 @@ export default function LandingPage() {
             <motion.div variants={fadeUp} className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-2">
-                  <Gem className="w-5 h-5 text-neutral-400" />
+                  <Zap className="w-5 h-5 text-neutral-400" />
                   <h3 className="text-xl font-bold">Агентство Бизнес</h3>
                 </div>
                 <p className="text-neutral-500 text-sm h-10">Огромный объем для агентств перформанс-маркетинга.</p>
@@ -479,7 +479,7 @@ export default function LandingPage() {
                 </div>
                 <div className="py-3 px-4 bg-neutral-50 rounded-xl border border-neutral-100 flex items-center justify-between text-sm font-bold">
                   <span>Вы получаете:</span>
-                  <span className="text-hermes-600 flex items-center gap-1.5"><Gem className="w-4 h-4"/> 1200 Искр</span>
+                  <span className="text-hermes-600 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 1200 Пульсов</span>
                 </div>
               </div>
               <ul className="space-y-4 mb-8 flex-1">
