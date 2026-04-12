@@ -33,7 +33,7 @@ export default function LandingPage() {
   const fadeUp = {
     hidden: { opacity: 0, y: 30 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
-  };
+  } as any;
   
   const staggerContainer = {
     hidden: { opacity: 0 },
@@ -43,7 +43,7 @@ export default function LandingPage() {
         staggerChildren: 0.15
       }
     }
-  };
+  } as any;
 
   return (
     <main className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-hermes-200">
@@ -70,7 +70,7 @@ export default function LandingPage() {
               </button>
             </SignInButton>
           ) : (
-            <UserButton afterSignOutUrl="/" appearance={{ elements: { userButtonAvatarBox: "w-10 h-10 shadow-md" } }} />
+            <UserButton appearance={{ elements: { userButtonAvatarBox: "w-10 h-10 shadow-md" } }} />
           )}
           {!isSignedIn ? (
             <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
