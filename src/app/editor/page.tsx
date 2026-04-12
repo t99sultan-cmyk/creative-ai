@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap } from "lucide-react";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -426,8 +426,8 @@ export default function Home() {
           <div className="flex flex-col items-end cursor-pointer group" title="Пополнить баланс">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Баланс</span>
             <div className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 group-hover:bg-hermes-100 group-hover:border-hermes-300 transition-colors">
-              <span className="font-extrabold text-sm">10</span>
-              <span className="text-sm">💎</span>
+              <span className="font-extrabold text-sm">17</span>
+              <Zap className="w-4 h-4 fill-current" />
             </div>
           </div>
         </div>
@@ -651,7 +651,7 @@ export default function Home() {
                   Создать Креатив
                 </span>
                 <span className="text-[10px] uppercase font-bold opacity-80 flex items-center justify-center gap-1">
-                  (Спишется 1 💎)
+                  (Спишется 1 ⚡)
                 </span>
               </span>
             )}
