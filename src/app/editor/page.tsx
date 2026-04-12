@@ -5,6 +5,7 @@ import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maxi
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
+import { useUser } from "@clerk/nextjs";
 
 type Format = "1:1" | "9:16";
 
@@ -48,8 +49,9 @@ export default function Home() {
   const [format, setFormat] = useState<Format>("9:16");
   const [isAnimated, setIsAnimated] = useState<boolean>(true);
   
-  // TODO: Fetch real user plan from DB/Clerk metadata
-  const userPlan = 'start'; // 'trial', 'start', 'creator', 'studio', 'business'
+  // Real user plan from Clerk metadata (defaults to 'start' or 'trial' depending on business rules)
+  const { user } = useUser();
+  const userPlan = (user?.publicMetadata?.plan as string) || 'start'; 
   const currentCost = isAnimated ? (userPlan === 'trial' ? 2 : 4) : (userPlan === 'trial' ? 1 : 3);
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
