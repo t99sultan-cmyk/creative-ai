@@ -325,7 +325,7 @@ export default function LandingPage() {
               <motion.div 
                 key={idx}
                 variants={fadeUp}
-                className="rounded-3xl bg-neutral-50 overflow-hidden border border-neutral-100 p-8 flex flex-col h-full hover:shadow-xl hover:bg-white transition-all cursor-pointer group"
+                className="rounded-3xl bg-neutral-50 overflow-hidden border border-neutral-100 p-8 flex flex-col h-full hover:shadow-xl hover:bg-white transition-shadow cursor-pointer group"
               >
                 <div className={clsx("w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110", niche.bg, niche.text)}>
                   {niche.icon}
@@ -419,7 +419,7 @@ export default function LandingPage() {
             className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch max-w-7xl mx-auto"
           >
             {/* Start Plan */}
-            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
+            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full relative cursor-default">
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-5 h-5 text-neutral-400" />
@@ -450,7 +450,7 @@ export default function LandingPage() {
             </motion.div>
 
             {/* Creator Plan */}
-            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
+            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full relative cursor-default">
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-5 h-5 text-neutral-400" />
@@ -515,7 +515,7 @@ export default function LandingPage() {
             </motion.div>
 
             {/* Business Plan */}
-            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
+            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full relative cursor-default">
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-5 h-5 text-neutral-400" />
