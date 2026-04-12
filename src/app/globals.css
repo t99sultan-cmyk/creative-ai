@@ -25,6 +25,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   margin: 0;
+  overscroll-behavior-y: none;
   background-image: 
     linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);

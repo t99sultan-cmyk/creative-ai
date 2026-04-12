@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap } from "lucide-react";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -643,7 +643,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="p-6 border-t border-neutral-200/50 bg-white/50 backdrop-blur-sm z-20">
+        <div className="p-6 border-t border-neutral-200/50 bg-white/50 backdrop-blur-sm z-20 hidden md:block">
           <button
             onClick={handleGenerate}
             disabled={isLoading || isRemovingBg || !prompt.trim()}
@@ -762,15 +762,55 @@ export default function Home() {
         )}
       </section>
 
-      {/* Mobile Bottom Bar Navbar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-[70px] bg-white border-t border-neutral-200 z-[60] flex items-center justify-around px-4 safe-area-bottom pb-2">
-        <button onClick={() => setMobileTab('controls')} className={clsx("flex flex-col items-center gap-1 w-20 transition-colors", mobileTab === 'controls' ? "text-hermes-500" : "text-neutral-400 hover:text-neutral-600")}>
-          <Sparkles className="w-6 h-6" />
-          <span className="text-[11px] font-bold">Настройки</span>
+      {/* Mobile App Bottom Navigation (Glassmorphic) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-[85px] bg-white/90 backdrop-blur-xl border-t border-neutral-200/50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-[60] flex items-center justify-between px-6 safe-area-bottom pb-5 pt-2">
+        <button onClick={() => setMobileTab('controls')} className={clsx("flex flex-col items-center gap-1 w-16 transition-all", mobileTab === 'controls' ? "text-neutral-900" : "text-neutral-400 hover:text-neutral-600")}>
+          <div className={clsx("p-2 rounded-xl transition-all", mobileTab === 'controls' ? "bg-neutral-100" : "")}>
+             <Sparkles className="w-6 h-6" />
+          </div>
+          <span className="text-[10px] font-bold">Настройки</span>
         </button>
-        <button onClick={() => setMobileTab('canvas')} className={clsx("flex flex-col items-center gap-1 w-20 transition-colors", mobileTab === 'canvas' ? "text-hermes-500" : "text-neutral-400 hover:text-neutral-600")}>
-          <Frame className="w-6 h-6" />
-          <span className="text-[11px] font-bold">Холст {code && "🖼️"}</span>
+
+        {/* Central FAB Generate Button */}
+        <div className="relative -top-6">
+          <button
+            onClick={() => {
+              if (mobileTab === 'controls') {
+                 if (prompt.trim()) {
+                    handleGenerate();
+                    setMobileTab('canvas');
+                 }
+              } else {
+                 setMobileTab('controls');
+              }
+            }}
+            disabled={isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls')}
+            className={clsx(
+              "w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center text-white shadow-xl shadow-hermes-500/30 border-[5px] border-white transition-all duration-300",
+              isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls')
+                ? "bg-neutral-300 shadow-none hover:scale-100 cursor-not-allowed border-neutral-100"
+                : "bg-black hover:bg-hermes-500 hover:scale-105 active:scale-95 hover:border-hermes-50"
+            )}
+          >
+            {isLoading ? (
+               <Loader2 className="w-8 h-8 text-white animate-spin" />
+            ) : mobileTab === 'controls' ? (
+               <Zap className="w-8 h-8 text-white fill-white/20" />
+            ) : (
+               <Sparkles className="w-7 h-7 text-white" />
+            )}
+          </button>
+          {!isLoading && prompt.trim() && mobileTab === 'controls' && (
+             <span className="absolute -top-1 -right-1 bg-hermes-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce ring-2 ring-white">1</span>
+          )}
+        </div>
+
+        <button onClick={() => setMobileTab('canvas')} className={clsx("flex flex-col items-center gap-1 w-16 transition-all", mobileTab === 'canvas' ? "text-neutral-900" : "text-neutral-400 hover:text-neutral-600")}>
+          <div className={clsx("p-2 rounded-xl transition-all relative", mobileTab === 'canvas' ? "bg-neutral-100" : "")}>
+             <Frame className="w-6 h-6" />
+             {code && mobileTab !== 'canvas' && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-hermes-500 rounded-full border-2 border-white" />}
+          </div>
+          <span className="text-[10px] font-bold">Холст</span>
         </button>
       </div>
       

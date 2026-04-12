@@ -608,7 +608,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 bg-neutral-900 border-t border-neutral-800 text-neutral-500 text-sm">
+      <footer className="py-12 bg-neutral-900 border-t border-neutral-800 text-neutral-500 text-sm mb-[80px] md:mb-0">
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-hermes-500" />
@@ -624,6 +624,21 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Mobile Sticky CTA */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white/90 to-transparent z-50 safe-area-bottom pb-6">
+         {!isSignedIn ? (
+            <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
+               <button className="w-full bg-black text-white font-bold text-lg py-4 rounded-2xl shadow-xl shadow-black/20 flex items-center justify-center gap-2 transition-all active:scale-95">
+                  <Zap className="w-5 h-5 fill-white/20" /> Открыть приложение
+               </button>
+            </SignInButton>
+          ) : (
+            <Link href="/editor" className="w-full bg-black text-white font-bold text-lg py-4 rounded-2xl shadow-xl shadow-black/20 flex items-center justify-center gap-2 transition-all active:scale-95">
+               <Zap className="w-5 h-5 fill-white/20" /> Открыть в редакторе
+            </Link>
+          )}
+      </div>
     </main>
   );
 }
