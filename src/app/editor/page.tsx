@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors } from "lucide-react";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -62,6 +62,11 @@ export default function Home() {
   
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  const [mobileTab, setMobileTab] = useState<'controls' | 'canvas'>('controls');
+  const [feedback, setFeedback] = useState<'like'|'dislike'|null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeKey, setIframeKey] = useState(0);
@@ -252,6 +257,10 @@ export default function Home() {
       }
 
       setCode(data.code);
+      setMobileTab('canvas'); // Switch to canvas automatically on mobile
+      setFeedback(null);
+      setFeedbackComment("");
+      setFeedbackSubmitted(false);
     } catch (err: any) {
       if (err.name === 'AbortError') {
         setError("Превышено время ожидания (генерация заняла больше 90 секунд). Пожалуйста, попробуйте еще раз.");
@@ -262,6 +271,12 @@ export default function Home() {
       setIsLoading(false);
       setLoadingProgress(0);
     }
+  };
+
+  const submitFeedback = async () => {
+    // In a real app we would POST this to /api/feedback
+    // await fetch('/api/feedback', { method: 'POST', body: JSON.stringify({ codeId: ..., score: feedback==='like'?1:-1, comment: feedbackComment }) })
+    setFeedbackSubmitted(true);
   };
 
   const handleDownloadClick = async () => {
@@ -411,7 +426,10 @@ export default function Home() {
       )}
 
       {/* Sidebar Controls */}
-      <aside className="w-[420px] h-full shrink-0 glass-panel bg-white/80 flex flex-col z-10 relative shadow-xl border-r border-neutral-200">
+      <aside className={clsx(
+        "fixed md:static inset-0 pb-16 md:pb-0 w-full md:w-[420px] h-full shrink-0 glass-panel bg-white/80 flex-col z-40 md:z-10 relative shadow-xl border-r border-neutral-200 overflow-hidden",
+        mobileTab === 'controls' ? "flex" : "hidden md:flex"
+      )}>
         <div className="p-6 border-b border-neutral-200/50 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-hermes-500 flex items-center justify-center shadow-lg shadow-hermes-500/20">
@@ -423,13 +441,13 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="flex flex-col items-end cursor-pointer group" title="Пополнить баланс">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Баланс</span>
-            <div className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 group-hover:bg-hermes-100 group-hover:border-hermes-300 transition-colors">
-              <span className="font-extrabold text-sm">17</span>
-              <Zap className="w-4 h-4 fill-current" />
+            <div className="flex flex-col items-end cursor-pointer group" title="Пополнить баланс">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Баланс</span>
+              <div className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 group-hover:bg-hermes-100 group-hover:border-hermes-300 transition-colors">
+                <span className="font-extrabold text-sm">17</span>
+                <span className="text-sm">⚡</span>
+              </div>
             </div>
-          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
@@ -660,7 +678,10 @@ export default function Home() {
       </aside>
 
       {/* Main Canvas Area */}
-      <section className="flex-1 relative flex flex-col items-center justify-center p-8 bg-[#E5E5E5] custom-grid-pattern">
+      <section className={clsx(
+        "flex-1 relative flex-col items-center justify-center p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-hidden pt-16 md:pt-8 w-full",
+        mobileTab === 'canvas' ? "flex" : "hidden md:flex"
+      )}>
         
         {code && (
            <div className="absolute top-8 right-8 z-20 flex items-center gap-3">
@@ -709,11 +730,49 @@ export default function Home() {
             </div>
             <div className="text-center">
               <h3 className="text-2xl font-bold text-neutral-800 tracking-tight">Холст пуст</h3>
-              <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500">Заполните ТЗ в панели слева и нажмите сгенерировать. Мы создадим для вас идеальную картинку.</p>
+              <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500 text-center px-4">Заполните ТЗ в настройках слева и нажмите сгенерировать. Создадим для вас идеальную картинку.</p>
             </div>
           </div>
         )}
+
+        {/* AI Learning Loop Feedback UI */}
+        {code && !isRecording && (
+          <div className="absolute bottom-24 md:bottom-8 z-20 flex flex-col items-center gap-3 w-[90%] max-w-[340px] bg-white p-4 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-neutral-200">
+             {!feedbackSubmitted ? (
+                <div className="w-full flex justify-between items-center">
+                   <p className="text-xs font-bold text-neutral-800">Оцените результат:</p>
+                   <div className="flex gap-2">
+                     <button onClick={() => setFeedback('like')} className={clsx("p-2 rounded-full border transition-all", feedback === 'like' ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-neutral-200 text-neutral-400 hover:bg-neutral-50')}>👍</button>
+                     <button onClick={() => setFeedback('dislike')} className={clsx("p-2 rounded-full border transition-all", feedback === 'dislike' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-neutral-200 text-neutral-400 hover:bg-neutral-50')}>👎</button>
+                   </div>
+                </div>
+             ) : (
+                <p className="text-xs font-bold text-green-600 text-center w-full my-1">Обновляем нейросеть... Спасибо! ❤️</p>
+             )}
+             {feedback === 'dislike' && !feedbackSubmitted && (
+               <div className="w-full flex gap-2 animate-in fade-in slide-in-from-top-2">
+                 <input type="text" value={feedbackComment} onChange={e => setFeedbackComment(e.target.value)} placeholder="Что ИИ исправить в будущем?" className="flex-1 text-xs border border-neutral-200 rounded-lg px-3 py-2 outline-none focus:border-hermes-500" />
+                 <button onClick={submitFeedback} className="bg-neutral-900 hover:bg-hermes-500 transition-colors text-white px-3 py-2 text-xs rounded-lg font-bold">Ок</button>
+               </div>
+             )}
+             {feedback === 'like' && !feedbackSubmitted && (
+                <button onClick={submitFeedback} className="w-full mt-2 bg-neutral-900 hover:bg-hermes-500 transition-colors text-white px-3 py-2 text-xs rounded-lg font-bold">Отправить и обучить ИИ на этом</button>
+             )}
+          </div>
+        )}
       </section>
+
+      {/* Mobile Bottom Bar Navbar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-[70px] bg-white border-t border-neutral-200 z-[60] flex items-center justify-around px-4 safe-area-bottom pb-2">
+        <button onClick={() => setMobileTab('controls')} className={clsx("flex flex-col items-center gap-1 w-20 transition-colors", mobileTab === 'controls' ? "text-hermes-500" : "text-neutral-400 hover:text-neutral-600")}>
+          <Sparkles className="w-6 h-6" />
+          <span className="text-[11px] font-bold">Настройки</span>
+        </button>
+        <button onClick={() => setMobileTab('canvas')} className={clsx("flex flex-col items-center gap-1 w-20 transition-colors", mobileTab === 'canvas' ? "text-hermes-500" : "text-neutral-400 hover:text-neutral-600")}>
+          <Frame className="w-6 h-6" />
+          <span className="text-[11px] font-bold">Холст {code && "🖼️"}</span>
+        </button>
+      </div>
       
       {/* Background Dots Pattern Definition */}
       <style dangerouslySetInnerHTML={{__html: `

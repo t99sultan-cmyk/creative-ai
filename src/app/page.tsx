@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Sparkles, ArrowRight, Upload, Wand2, Download, CheckCircle2, Zap, Target, BarChart3, TrendingUp, Key, XCircle, ChevronDown } from "lucide-react";
+import { Sparkles, ArrowRight, Upload, Wand2, Download, CheckCircle2, Zap, Target, BarChart3, TrendingUp, Key, Gem, XCircle, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import { motion } from "framer-motion";
+import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 
 export default function LandingPage() {
+  const { isSignedIn } = useAuth();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   const faqs = [
@@ -30,7 +32,7 @@ export default function LandingPage() {
 
   const fadeUp = {
     hidden: { opacity: 0, y: 30 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" as const } }
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
   };
   
   const staggerContainer = {
@@ -61,12 +63,26 @@ export default function LandingPage() {
           <a href="#faq" className="hover:text-hermes-600 transition-colors">FAQ</a>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/login" className="text-sm font-bold border-2 border-neutral-200 text-neutral-800 px-5 py-2 rounded-xl hover:border-hermes-500 hover:text-hermes-600 transition-all">
-            Войти
-          </Link>
-          <Link href="/login" className="text-sm font-bold bg-neutral-900 text-white px-5 py-2.5 rounded-xl hover:bg-hermes-500 hover:shadow-lg hover:shadow-hermes-500/30 transition-all hidden sm:block">
-            Доступ в Редактор
-          </Link>
+          {!isSignedIn ? (
+            <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
+              <button className="text-sm font-bold border-2 border-neutral-200 text-neutral-800 px-5 py-2 rounded-xl hover:border-hermes-500 hover:text-hermes-600 transition-all">
+                Войти
+              </button>
+            </SignInButton>
+          ) : (
+            <UserButton afterSignOutUrl="/" appearance={{ elements: { userButtonAvatarBox: "w-10 h-10 shadow-md" } }} />
+          )}
+          {!isSignedIn ? (
+            <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
+              <button className="text-sm font-bold bg-neutral-900 text-white px-5 py-2.5 rounded-xl hover:bg-hermes-500 hover:shadow-lg hover:shadow-hermes-500/30 transition-all hidden sm:block">
+                Доступ в Редактор
+              </button>
+            </SignInButton>
+          ) : (
+            <Link href="/editor" className="text-sm font-bold bg-neutral-900 text-white px-5 py-2.5 rounded-xl hover:bg-hermes-500 hover:shadow-lg hover:shadow-hermes-500/30 transition-all hidden sm:block">
+              Доступ в Редактор
+            </Link>
+          )}
         </div>
       </nav>
 
@@ -99,13 +115,22 @@ export default function LandingPage() {
             Избавьтесь от долгих ожиданий и мучений с дизайнерами. Наш ИИ генерирует шикарные статичные баннеры и динамичные видеоролики для Meta, TikTok и Telegram в 1 клик.
           </motion.p>
           <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/login" className="group w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-hermes-500 hover:bg-hermes-600 text-white font-bold rounded-2xl text-lg transition-all shadow-xl shadow-hermes-500/20 hover:-translate-y-1">
-              <Zap className="w-5 h-5 fill-white" />
-              Сгенерировать креатив
-            </Link>
+            {!isSignedIn ? (
+              <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
+                <button className="group w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-hermes-500 hover:bg-hermes-600 text-white font-bold rounded-2xl text-lg transition-all shadow-xl shadow-hermes-500/20 hover:-translate-y-1">
+                  <Zap className="w-5 h-5 fill-white" />
+                  Сгенерировать креатив
+                </button>
+              </SignInButton>
+            ) : (
+              <Link href="/editor" className="group w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-hermes-500 hover:bg-hermes-600 text-white font-bold rounded-2xl text-lg transition-all shadow-xl shadow-hermes-500/20 hover:-translate-y-1">
+                <Zap className="w-5 h-5 fill-white" />
+                Сгенерировать креатив
+              </Link>
+            )}
           </motion.div>
           <motion.p variants={fadeUp} className="mt-4 text-xs text-neutral-400">
-            Свободный демо-доступ. Дарим <b className="text-neutral-600">17 ⚡ Пульсов</b>.
+            Свободный демо-доступ. Дарим <b className="text-neutral-600">17 ⚡ Пульсов</b> (Тест).
           </motion.p>
         </motion.div>
       </section>
@@ -244,8 +269,8 @@ export default function LandingPage() {
                 <p className="text-neutral-500 text-lg leading-relaxed">
                   Пока конкуренты ждут ответа от агентства, вы создаете 20-30 вариаций креативов и запускаете их в сплит-тест (A/B тест). Больше тестов — ниже стоимость привлечения клиента.
                 </p>
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-hermes-50 border border-hermes-200 font-semibold text-hermes-700 mt-2 shadow-sm">
-                   1 Генерация = 1 Пульс (⚡)
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-hermes-50 border border-hermes-200 font-semibold text-hermes-700 mt-2 shadow-sm text-sm">
+                   Статика: 3 Пульса (⚡) | Видео: 4 Пульса (⚡)
                 </div>
               </motion.div>
             </div>
@@ -335,10 +360,10 @@ export default function LandingPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="bg-neutral-800/50 rounded-3xl overflow-hidden border border-neutral-700/50 shadow-2xl backdrop-blur-xl"
+            className="bg-neutral-800/50 rounded-3xl overflow-hidden border border-neutral-700/50 shadow-xl backdrop-blur-xl"
           >
             <div className="grid grid-cols-3 border-b border-neutral-700/50 bg-neutral-800/80 p-6">
-              <div className="font-bold text-neutral-400 pl-4">Что мы сравниваем</div>
+              <div className="font-bold text-neutral-400 pl-4">Характеристика</div>
               <div className="font-bold text-center text-neutral-300">Классика (Дизайнер)</div>
               <div className="font-extrabold text-center text-hermes-400 flex items-center justify-center gap-2">
                 <Zap className="w-5 h-5" /> Creative AI
@@ -346,22 +371,22 @@ export default function LandingPage() {
             </div>
             <div className="divide-y divide-neutral-700/30">
               <div className="grid grid-cols-3 p-6 items-center hover:bg-neutral-800/40 transition-colors">
-                <div className="font-medium text-neutral-400 pl-4">Время создания креатива</div>
+                <div className="font-medium text-neutral-400 pl-4">Скорость работы</div>
                 <div className="text-center text-neutral-300 font-medium opacity-80">От 1 до 3 дней (с ТЗ)</div>
-                <div className="text-center text-white font-bold text-lg animate-pulse">Менее 99 секунд</div>
+                <div className="text-center text-white font-bold text-lg animate-pulse">Моментально (до 15 сек)</div>
               </div>
               <div className="grid grid-cols-3 p-6 items-center bg-neutral-800/20 hover:bg-neutral-800/60 transition-colors">
-                <div className="font-medium text-neutral-400 pl-4">Стоимость одной штуки</div>
-                <div className="text-center text-neutral-300 font-medium opacity-80">От 5 000 ₸</div>
-                <div className="text-center text-white font-bold text-lg">От 30 ₸ / генерация</div>
+                <div className="font-medium text-neutral-400 pl-4">Стоимость креатива</div>
+                <div className="text-center text-neutral-300 font-medium opacity-80">От 5 000 ₸ за штуку</div>
+                <div className="text-center text-white font-bold text-lg">От 79 ₸ (в 60 раз дешевле)</div>
               </div>
               <div className="grid grid-cols-3 p-6 items-center hover:bg-neutral-800/40 transition-colors">
-                <div className="font-medium text-neutral-400 pl-4">Внесение правок</div>
-                <div className="text-center text-neutral-300 font-medium opacity-80 flex flex-col items-center"><XCircle className="w-5 h-5 text-red-400/50 mb-1" /> Долго и платно</div>
-                <div className="text-center text-hermes-400 font-medium flex flex-col items-center"><CheckCircle2 className="w-6 h-6 mb-1" /> Моментально и в 1 клик</div>
+                <div className="font-medium text-neutral-400 pl-4">Тестирование новых гипотез</div>
+                <div className="text-center text-neutral-300 font-medium opacity-80 flex flex-col items-center"><XCircle className="w-5 h-5 text-red-400/50 mb-1" /> Дополнительная оплата и время</div>
+                <div className="text-center text-hermes-400 font-medium flex flex-col items-center"><CheckCircle2 className="w-6 h-6 mb-1" /> Бесконечные тесты в пару кликов</div>
               </div>
               <div className="grid grid-cols-3 p-6 items-center bg-neutral-800/20 hover:bg-neutral-800/60 transition-colors">
-                <div className="font-medium text-neutral-400 pl-4">Генерация видео-анимации (MP4)</div>
+                <div className="font-medium text-neutral-400 pl-4">Видео-анимация для таргета</div>
                 <div className="text-center text-neutral-300 font-medium opacity-80 flex justify-center"><XCircle className="w-5 h-5 text-red-400/50" /></div>
                 <div className="text-center text-hermes-400 font-medium flex justify-center"><CheckCircle2 className="w-6 h-6 drop-shadow-md" /></div>
               </div>
@@ -382,7 +407,7 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-5xl font-bold mb-4">Цены без сюрпризов (в Тенге)</h2>
             <p className="text-neutral-500 text-lg max-w-2xl mx-auto">
               Мы используем внутреннюю валюту — Пульсы ⚡. <br />
-              <b>1 генерация дизайна или удаление фона = 1 Пульс.</b> Вы платите ровно за тот объем, который нужен для запуска рекламы.
+              <b>1 статичный креатив = 3 Пульса, 1 анимированный = 4 Пульса.</b><br/>Вы можете тратить их в любом сочетании.
             </p>
           </motion.div>
 
@@ -391,114 +416,133 @@ export default function LandingPage() {
             whileInView="visible"
             viewport={{ once: true, margin: "-50px" }}
             variants={staggerContainer}
-            className="grid lg:grid-cols-3 gap-8 items-center max-w-5xl mx-auto"
+            className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch max-w-7xl mx-auto"
           >
-            {/* Starter Plan */}
-            <motion.div variants={fadeUp} className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
-              <div className="mb-8">
+            {/* Start Plan */}
+            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
+              <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-5 h-5 text-neutral-400" />
                   <h3 className="text-xl font-bold">Старт</h3>
                 </div>
-                <p className="text-neutral-500 text-sm h-10">Идеально для тестовых запусков рекламы.</p>
-                <div className="my-6">
-                  <span className="text-4xl font-extrabold text-neutral-900">2 000 ₸</span>
+                <p className="text-neutral-500 text-sm h-14">Тестовый запуск на 1–3 товара.</p>
+                <div className="my-4">
+                  <span className="text-3xl font-extrabold text-neutral-900">1 990 ₸</span>
                 </div>
-                <div className="py-3 px-4 bg-neutral-50 rounded-xl border border-neutral-100 flex items-center justify-between text-sm font-bold">
-                  <span>Вы получаете:</span>
-                  <span className="text-hermes-600 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 50 Пульсов</span>
+                <div className="py-2.5 px-3 bg-neutral-50 rounded-xl border border-neutral-100 flex items-center justify-between text-sm font-bold">
+                  <span>Баланс:</span>
+                  <span className="text-hermes-600 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 45 Пульсов</span>
                 </div>
               </div>
-              <ul className="space-y-4 mb-8 flex-1">
-                <li className="flex items-start gap-3 text-sm text-neutral-600">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  40 ₸ за один креатив
+              <ul className="space-y-3 mb-6 flex-1">
+                <li className="flex items-start gap-2 text-sm text-neutral-600">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>15 статичных</b>
                 </li>
-                <li className="flex items-start gap-3 text-sm text-neutral-600">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Доступ к статической генерации
+                <li className="flex items-start gap-2 text-sm text-neutral-600">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>11 анимированных</b>
                 </li>
-                <li className="flex items-start gap-3 text-sm text-neutral-600">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Стандартное качество (HD)
+                <li className="flex items-start gap-2 text-xs text-neutral-400 mt-2 bg-neutral-50 p-2 rounded-lg">
+                  ≈ 133 ₸ / статичный креатив
                 </li>
               </ul>
-              <Link href="/login" className="w-full py-3.5 px-4 border-2 border-neutral-200 hover:border-hermes-500 text-neutral-700 font-bold rounded-xl text-center transition-all bg-white hover:bg-neutral-50 hover:text-hermes-600">
-                Продолжить
-              </Link>
             </motion.div>
 
-            {/* Popular Plan */}
-            <motion.div variants={fadeUp} className="bg-neutral-900 p-8 rounded-3xl shadow-2xl shadow-hermes-500/30 flex flex-col h-full relative transform lg:scale-105 border-2 border-hermes-500 z-10 group hover:shadow-hermes-500/40 transition-shadow">
-              <div className="absolute top-0 right-6 -translate-y-1/2 bg-gradient-to-r from-hermes-400 to-[#d95e16] text-white px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase shadow-lg group-hover:animate-pulse">
-                Хит для таргетологов
+            {/* Creator Plan */}
+            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-5 h-5 text-neutral-400" />
+                  <h3 className="text-xl font-bold">Креатор</h3>
+                </div>
+                <p className="text-neutral-500 text-sm h-14">Небольшим магазинам и авторам.</p>
+                <div className="my-4">
+                  <span className="text-3xl font-extrabold text-neutral-900">4 980 ₸</span>
+                </div>
+                <div className="py-2.5 px-3 bg-neutral-50 rounded-xl border border-neutral-100 flex items-center justify-between text-sm font-bold">
+                  <span>Баланс:</span>
+                  <span className="text-hermes-600 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 126 Пульсов</span>
+                </div>
               </div>
-              <div className="mb-8">
+              <ul className="space-y-3 mb-6 flex-1">
+                <li className="flex items-start gap-2 text-sm text-neutral-600">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>42 статичных</b>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-neutral-600">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>31 анимированных</b>
+                </li>
+                <li className="flex items-start gap-2 text-xs text-neutral-400 mt-2 bg-neutral-50 p-2 rounded-lg">
+                  ≈ 119 ₸ / статичный креатив
+                </li>
+              </ul>
+            </motion.div>
+
+            {/* Studio Plan */}
+            <motion.div variants={fadeUp} className="bg-neutral-900 p-6 md:p-8 rounded-3xl shadow-2xl shadow-hermes-500/30 flex flex-col h-full relative transform lg:scale-105 border-2 border-hermes-500 z-10 group hover:shadow-hermes-500/40 transition-shadow">
+              <div className="absolute top-0 right-4 -translate-y-1/2 bg-gradient-to-r from-hermes-400 to-[#d95e16] text-white px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase shadow-lg group-hover:animate-pulse">
+                Самый выгодный
+              </div>
+              <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-5 h-5 text-hermes-400" />
                   <h3 className="text-xl font-bold text-white">Студия</h3>
                 </div>
-                <p className="text-neutral-400 text-sm h-10">Оптимально для ежедневного запуска рекламных кампаний.</p>
-                <div className="my-6 text-white bg-clip-text text-transparent bg-gradient-to-r from-white to-neutral-400">
-                  <span className="text-5xl font-extrabold">12 500 ₸</span>
+                <p className="text-neutral-400 text-sm h-14">Оптимально для ежедневного запуска рекламы.</p>
+                <div className="my-4 text-white bg-clip-text text-transparent bg-gradient-to-r from-white to-neutral-400">
+                  <span className="text-3xl font-extrabold">14 980 ₸</span>
                 </div>
-                <div className="py-3 px-4 bg-neutral-800 rounded-xl border border-neutral-700 flex items-center justify-between text-sm font-bold text-white group-hover:bg-neutral-700 transition-colors">
-                  <span>Вы получаете:</span>
-                  <span className="text-hermes-400 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 400 Пульсов</span>
+                <div className="py-2.5 px-3 bg-neutral-800 rounded-xl border border-neutral-700 flex items-center justify-between text-sm font-bold text-white group-hover:bg-neutral-700 transition-colors">
+                  <span>Баланс:</span>
+                  <span className="text-hermes-400 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 453 Пульса</span>
                 </div>
               </div>
-              <ul className="space-y-4 mb-8 flex-1">
-                <li className="flex items-start gap-3 text-sm text-neutral-200">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Всего 31 ₸ за генерацию!
+              <ul className="space-y-3 mb-6 flex-1">
+                <li className="flex items-start gap-2 text-sm text-neutral-200">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>151 статичного</b>
                 </li>
-                <li className="flex items-start gap-3 text-sm text-neutral-200">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Редактор Видео-анимации (MP4)
+                <li className="flex items-start gap-2 text-sm text-neutral-200">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>113 анимированных</b>
                 </li>
-                <li className="flex items-start gap-3 text-sm text-neutral-200">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Премиум качество (4K UPSCALE)
+                <li className="flex items-start gap-2 text-xs text-neutral-400 mt-2 bg-neutral-800 p-2 rounded-lg">
+                  ≈ 99 ₸ / статичный креатив
                 </li>
               </ul>
-              <Link href="/login" className="w-full py-4 px-4 bg-hermes-500 hover:bg-hermes-400 text-white shadow-lg shadow-hermes-500/20 font-bold rounded-xl text-center md:text-lg transition-all hover:scale-[1.03]">
-                Оформить пакет
-              </Link>
             </motion.div>
 
             {/* Business Plan */}
-            <motion.div variants={fadeUp} className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
-              <div className="mb-8">
+            <motion.div variants={fadeUp} className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative cursor-default">
+              <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-5 h-5 text-neutral-400" />
-                  <h3 className="text-xl font-bold">Агентство Бизнес</h3>
+                  <h3 className="text-xl font-bold">Бизнес</h3>
                 </div>
-                <p className="text-neutral-500 text-sm h-10">Огромный объем для агентств перформанс-маркетинга.</p>
-                <div className="my-6">
-                  <span className="text-4xl font-extrabold text-neutral-900">32 500 ₸</span>
+                <p className="text-neutral-500 text-sm h-14">Огромный объем для агентств перформанс-маркетинга.</p>
+                <div className="my-4">
+                  <span className="text-3xl font-extrabold text-neutral-900">49 980 ₸</span>
                 </div>
-                <div className="py-3 px-4 bg-neutral-50 rounded-xl border border-neutral-100 flex items-center justify-between text-sm font-bold">
-                  <span>Вы получаете:</span>
-                  <span className="text-hermes-600 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 1200 Пульсов</span>
+                <div className="py-2.5 px-3 bg-neutral-50 rounded-xl border border-neutral-100 flex items-center justify-between text-sm font-bold">
+                  <span>Баланс:</span>
+                  <span className="text-hermes-600 flex items-center gap-1.5"><Zap className="w-4 h-4"/> 1 899 Пульсов</span>
                 </div>
               </div>
-              <ul className="space-y-4 mb-8 flex-1">
-                <li className="flex items-start gap-3 text-sm text-neutral-600">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Меньше 27 ₸ за генерацию
+              <ul className="space-y-3 mb-6 flex-1">
+                <li className="flex items-start gap-2 text-sm text-neutral-600">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>633 статичных</b>
                 </li>
-                <li className="flex items-start gap-3 text-sm text-neutral-600">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Высший приоритет рендеринга
+                <li className="flex items-start gap-2 text-sm text-neutral-600">
+                  <CheckCircle2 className="w-4 h-4 text-hermes-500 shrink-0 mt-0.5" />
+                  До <b>474 анимированных</b>
                 </li>
-                <li className="flex items-start gap-3 text-sm text-neutral-600">
-                  <CheckCircle2 className="w-5 h-5 text-hermes-500 shrink-0" />
-                  Поддержка 24/7 в Telegram
+                <li className="flex items-start gap-2 text-xs text-neutral-400 mt-2 bg-neutral-50 p-2 rounded-lg">
+                  ≈ 79 ₸ / статичный креатив
                 </li>
               </ul>
-              <Link href="/login" className="w-full py-3.5 px-4 border-2 border-neutral-200 hover:border-hermes-500 text-neutral-700 font-bold rounded-xl text-center transition-all bg-white hover:bg-neutral-50 hover:text-hermes-600">
-                Купить сейчас
-              </Link>
             </motion.div>
           </motion.div>
           
