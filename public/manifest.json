@@ -1,0 +1,16 @@
+{
+  "name": "Creative AI Ads",
+  "short_name": "Creative AI",
+  "description": "Моментальная генерация рекламных креативов.",
+  "start_url": "/editor",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/globe.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
