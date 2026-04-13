@@ -440,9 +440,9 @@ export default function LandingPage() {
                  <div className={clsx("mt-auto p-4 rounded-xl", plan.isPro ? "bg-white/5" : "bg-neutral-50")}>
                    <p className="text-[10px] uppercase font-bold text-neutral-500 mb-3 text-center">Этого хватит на:</p>
                    <ul className="space-y-3">
-                     <li className="flex items-center gap-3 text-sm"><ImageIcon className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/3)}</b> статики</li>
+                     <li className="flex items-center gap-3 text-sm"><ImageIcon className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/3)}</b> статичных креативов</li>
                      <li className="flex items-center justify-center text-[10px] font-bold text-neutral-400 relative"><span className="bg-neutral-400 w-full h-[1px] absolute opacity-20"></span><span className={clsx("relative px-2", plan.isPro ? "bg-neutral-900" : "bg-neutral-50")}>ЛИБО</span></li>
-                     <li className="flex items-center gap-3 text-sm"><Play className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/4)}</b> видео (9:16)</li>
+                     <li className="flex items-center gap-3 text-sm"><Play className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/4)}</b> анимированных креативов</li>
                    </ul>
                  </div>
               </div>

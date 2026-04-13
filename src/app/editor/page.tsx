@@ -829,6 +829,11 @@ export default function Home() {
           {error && (
             <div className="p-4 bg-red-50 text-red-600 text-sm rounded-xl border-2 border-red-100 font-medium leading-relaxed">
               {error}
+              {error.includes("Пожалуйста, пополните счет") && (
+                 <a href="/#pricing" className="block mt-3 text-center bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm">
+                    🚀 Перейти к Пакетам
+                 </a>
+              )}
             </div>
           )}
         </div>
