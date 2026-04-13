@@ -119,7 +119,7 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) throw new Error("GEMINI_API_KEY is missing");
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent?key=${geminiApiKey}`, {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${geminiApiKey}`, {
        method: "POST",
        headers: { "Content-Type": "application/json" },
        body: JSON.stringify({
