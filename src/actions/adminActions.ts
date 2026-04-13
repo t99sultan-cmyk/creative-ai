@@ -95,6 +95,20 @@ export async function createPromoCode(impulses: number) {
   }
 }
 
+export async function deletePromoCode(code: string) {
+  if (!(await isAdmin())) {
+    return { success: false, error: "Access Denied" };
+  }
+
+  try {
+    await db.delete(promoCodes).where(eq(promoCodes.code, code));
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error deleting promo:", e);
+    return { success: false, error: e.message };
+  }
+}
+
 export async function updateUserImpulses(userId: string, newBalance: number) {
   if (!(await isAdmin())) {
     return { success: false, error: "Access Denied" };

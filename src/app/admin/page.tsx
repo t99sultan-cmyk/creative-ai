@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminDashboardData, createPromoCode, updateUserImpulses, getUserHistory } from "@/actions/adminActions";
+import { getAdminDashboardData, createPromoCode, updateUserImpulses, getUserHistory, deletePromoCode } from "@/actions/adminActions";
 import { useRouter } from "next/navigation";
-import { CopyIcon, CheckCircleIcon, Edit2Icon, HistoryIcon, XIcon, CheckIcon } from "lucide-react";
+import { CopyIcon, CheckCircleIcon, Edit2Icon, HistoryIcon, XIcon, CheckIcon, TrashIcon } from "lucide-react";
 
 function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => void, onViewHistory: (userId: string) => void }) {
   const [editing, setEditing] = useState(false);
@@ -132,6 +132,22 @@ export default function AdminPage() {
     setGenerating(false);
   };
 
+  const handleDeletePromo = async (code: string) => {
+    if (!confirm("Удалить этот промокод навсегда?")) return;
+    
+    // Optimistic UI update
+    setData((prev: any) => ({
+      ...prev,
+      activePromos: prev.activePromos.filter((p: any) => p.code !== code)
+    }));
+
+    const res = await deletePromoCode(code);
+    if (!res.success) {
+      alert("Ошибка удаления: " + res.error);
+      init(); // Revert back if failed
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedCode(text);
@@ -143,7 +159,7 @@ export default function AdminPage() {
     setLoadingHistory(true);
     const res = await getUserHistory(userId);
     if (res.success) {
-       setUserHistory(res.history);
+       setUserHistory(res.history || []);
     } else {
        alert("Ошибка загрузки истории");
     }
@@ -233,12 +249,21 @@ export default function AdminPage() {
                   <div key={promo.code} className="flex flex-col bg-neutral-50 border border-neutral-200 rounded-xl p-3">
                     <div className="flex justify-between items-center mb-1">
                       <span className="font-mono font-bold text-[10px] bg-white px-2 py-1 rounded shadow-sm break-all">{promo.code}</span>
-                      <button 
-                        onClick={() => copyToClipboard(promo.code)}
-                        className="text-neutral-400 hover:text-orange-500 transition-colors shrink-0 ml-2"
-                      >
-                        {copiedCode === promo.code ? <CheckCircleIcon className="w-4 h-4 text-green-500" /> : <CopyIcon className="w-4 h-4" />}
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <button 
+                          onClick={() => copyToClipboard(promo.code)}
+                          className="text-neutral-400 hover:text-orange-500 transition-colors p-1"
+                        >
+                          {copiedCode === promo.code ? <CheckCircleIcon className="w-4 h-4 text-green-500" /> : <CopyIcon className="w-4 h-4" />}
+                        </button>
+                        <button 
+                          onClick={() => handleDeletePromo(promo.code)}
+                          className="text-neutral-400 hover:text-red-500 transition-colors p-1"
+                          title="Удалить код"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <div className="text-xs text-neutral-500">Баланс: {promo.impulses} ⚡</div>
                   </div>
