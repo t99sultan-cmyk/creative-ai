@@ -1,15 +1,28 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/db';
-import { creatives } from '@/db/schema';
+import { creatives, users } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(request: Request) {
   try {
+    const { userId } = auth();
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Не авторизован" }), { status: 401 });
+    }
+
     const { prompt, format, isAnimated, referenceImagesBase64, productImagesBase64 } = await request.json();
-    
     const hasProducts = productImagesBase64 && productImagesBase64.length > 0;
+    const cost = isAnimated ? 4 : 3;
+
+    // Check user balance
+    const userRecords = await db.select({ impulses: users.impulses }).from(users).where(eq(users.id, userId));
+    const currentImpulses = userRecords[0]?.impulses || 0;
+    if (currentImpulses < cost) {
+       return new Response(JSON.stringify({ error: "Недостаточно импульсов на балансе. Пожалуйста, пополните счет." }), { status: 400 });
+    }
 
     // Improved System instruction for elite Generative UI generation
     const systemPrompt = `You are an absolute elite, award-winning Frontend Developer & UI/UX Designer.
@@ -31,10 +44,11 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
   "STRICT BAN ON ANIMATION: The user requested a STATIC image. DO NOT use any CSS animations, transitions, or GSAP. The output must be a perfectly static scene."}
 7. Images & Products (CRITICAL FOR SUCCESS): 
    - "Reference Images": strictly for layout, color, and vibe inspiration. DO NOT link to them.
+   - 🔴 LAW OF THE REFERENCE: You MUST strictly interpret the visual tone and color scheme of the reference image! If the reference is a "Light/White" design, you MUST generate a light background and dark text. If it is "Dark/Neon", you MUST generate a dark background. Do not guess!
    - "Product Images": you MUST visually integrate these EXACT cut-out images into the final banner code (if provided).
    - CREATIVE LAYOUT (OVERLAYS ALLOWED): You CAN and SHOULD use highly creative typography positioning! Text can elegantly overlap product images. Feel free to use \`absolute\` positioning, severe negative margins, and overlapping elements to create deep 3D compositing. However, if text overlaps an image, you MUST ensure it remains 100% readable by applying heavy text shadows, glows, or background gradients behind the text. TEXT MUST ALWAYS BE ON TOP (use high z-index)! Do not let images hide text!
    - TYPOGRAPHY & LONG WORDS: NEVER break or chop words in the middle! Do NOT use \`break-words\` or \`break-all\`. To prevent long words from overflowing horizontally, use smaller dynamic typography (\`text-2xl\` or \`text-3xl\`), use \`text-balance\`, and add generous side padding. Headings must fit naturally.
-   - CRITICAL SIZING & BOUNDS: Your generated HTML structure MUST NOT OVERFLOW. Use exactly \`h-screen w-[100vw] overflow-hidden flex flex-col\` on the main container. Ensure the bottom is physically visible.
+   - 🔴 LAW OF THE ASPECT RATIO: Your generated HTML structure MUST NOT OVERFLOW. Use exactly \`h-screen w-[100vw] overflow-hidden flex flex-col\` on the main container. If format is "1:1", you must ignore any conflicting hints in the user prompt and ALWAYS output a perfect square. Ensure the bottom is physically visible.
    ${format === '9:16' 
    ? `- VIRAL REELS/STORIES STRUCTURE (CRITICAL 9:16): 
      1. THE HOOK (TOP): Place a punchy 3-4 word title (AIDA formula) at the very TOP to break banner blindness. It MUST be an Instagram-style pill (e.g., \`bg-black/80 backdrop-blur rounded-full px-5 py-2 text-white border border-white/20\`). You MUST include a CSS-animated emoji (e.g., smoothly bouncing 🔥, 🚀).
@@ -117,21 +131,25 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
       });
     }
 
-    // Save to History Bank
-    const { userId } = auth();
+    // Deduct Balance and Save to History Bank
+    const creativeId = crypto.randomUUID();
     if (userId) {
+      await db.update(users)
+        .set({ impulses: currentImpulses - cost })
+        .where(eq(users.id, userId));
+
       await db.insert(creatives).values({
-        id: crypto.randomUUID(),
+        id: creativeId,
         userId,
         prompt,
         format,
-        cost: isAnimated ? 4 : 3,
+        cost,
         htmlCode: code,
       });
     }
 
     return new Response(
-      JSON.stringify({ code }),
+      JSON.stringify({ code, creativeId }),
       {
         status: 200,
         headers: { "Content-Type": "application/json" },

@@ -86,6 +86,7 @@ export default function Home() {
   const [promoCode, setPromoCode] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [promoSuccess, setPromoSuccess] = useState("");
+  const [activeCreativeId, setActiveCreativeId] = useState<string | null>(null);
   
   // History
   const [historyItems, setHistoryItems] = useState<any[]>([]);
@@ -320,6 +321,9 @@ export default function Home() {
 
       // Automatically load the FIRST generated variation into the main canvas
       setCode(results[0].code);
+      if (results[0].creativeId) {
+        setActiveCreativeId(results[0].creativeId);
+      }
 
       // Update History Bank
       const hist = await getUserCreatives();
@@ -346,9 +350,22 @@ export default function Home() {
   };
 
   const submitFeedback = async () => {
-    // In a real app we would POST this to /api/feedback
-    // await fetch('/api/feedback', { method: 'POST', body: JSON.stringify({ codeId: ..., score: feedback==='like'?1:-1, comment: feedbackComment }) })
-    setFeedbackSubmitted(true);
+    if (!activeCreativeId) return;
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creativeId: activeCreativeId,
+          score: feedback === 'like' ? 1 : -1,
+          comment: feedbackComment
+        })
+      });
+      setFeedbackSubmitted(true);
+    } catch (e) {
+      console.error(e);
+      setFeedbackSubmitted(true);
+    }
   };
 
   const handleDownloadClick = async () => {
@@ -480,7 +497,7 @@ export default function Home() {
                    {historyItems.length === 0 ? (
                       <div className="col-span-full py-20 text-center text-neutral-400 font-bold">Вы пока не создали ни одного креатива.</div>
                    ) : historyItems.map((item: any, idx: number) => (
-                      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group hover:shadow-md transition-all cursor-pointer" onClick={() => { setCode(item.htmlCode); setShowHistory(false); setMobileTab('canvas'); }}>
+                      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group hover:shadow-md transition-all cursor-pointer" onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setShowHistory(false); setMobileTab('canvas'); }}>
                          <div className="flex-1 relative aspect-[9/16] bg-neutral-100 pointer-events-none overflow-hidden">
                              <iframe 
                                srcDoc={item.htmlCode}
