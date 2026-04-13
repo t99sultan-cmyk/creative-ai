@@ -52,49 +52,32 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
 2. Single File: All HTML, CSS (<style>), and JS (<script>) must be in one file.
 3. Libraries: 
    - ALWAYS include Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>.
-   - ALWAYS use modern Google Fonts via CDN. Include them in the <head>.
-   - Use FontAwesome or GSAP via CDN if needed.
+   - ALWAYS use modern Google Fonts via CDN.
+   - Use GSAP for animations if isAnimated is true.
 4. STRICT BAN ON SOCIAL MEDIA UI:
-   - You are generating the ACTUAL BANNER/CREATIVE graphic, NOT a mock-up of an Instagram post.
-   - DO NOT include fake Instagram elements like "Fit_studio", user avatars, "Подробнее" buttons, like/comment buttons, or any social media UI frames. The result MUST be pure promotional banner content.
-5. Colors & Layout: Adapt to the prompt. Give it deep modern aesthetics, smooth shadows, professional typography. Target aspect ratio is ${format}. The main wrapper MUST take up 100vh and 100vw seamlessly.
-6. ${isAnimated ? 
-  "ANIMATION REQUIRED: The user requested an ANIMATED creative. Use robust CSS keyframes or GSAP to make the text and elements fly in, slide, or scale beautifully." : 
-  "STRICT BAN ON ANIMATION: The user requested a STATIC image. DO NOT use any CSS animations, transitions, or GSAP. The output must be a perfectly static scene."}
-7. Images & Products (CRITICAL FOR SUCCESS): 
-   - "Reference Images": strictly for layout, color, and vibe inspiration. DO NOT link to them.
-   - 🔴 LAW OF THE REFERENCE: You MUST strictly interpret the visual tone and color scheme of the reference image! If the reference is a "Light/White" design, you MUST generate a light background and dark text. If it is "Dark/Neon", you MUST generate a dark background. Do not guess!
-   - "Product Images": you MUST visually integrate these EXACT cut-out images into the final banner code (if provided).
-   - CREATIVE LAYOUT (NO OVERLAPS): You MUST use Flexbox (\`flex flex-col gap-4\`) or CSS Grid for the main layout to ensure elements naturally push each other down. NEVER use \`absolute\` positioning for text blocks unless it is a small badge. ALL text blocks must have their own structural space in the flex container so they NEVER overlap "слово на слово".
-   - TYPOGRAPHY & SAFE ZONES: Ensure huge headings use \`text-balance\` and \`break-words\` safely. Keep text safely away from the absolute edges by using generous padding (\`p-6\` or \`p-8\`) on the main container. Ensure high contrast against the background so it's always 100% readable.
-   - 🔴 LAW OF THE ASPECT RATIO: Your generated HTML structure MUST NOT OVERFLOW. Use exactly \`h-screen w-[100vw] overflow-hidden flex flex-col\` on the main container. If format is "1:1", you must ignore any conflicting hints in the user prompt and ALWAYS output a perfect square. Ensure the bottom is physically visible.
-   ${format === '9:16' 
-   ? `- VIRAL REELS/STORIES STRUCTURE (CRITICAL 9:16): 
-     1. THE HOOK (TOP): Place a punchy 3-4 word title (AIDA formula) at the very TOP to break banner blindness. It MUST be an Instagram-style pill (e.g., \`bg-black/80 backdrop-blur rounded-full px-5 py-2 text-white border border-white/20\`). You MUST include a CSS-animated emoji (e.g., smoothly bouncing 🔥, 🚀).
-     2. THE CENTER: Leave the center of the screen mostly empty so the PERSON/PRODUCT image can stand out clearly.
-     3. THE CAPTIONS (BOTTOM): Place descriptions/subtitles in the BOTTOM THIRD. They MUST be in ALL CAPS. Emulate the "Captions" or "CapCut" app style: ultra-bold text, heavy drop-shadows (\`drop-shadow-2xl\`). 
-   `
-   : `- FEED AD (1:1 SQUARE) STRUCTURE:
-     1. SQUARE LAYOUT: Since the width and height are equal, use a strong Grid or Flex layout. You can place the product on the right and text on the left, OR use a bold center composition.
-     2. THE HOOK: Make the main heading massive and highly visible. You MUST include a CSS-animated emoji.
-     3. READABILITY: Ensure the text block has a beautiful dark underlay or heavy text-shadows so it's readable over any background.
-   `}
-   
-   - DYNAMIC TEXT HIGHLIGHTS & ANIMATIONS (CRITICAL FOR ALL):
-     1. YELLOW HIGHLIGHTS: Regardless of the format, you MUST highlight several key power words (5-7 words max) in a bright YELLOW color (\`text-yellow-400\`) in the main headings/captions.
-     2. WORD-BY-WORD ANIMATION: If 'isAnimated' is true, text MUST NOT fade in all at once. Animate captions WORD-BY-WORD or line-by-line appearing smoothly (e.g. using CSS animation delays on \`<span style="animation-delay: ...s">\`), so the viewer reads them naturally.
-   
-   ${hasProducts 
-     ? `- IMAGE PLACEMENT & FRAMING (CRITICAL): If the design has A LOT of text (bullet points, long descriptions), DO NOT use the product/person image as a full-screen background! It will get completely buried under text cards and look terrible. Instead, give the image its own dedicated structural space: place it inside a sleek rounded frame (\`rounded-2xl\`, \`shadow-2xl\`), a stylish circular avatar, or a distinct top/bottom block so it proudly stands out alongside the text!
-   - DYNAMIC SCALING: You can scale images gracefully (e.g. \`scale-110\`) and use \`object-cover\`, \`object-top\` to crop beautifully. BUT DO NOT use excessive scaling that pushes the image out of bounds. All animations must settle perfectly on-screen.
-   - HOW TO USE PRODUCTS: Since you cannot output binary data, you MUST use placeholders for the \`src\` attributes. Use the EXACT strings: \`PRODUCT_IMG_0\` for the first product, \`PRODUCT_IMG_1\` for the second. 
-   - Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="h-64 w-auto object-contain drop-shadow-2xl">\`
-   - IF YOU FAIL TO ADD \`PRODUCT_IMG_0\`, THE PRODUCT WILL NOT APPEAR.`
-     : `- NO PRODUCTS PROVIDED: The user did NOT upload any product images. DO NOT create any empty image blocks, placeholders, or <img> tags for products. Focus 100% of the layout on beautiful typography, background shapes, gradients, and text content.`
-   }`;
+   - Generate the ACTUAL promotional banner. DO NOT include fake Instagram UI (no comments, no avatars).
+
+5. BEAUTIFUL LAYOUT & HIGH CONTRAST (CRITICAL):
+   - You have FULL CREATIVE FREEDOM to make it look stunning, just like you would on Gemini Canvas.
+   - 🔴 PREVENT TEXT OVERLAP: Never let text overlap in a way that makes it unreadable. Use Flexbox or Grid properly. Give elements breathing room and gaps. If you use absolute positioning for floating elements, ensure they do not cover the main text.
+   - You MUST ensure very high contrast. If the background is dark (refer to the Reference Image mood), use white/bright text. If light, use dark text. Use text-shadows or gradients to make text pop!
+   - Ensure the outer container is strictly bounded: \`h-screen w-[100vw] overflow-hidden\`.
+
+6. FORMAT SPECIFICS:
+   - The user requested aspect ratio: ${format}.
+   - If 9:16: Make it vertical like a story. Keep the hook/title at the top, center empty for visuals/product, and heavily stylized captions at the bottom.
+   - If 1:1: Make it a perfect square.
+
+7. ANIMATIONS (${isAnimated ? 'ON' : 'OFF'}):
+   - ${isAnimated ? 'You MUST animate the typography and elements beautifully using CSS keyframes or GSAP.' : 'NO animations. Output must be perfectly static.'}
+
+8. HIGHLIGHTS & PRODUCT INTEGRATION:
+   - Highlight 3-5 power words in a vibrant color (like text-yellow-400 or a gradient).
+   ${hasProducts ? `- PRODUCT IMAGES: You MUST visually integrate these EXACT cut-out images. Use placeholders \`PRODUCT_IMG_0\`, \`PRODUCT_IMG_1\`. Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="...">\`` : '- NO PRODUCTS PROVIDED. Focus 100% on beautiful typography and background.'}
+`;
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-1.5-pro",
       systemInstruction: systemPrompt,
     });
 
