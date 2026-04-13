@@ -4,6 +4,8 @@ import { db } from '@/db';
 import { creatives, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
+export const maxDuration = 60; // Allow Vercel functions to run up to 60s
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(request: Request) {
@@ -63,8 +65,8 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - "Reference Images": strictly for layout, color, and vibe inspiration. DO NOT link to them.
    - 🔴 LAW OF THE REFERENCE: You MUST strictly interpret the visual tone and color scheme of the reference image! If the reference is a "Light/White" design, you MUST generate a light background and dark text. If it is "Dark/Neon", you MUST generate a dark background. Do not guess!
    - "Product Images": you MUST visually integrate these EXACT cut-out images into the final banner code (if provided).
-   - CREATIVE LAYOUT (OVERLAYS ALLOWED): You CAN and SHOULD use highly creative typography positioning! Text can elegantly overlap product images. Feel free to use \`absolute\` positioning, severe negative margins, and overlapping elements to create deep 3D compositing. However, if text overlaps an image, you MUST ensure it remains 100% readable by applying heavy text shadows, glows, or background gradients behind the text. TEXT MUST ALWAYS BE ON TOP (use high z-index)! Do not let images hide text!
-   - TYPOGRAPHY & LONG WORDS: NEVER break or chop words in the middle! Do NOT use \`break-words\` or \`break-all\`. To prevent long words from overflowing horizontally, use smaller dynamic typography (\`text-2xl\` or \`text-3xl\`), use \`text-balance\`, and add generous side padding. Headings must fit naturally.
+   - CREATIVE LAYOUT (NO OVERLAPS): You MUST use Flexbox (\`flex flex-col gap-4\`) or CSS Grid for the main layout to ensure elements naturally push each other down. NEVER use \`absolute\` positioning for text blocks unless it is a small badge. ALL text blocks must have their own structural space in the flex container so they NEVER overlap "слово на слово".
+   - TYPOGRAPHY & SAFE ZONES: Ensure huge headings use \`text-balance\` and \`break-words\` safely. Keep text safely away from the absolute edges by using generous padding (\`p-6\` or \`p-8\`) on the main container. Ensure high contrast against the background so it's always 100% readable.
    - 🔴 LAW OF THE ASPECT RATIO: Your generated HTML structure MUST NOT OVERFLOW. Use exactly \`h-screen w-[100vw] overflow-hidden flex flex-col\` on the main container. If format is "1:1", you must ignore any conflicting hints in the user prompt and ALWAYS output a perfect square. Ensure the bottom is physically visible.
    ${format === '9:16' 
    ? `- VIRAL REELS/STORIES STRUCTURE (CRITICAL 9:16): 
