@@ -14,7 +14,7 @@ function CheckoutContent() {
   const { isSignedIn } = useAuth();
   
   // Replace these with real links once the user provides them
-  const KASPI_PAY_LINK = "https://kaspi.kz/pay/placeholder"; // Placeholder Kaspi link
+  const KASPI_PAY_LINK = "https://pay.kaspi.kz/pay/7esn3yim"; 
   const WHATSAPP_LINK = "https://wa.me/77770000000?text=Здравствуйте!%20Я%20оплатил%20пакет%20" + plan + " в AICreative.kz.%20Моя%20квитанция:";
 
   return (

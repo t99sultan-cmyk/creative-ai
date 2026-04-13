@@ -9,6 +9,7 @@ import { useUser } from "@clerk/nextjs";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
 import { getUserCreatives } from "@/actions/getUserCreatives";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Format = "1:1" | "9:16";
 
