@@ -74,3 +74,48 @@ export async function createPromoCode(impulses: number) {
     return { success: false, error: e.message };
   }
 }
+
+export async function updateUserImpulses(userId: string, newBalance: number) {
+  if (!(await isAdmin())) {
+    return { success: false, error: "Access Denied" };
+  }
+
+  try {
+    await db.update(users)
+      .set({ impulses: newBalance })
+      .where(eq(users.id, userId));
+      
+    // Create lazily if they somehow don't exist yet but appear in some UI
+    const existingUser = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!existingUser) {
+        await db.insert(users).values({
+            id: userId,
+            email: "unknown/lazy-created@aicreative.kz",
+            impulses: newBalance
+        });
+    }
+
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error updating user balances:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function getUserHistory(userId: string) {
+  if (!(await isAdmin())) {
+    return { success: false, error: "Access Denied" };
+  }
+
+  try {
+    const history = await db.select()
+      .from(creatives)
+      .where(eq(creatives.userId, userId))
+      .orderBy(desc(creatives.createdAt));
+
+    return { success: true, history };
+  } catch (e: any) {
+    console.error("Error fetching user history:", e);
+    return { success: false, error: e.message };
+  }
+}
