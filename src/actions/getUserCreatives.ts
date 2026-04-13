@@ -7,7 +7,7 @@ import { eq, desc } from 'drizzle-orm';
 
 export async function getUserCreatives() {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return { success: false, error: 'Unauthorized' };
     }
