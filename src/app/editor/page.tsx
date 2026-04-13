@@ -589,8 +589,8 @@ export default function Home() {
                   <span className="font-extrabold text-sm">{impulses === null ? "..." : impulses}</span>
                   <span className="text-sm">⚡</span>
                 </button>
-                <Link href="/checkout" className="px-3 py-1.5 bg-[#f14635] text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center shadow-sm whitespace-nowrap">
-                  {impulses !== null && impulses >= 10 ? 'Докупить' : 'Купить'}
+                <Link href="/#pricing" className="px-3 py-1.5 bg-[#f14635] text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center shadow-sm whitespace-nowrap">
+                  {impulses !== null && impulses >= 10 ? 'Докупить (Kaspi)' : 'Купить (Kaspi)'}
                 </Link>
               </div>
               <button 
