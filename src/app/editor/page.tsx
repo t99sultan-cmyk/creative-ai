@@ -49,10 +49,8 @@ export default function Home() {
   const [format, setFormat] = useState<Format>("9:16");
   const [isAnimated, setIsAnimated] = useState<boolean>(true);
   
-  // Real user plan from Clerk metadata (defaults to 'start' or 'trial' depending on business rules)
-  const { user } = useUser();
-  const userPlan = (user?.publicMetadata?.plan as string) || 'start'; 
-  const currentCost = isAnimated ? (userPlan === 'trial' ? 2 : 4) : (userPlan === 'trial' ? 1 : 3);
+  // All plans (including trial) cost 3 for static and 4 for animated
+  const currentCost = isAnimated ? 4 : 3;
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);

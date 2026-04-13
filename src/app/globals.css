@@ -1,5 +1,5 @@
-@import "tailwindcss";
-
+@import "tailwindcss" source(none);
+@source "./";
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-hermes-50: #fff4ed;

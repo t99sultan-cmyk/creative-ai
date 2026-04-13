@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Exclude AI agent markdown files to prevent Tailwind CSS Crash
+src/lib/agents/**/*.md
+.windsurfrules
+*.md
