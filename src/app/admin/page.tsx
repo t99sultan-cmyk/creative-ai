@@ -67,9 +67,14 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
          {u.promosUsed?.length > 0 ? (
             <div className="flex flex-col gap-1">
                {u.promosUsed.map((p: any) => (
-                  <span key={p.code} title={p.code} className="bg-orange-50 text-orange-600 px-2 py-1 rounded truncate max-w-[120px] inline-block font-mono">
-                     +{p.impulses}⚡
-                  </span>
+                  <div key={p.code} className="flex flex-col mb-1 border-b border-neutral-100 last:border-0 pb-1 last:pb-0">
+                    <span title={p.code} className="text-orange-600 font-bold mb-0.5">
+                       +{p.impulses}⚡ Пакет
+                    </span>
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                       {p.usedAt ? new Date(p.usedAt).toLocaleString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Неизвестно'}
+                    </span>
+                  </div>
                ))}
             </div>
          ) : (
