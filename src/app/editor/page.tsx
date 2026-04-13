@@ -8,6 +8,7 @@ import { toPng } from "html-to-image";
 import { useUser } from "@clerk/nextjs";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
+import { getUserCreatives } from "@/actions/getUserCreatives";
 
 type Format = "1:1" | "9:16";
 
@@ -50,9 +51,10 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [format, setFormat] = useState<Format>("9:16");
   const [isAnimated, setIsAnimated] = useState<boolean>(true);
+  const [generationsCount, setGenerationsCount] = useState<number>(1);
   
-  // All plans (including trial) cost 3 for static and 4 for animated
-  const currentCost = isAnimated ? 4 : 3;
+  // All plans cost 3 for static and 4 for animated
+  const currentCost = (isAnimated ? 4 : 3) * generationsCount;
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);
@@ -83,17 +85,25 @@ export default function Home() {
   const [promoCode, setPromoCode] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [promoSuccess, setPromoSuccess] = useState("");
+  
+  // History
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const isUIBlocked = isLoading || isRemovingBg || isRecording || isRedeeming;
 
   useEffect(() => {
-    async function fetchBalance() {
+    async function fetchData() {
       const data = await getUserBalance();
       if (data.success) {
         setImpulses(data.impulses);
       }
+      const hist = await getUserCreatives();
+      if (hist.success && hist.creatives) {
+        setHistoryItems(hist.creatives);
+      }
     }
-    fetchBalance();
+    fetchData();
   }, []);
 
   const handleRedeem = async () => {
@@ -178,6 +188,7 @@ export default function Home() {
     setPendingProductFile(null);
     setCode(null);
     setError("");
+    setGenerationsCount(1);
     localStorage.removeItem("creative_prompt");
   };
 
@@ -274,44 +285,56 @@ export default function Home() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds timeout
+      const timeoutId = setTimeout(() => controller.abort(), 95000); // 95 seconds timeout
 
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          format,
-          isAnimated,
-          referenceImagesBase64: refBase64,
-          productImagesBase64: prodBase64,
-        }),
-        signal: controller.signal
+      const promises = Array.from({ length: generationsCount }).map((_, idx) => {
+        const iterationPrompt = prompt + (idx > 0 && generationsCount > 1 ? ` [Сделай альтернативную версию ${idx + 1}, немного поменяй композицию]` : '');
+        return fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: iterationPrompt,
+            format,
+            isAnimated,
+            referenceImagesBase64: refBase64,
+            productImagesBase64: prodBase64,
+          }),
+          signal: controller.signal
+        }).then(r => r.json());
       });
-      
+
+      const results = await Promise.all(promises);
       clearTimeout(timeoutId);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Intercept nasty 503 google errors
-        const errMsg = data.error?.toLowerCase() || "";
-        if (response.status === 503 || errMsg.includes("503") || errMsg.includes("high demand")) {
-          throw new Error("Сервера Google (Gemini) сейчас перегружены из-за высокого спроса! Пожалуйста, подождите 15-30 секунд и нажмите кнопку заново.");
-        }
-        throw new Error(data.error || "Произошла ошибка при генерации");
+      // Check for errors in ANY response
+      for (const data of results) {
+         if (data.error) {
+           const errMsg = data.error.toLowerCase();
+           if (errMsg.includes("503") || errMsg.includes("high demand")) {
+             throw new Error("Сервера перегружены из-за высокого спроса! Подождите 15-30 секунд.");
+           }
+           throw new Error(data.error);
+         }
       }
 
-      setCode(data.code);
-      setMobileTab('canvas'); // Switch to canvas automatically on mobile
+      // Automatically load the FIRST generated variation into the main canvas
+      setCode(results[0].code);
+
+      // Update History Bank
+      const hist = await getUserCreatives();
+      if (hist.success && hist.creatives) {
+        setHistoryItems(hist.creatives);
+      }
+
+      setMobileTab('canvas');
       setFeedback(null);
       setFeedbackComment("");
       setFeedbackSubmitted(false);
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        setError("Превышено время ожидания (генерация заняла больше 90 секунд). Пожалуйста, попробуйте еще раз.");
+        setError("Превышено время ожидания. Код мог успеть сохраниться в вашем Банке Креативов.");
+        const hist = await getUserCreatives();
+        if (hist.success && hist.creatives) setHistoryItems(hist.creatives);
       } else {
         setError(err.message);
       }
@@ -441,6 +464,46 @@ export default function Home() {
   return (
     <main className="flex h-screen w-full overflow-hidden text-neutral-900 font-sans relative z-0">
       
+      {/* HISTORY BANK OVERLAY */}
+      <AnimatePresence>
+        {showHistory && (
+          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm p-4 md:p-10 flex flex-col items-center">
+             <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl flex flex-col h-full overflow-hidden">
+                <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
+                   <h2 className="text-2xl font-black flex items-center gap-2"><PackageSearch className="w-6 h-6 text-hermes-500" /> Мой Банк Креативов ({historyItems.length})</h2>
+                   <button onClick={() => setShowHistory(false)} className="w-10 h-10 rounded-full flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 transition-colors">
+                     <X className="w-5 h-5 text-neutral-600" />
+                   </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 bg-neutral-50 grid grid-cols-2 md:grid-cols-4 gap-6 content-start">
+                   {historyItems.length === 0 ? (
+                      <div className="col-span-full py-20 text-center text-neutral-400 font-bold">Вы пока не создали ни одного креатива.</div>
+                   ) : historyItems.map((item: any, idx: number) => (
+                      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group hover:shadow-md transition-all cursor-pointer" onClick={() => { setCode(item.htmlCode); setShowHistory(false); setMobileTab('canvas'); }}>
+                         <div className="flex-1 relative aspect-[9/16] bg-neutral-100 pointer-events-none overflow-hidden">
+                             <iframe 
+                               srcDoc={item.htmlCode}
+                               className="absolute top-0 left-0"
+                               style={{ width: '400px', height: item.format === '9:16' ? '711px' : '400px', transform: 'scale(0.33) origin-top-left', transformOrigin: 'top left' }}
+                               sandbox="allow-same-origin"
+                             />
+                             <div className="absolute inset-0 bg-transparent" />
+                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity font-bold">
+                               <Sparkles className="w-6 h-6 mb-2" /> Загрузить
+                             </div>
+                         </div>
+                         <div className="p-3 border-t border-neutral-100 bg-white">
+                            <p className="text-[10px] font-bold text-neutral-400 mb-1">{new Date(item.createdAt).toLocaleString('ru-RU', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} • {item.format}</p>
+                            <p className="text-xs font-bold text-neutral-800 line-clamp-2 leading-tight">{item.prompt}</p>
+                         </div>
+                      </div>
+                   ))}
+                </div>
+             </div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Video Recording Modal */}
       {showVideoInstruction && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -498,6 +561,12 @@ export default function Home() {
               >
                 <span className="font-extrabold text-sm">{impulses === null ? "..." : impulses}</span>
                 <span className="text-sm">⚡</span>
+              </button>
+              <button 
+                onClick={() => setShowHistory(true)}
+                className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600 underline"
+              >
+                Мой Банк ({historyItems.length})
               </button>
             </div>
         </div>
@@ -589,6 +658,33 @@ export default function Home() {
                 Статичный
               </button>
             </div>
+          </div>
+
+          {/* Variations Count */}
+          <div className="space-y-3">
+             <h2 className="text-sm font-semibold flex items-center justify-between">
+               <span className="flex items-center gap-2">
+                 Сколько вариантов?
+               </span>
+               <span className="text-xs bg-hermes-50 text-hermes-600 px-2 py-0.5 rounded font-bold">x{currentCost} ⚡</span>
+             </h2>
+             <div className="flex gap-2">
+                {[1, 2, 3, 4].map(v => (
+                   <button 
+                     key={v} 
+                     disabled={isLoading}
+                     onClick={() => setGenerationsCount(v)} 
+                     className={clsx(
+                       "flex-1 py-2 rounded-xl border text-sm font-bold transition-colors", 
+                       generationsCount === v ? "bg-hermes-500 text-white border-hermes-500 shadow-md shadow-hermes-500/20" : "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-300",
+                       isLoading && "opacity-50 cursor-not-allowed"
+                     )}
+                   >
+                     {v}
+                   </button>
+                ))}
+             </div>
+             <p className="text-[10px] text-neutral-400 leading-tight">Система сгенерирует {generationsCount} {generationsCount === 1 ? 'вариант' : 'варианта'} одновременно. Первый откроется сразу, остальные сохранятся в Банк Креативов.</p>
           </div>
 
           {/* Reference Image Upload */}

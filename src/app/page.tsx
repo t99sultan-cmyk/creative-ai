@@ -224,10 +224,10 @@ export default function LandingPage() {
       </section>
 
       {/* Honest Social Proof / Integration string */}
-      <section className="py-8 bg-neutral-900 overflow-hidden relative">
+      <section className="py-8 bg-neutral-900 border-y border-neutral-800 overflow-hidden relative">
          <div className="max-w-7xl mx-auto px-4 flex items-center justify-center text-center">
             <p className="text-white/80 font-medium md:text-lg">
-              Генерируем рекламные креативы для магазинов на <strong className="text-white">Kaspi</strong>, <strong className="text-white">Wildberries</strong>, <strong className="text-white">Ozon</strong> и других площадках
+              Генерируем рекламные креативы для кампаний в <strong className="text-white">Kaspi</strong>, <strong className="text-white">Wildberries</strong>, <strong className="text-white">Ozon</strong>, <strong className="text-white">Instagram</strong>, <strong className="text-white">TikTok</strong>, <strong className="text-white">YouTube</strong>, <strong className="text-white">Freedom</strong> и <strong className="text-white">Choco</strong>.
             </p>
          </div>
       </section>
@@ -417,29 +417,34 @@ export default function LandingPage() {
 
           <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mt-12">
             {[ 
-              { title: "Старт", price: "1 990", impulses: 45, info: "На 1–3 товара" },
+              { title: "Старт", price: "1 990", impulses: 45, info: "На 1–3 ниши" },
               { title: "Креатор", price: "4 980", impulses: 126, info: "Для малого бизнеса" },
               { title: "Студия", price: "14 980", impulses: 453, info: "ХИТ. A/B тесты", isPro: true },
-              { title: "Бизнес", price: "49 980", impulses: 1899, info: "Для агентств" }
+              { title: "Бизнес", price: "49 980", impulses: 1899, info: "Для мощных агентств" }
             ].map((plan, i) => (
               <div key={i} className={clsx("p-6 md:p-8 rounded-[2rem] flex flex-col h-full relative group", plan.isPro ? "bg-neutral-900 text-white border-2 border-hermes-500 shadow-xl" : "bg-white border border-neutral-200")}>
-                 {plan.isPro && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#FFD700] text-black px-4 py-1.5 rounded-full text-xs font-black uppercase shadow-lg">Самый частый</div>}
+                 {plan.isPro && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-hermes-400 to-hermes-600 text-white px-4 py-1.5 rounded-full text-xs font-black uppercase shadow-lg shadow-hermes-500/30">Самый частый</div>}
                  <h3 className="text-xl font-bold mb-2">{plan.title}</h3>
                  <p className={clsx("text-sm mb-4 h-10", plan.isPro ? "text-neutral-400" : "text-neutral-500")}>{plan.info}</p>
                  <span className="text-3xl font-extrabold mb-4 block">{plan.price} ₸</span>
                  
-                 <div className={clsx("py-2.5 px-3 rounded-xl border flex items-center justify-between text-sm font-bold mb-6", plan.isPro ? "bg-neutral-800 border-neutral-700 text-white" : "bg-neutral-50 border-neutral-100")}>
-                   <span>Баланс:</span><span className={plan.isPro ? 'text-hermes-400' : 'text-hermes-600'}>{plan.impulses} ⚡</span>
+                 <div className={clsx("text-center py-3 px-3 rounded-2xl border flex flex-col items-center justify-center mb-6", plan.isPro ? "bg-neutral-800 border-neutral-700/50 shadow-inner" : "bg-hermes-50 border-hermes-100")}>
+                   <span className={clsx("text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1", plan.isPro ? 'text-white' : 'text-neutral-500')}>Вы получаете</span>
+                   <span className={clsx("text-2xl font-black", plan.isPro ? 'text-hermes-400 drop-shadow-md' : 'text-hermes-600')}>{plan.impulses} <span className="text-sm">Импульсов ⚡</span></span>
                  </div>
                  
-                 <SignInButton mode="modal" fallbackRedirectUrl="/editor">
-                   <button className={clsx("min-h-[48px] w-full mb-6 rounded-xl font-bold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-hermes-500 hover:bg-hermes-600" : "bg-neutral-900 hover:bg-neutral-800")}>Купить</button>
+                 <SignInButton mode="modal" fallbackRedirectUrl={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`}>
+                   <button className={clsx("min-h-[56px] w-full mb-6 rounded-2xl font-bold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-hermes-500 hover:bg-hermes-600 shadow-lg shadow-hermes-500/20" : "bg-neutral-900 hover:bg-neutral-800")}>Купить пакет "{plan.title}"</button>
                  </SignInButton>
                  
-                 <ul className="space-y-3 mt-auto">
-                   <li className="flex items-center gap-2 text-sm"><CheckCircle2 className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-green-500")} /> <b>~{Math.floor(plan.impulses/3)} статики</b></li>
-                   <li className="flex items-center gap-2 text-sm"><CheckCircle2 className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-green-500")} /> <b>~{Math.floor(plan.impulses/4)} видео</b></li>
-                 </ul>
+                 <div className={clsx("mt-auto p-4 rounded-xl", plan.isPro ? "bg-white/5" : "bg-neutral-50")}>
+                   <p className="text-[10px] uppercase font-bold text-neutral-500 mb-3 text-center">Этого хватит на:</p>
+                   <ul className="space-y-3">
+                     <li className="flex items-center gap-3 text-sm"><ImageIcon className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/3)}</b> статики</li>
+                     <li className="flex items-center justify-center text-[10px] font-bold text-neutral-400 relative"><span className="bg-neutral-400 w-full h-[1px] absolute opacity-20"></span><span className={clsx("relative px-2", plan.isPro ? "bg-neutral-900" : "bg-neutral-50")}>ЛИБО</span></li>
+                     <li className="flex items-center gap-3 text-sm"><Play className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/4)}</b> видео (9:16)</li>
+                   </ul>
+                 </div>
               </div>
             ))}
           </div>
@@ -487,16 +492,35 @@ export default function LandingPage() {
       </section>
 
       {/* FINAL OFFER (CTA) */}
-      <section className="py-16 bg-gradient-to-br from-hermes-600 to-[#d95e16] text-white">
-         <div className="max-w-4xl mx-auto px-4 text-center">
-            <h2 className="text-3xl md:text-5xl font-black mb-6">Ещё не готовы купить пакет?</h2>
-            <p className="text-white/90 text-lg md:text-xl mb-10 max-w-2xl mx-auto leading-relaxed">
-              Получите 17 Импульсов бесплатно и протестируйте сервис на своих товарах прямо сейчас.<br/>
-              <b>Без привязки карты. Без скрытых обязательств.</b>
+      <section className="py-20 bg-neutral-950 text-white relative overflow-hidden">
+         {/* Background Ornaments */}
+         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-800/40 via-neutral-950 to-neutral-950" />
+         <motion.div animate={{ rotate: -360 }} transition={{ duration: 150, repeat: Infinity, ease: "linear" }} className="absolute -top-[50%] -left-[10%] w-[100vw] h-[100vw] lg:w-[40vw] lg:h-[40vw] border-[1px] border-white/5 rounded-full" />
+         <motion.div animate={{ rotate: 360 }} transition={{ duration: 100, repeat: Infinity, ease: "linear" }} className="absolute -bottom-[50%] -right-[10%] w-[80vw] h-[80vw] lg:w-[30vw] lg:h-[30vw] border-[1px] border-white/5 rounded-full" />
+         
+         <div className="max-w-4xl mx-auto px-4 text-center relative z-10 flex flex-col items-center">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hermes-400 to-hermes-600 flex items-center justify-center shadow-lg shadow-hermes-500/30 mb-8 border border-white/10">
+               <Zap className="w-8 h-8 text-white fill-white" />
+            </div>
+            
+            <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight drop-shadow-xl text-transparent bg-clip-text bg-gradient-to-b from-white to-white/70">
+              Еще не готовы купить пакет?
+            </h2>
+            
+            <p className="text-neutral-400 text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed font-medium">
+              Испытайте мощь ИИ прямо сейчас. Получите <span className="text-hermes-400 font-bold border-b border-hermes-500/50">17 Импульсов</span> абсолютно бесплатно и сгенерируйте свои первые креативы. 
+              <br/><br/>
+              <span className="text-white bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm shadow-inner text-sm border border-white/5 uppercase tracking-widest">
+                💳 Без привязки карты. Без обязательств.
+              </span>
             </p>
+            
             <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
-               <button className="min-h-[64px] px-8 bg-white text-hermes-600 font-black text-lg md:text-xl rounded-[1.25rem] shadow-2xl active:scale-95 transition-transform w-full md:w-auto">
-                 Получить 17 Импульсов бесплатно
+               <button className="group relative min-h-[72px] px-10 bg-gradient-to-br from-hermes-500 to-[#d95e16] text-white font-black text-lg md:text-xl rounded-full shadow-[0_0_40px_rgba(243,112,33,0.4)] active:scale-95 transition-all w-full md:w-auto overflow-hidden">
+                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                 <span className="relative z-10 flex items-center justify-center gap-3">
+                   ПОЛУЧИТЬ 17 ИМПУЛЬСОВ БЕСПЛАТНО <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform" />
+                 </span>
                </button>
             </SignInButton>
          </div>

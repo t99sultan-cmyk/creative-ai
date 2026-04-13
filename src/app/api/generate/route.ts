@@ -1,4 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { auth } from '@clerk/nextjs/server';
+import { db } from '@/db';
+import { creatives } from '@/db/schema';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -111,6 +114,19 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
         // Handle all occurrences of PRODUCT_IMG_X
         const searchPattern = new RegExp(`PRODUCT_IMG_${index}`, 'g');
         code = code.replace(searchPattern, imgBase64);
+      });
+    }
+
+    // Save to History Bank
+    const { userId } = auth();
+    if (userId) {
+      await db.insert(creatives).values({
+        id: crypto.randomUUID(),
+        userId,
+        prompt,
+        format,
+        cost: isAnimated ? 4 : 3,
+        htmlCode: code,
       });
     }
 
