@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 
 export const users = pgTable("user", {
   id: text("id").primaryKey(), // Clerk User ID
@@ -20,5 +20,14 @@ export const creatives = pgTable("creative", {
   htmlCode: text("htmlCode"),
   feedbackScore: integer("feedback_score"), // 1 for Like, -1 for Dislike, null for unrated
   feedbackText: text("feedback_text"), // Text comment from user telling the AI what went wrong/right
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const promoCodes = pgTable("promo_code", {
+  code: text("code").primaryKey(), // e.g. "KASPI-XYZ123"
+  impulses: integer("impulses").notNull(), 
+  isUsed: boolean("is_used").default(false).notNull(),
+  usedBy: text("used_by").references(() => users.id),
+  usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });

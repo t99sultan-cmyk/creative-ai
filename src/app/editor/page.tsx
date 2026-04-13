@@ -6,6 +6,8 @@ import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
 import { useUser } from "@clerk/nextjs";
+import { getUserBalance } from "@/actions/getUserBalance";
+import { redeemPromoCode } from "@/actions/redeemPromoCode";
 
 type Format = "1:1" | "9:16";
 
@@ -76,7 +78,49 @@ export default function Home() {
   const [iframeKey, setIframeKey] = useState(0);
   const MAX_IMAGES = 4;
 
-  const isUIBlocked = isLoading || isRemovingBg || isRecording;
+  const [impulses, setImpulses] = useState<number | null>(null);
+  const [showPromoInput, setShowPromoInput] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [promoSuccess, setPromoSuccess] = useState("");
+
+  const isUIBlocked = isLoading || isRemovingBg || isRecording || isRedeeming;
+
+  useEffect(() => {
+    async function fetchBalance() {
+      const data = await getUserBalance();
+      if (data.success) {
+        setImpulses(data.impulses);
+      }
+    }
+    fetchBalance();
+  }, []);
+
+  const handleRedeem = async () => {
+    setIsRedeeming(true);
+    setError("");
+    setPromoSuccess("");
+    try {
+      const result = await redeemPromoCode(promoCode);
+      if (result.success) {
+        setPromoSuccess(`Успешно! Начислено +${result.impulsesAdded} ⚡️`);
+        if (impulses !== null && result.impulsesAdded) {
+          setImpulses(impulses + result.impulsesAdded);
+        }
+        setPromoCode("");
+        setTimeout(() => {
+          setShowPromoInput(false);
+          setPromoSuccess("");
+        }, 3000);
+      } else {
+        setError(result.error || "Ошибка активации кода.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Ошибка системы");
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
 
   // LOCAL STORAGE PERSISTENCE
   useEffect(() => {
@@ -445,14 +489,42 @@ export default function Home() {
             </div>
           </div>
           
-            <div className="flex flex-col items-end cursor-pointer group" title="Пополнить баланс">
+            <div className="flex flex-col items-end">
               <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Баланс</span>
-              <div className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 group-hover:bg-hermes-100 group-hover:border-hermes-300 transition-colors">
-                <span className="font-extrabold text-sm">17</span>
+              <button 
+                onClick={() => setShowPromoInput(!showPromoInput)}
+                className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 hover:bg-hermes-100 hover:border-hermes-300 transition-colors"
+                title="Активировать промокод"
+              >
+                <span className="font-extrabold text-sm">{impulses === null ? "..." : impulses}</span>
                 <span className="text-sm">⚡</span>
-              </div>
+              </button>
             </div>
         </div>
+
+        {showPromoInput && (
+          <div className="px-6 py-4 bg-hermes-50/50 border-b border-hermes-100">
+            <h3 className="text-xs font-bold text-hermes-800 uppercase tracking-wider mb-2">Активация промокода</h3>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                placeholder="PROMO-XYZ"
+                className="flex-1 bg-white border border-hermes-200 rounded-lg px-3 py-2 text-sm uppercase outline-none focus:border-hermes-500 font-mono"
+                disabled={isRedeeming}
+              />
+              <button 
+                onClick={handleRedeem}
+                disabled={isRedeeming || !promoCode.trim()}
+                className="bg-hermes-600 hover:bg-hermes-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center min-w-[100px]"
+              >
+                {isRedeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "ОК"}
+              </button>
+            </div>
+            {promoSuccess && <p className="text-xs text-green-600 font-bold mt-2">{promoSuccess}</p>}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
