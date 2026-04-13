@@ -499,15 +499,17 @@ export default function Home() {
                       <div className="col-span-full py-20 text-center text-neutral-400 font-bold">Вы пока не создали ни одного креатива.</div>
                    ) : historyItems.map((item: any, idx: number) => (
                       <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group hover:shadow-md transition-all cursor-pointer" onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setShowHistory(false); setMobileTab('canvas'); }}>
-                         <div className="flex-1 relative aspect-[9/16] bg-neutral-100 pointer-events-none overflow-hidden">
-                             <iframe 
-                               srcDoc={item.htmlCode}
-                               className="absolute top-0 left-0"
-                               style={{ width: '400px', height: item.format === '9:16' ? '711px' : '400px', transform: 'scale(0.33) origin-top-left', transformOrigin: 'top left' }}
-                               sandbox="allow-same-origin"
-                             />
-                             <div className="absolute inset-0 bg-transparent" />
-                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity font-bold">
+                         <div className="flex-1 relative aspect-[9/16] bg-neutral-100 pointer-events-none overflow-hidden flex items-center justify-center">
+                             <div className="relative w-full h-full" style={{ containerType: 'inline-size' }}>
+                               <iframe 
+                                 srcDoc={item.htmlCode}
+                                 className="absolute top-0 left-0 border-0"
+                                 style={{ width: '400px', height: item.format === '9:16' ? '711px' : '400px', transform: 'scale(calc(100cqw / 400))', transformOrigin: 'top left' }}
+                                 sandbox="allow-same-origin"
+                               />
+                             </div>
+                             <div className="absolute inset-0 bg-transparent z-10" />
+                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity font-bold z-20">
                                <Sparkles className="w-6 h-6 mb-2" /> Загрузить
                              </div>
                          </div>
@@ -583,7 +585,7 @@ export default function Home() {
                   <span className="text-sm">⚡</span>
                 </button>
                 <Link href="/checkout" className="px-3 py-1.5 bg-[#f14635] text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center shadow-sm whitespace-nowrap">
-                  Купить
+                  {impulses !== null && impulses >= 10 ? 'Докупить' : 'Купить'}
                 </Link>
               </div>
               <button 
@@ -918,10 +920,16 @@ export default function Home() {
               key={iframeKey}
               ref={iframeRef}
               srcDoc={code}
-              className="w-full h-full bg-[#fcfcfc] overflow-hidden"
+              className="absolute bg-[#fcfcfc] overflow-hidden"
               sandbox="allow-scripts allow-same-origin"
               title="Generated Creative"
-              style={{ padding: 0, margin: 0, border: 'none' }}
+              style={{
+                width: format === '9:16' ? '400px' : '500px',
+                height: format === '9:16' ? '711px' : '500px',
+                transform: format === '9:16' ? 'scale(0.9)' : 'scale(1)',
+                transformOrigin: 'center center',
+                border: 'none',
+              }}
             />
           </div>
         ) : (
