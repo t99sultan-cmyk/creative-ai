@@ -53,8 +53,31 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
           </div>
         )}
       </td>
-      <td className="p-4 text-neutral-500 text-xs">
-         {new Date(u.createdAt).toLocaleDateString("ru-RU", { day: 'numeric', month: 'short', year: 'numeric' })}
+      <td className="p-4 text-neutral-500 text-xs text-center border-l border-neutral-100">
+         {u.totalGenerations}
+      </td>
+      <td className="p-4 border-l border-neutral-100">
+         <div className="flex flex-col text-xs font-bold gap-1">
+             {u.likes > 0 && <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded w-max">👍 {u.likes}</span>}
+             {u.dislikes > 0 && <span className="text-red-500 bg-red-50 px-2 py-0.5 rounded w-max">👎 {u.dislikes}</span>}
+             {u.likes === 0 && u.dislikes === 0 && <span className="text-neutral-300 font-normal ml-1">-</span>}
+         </div>
+      </td>
+      <td className="p-4 border-l border-neutral-100 text-xs">
+         {u.promosUsed?.length > 0 ? (
+            <div className="flex flex-col gap-1">
+               {u.promosUsed.map((p: any) => (
+                  <span key={p.code} title={p.code} className="bg-orange-50 text-orange-600 px-2 py-1 rounded truncate max-w-[120px] inline-block font-mono">
+                     +{p.impulses}⚡
+                  </span>
+               ))}
+            </div>
+         ) : (
+            <span className="text-neutral-400 italic">Free Only</span>
+         )}
+      </td>
+      <td className="p-4 text-neutral-400 text-xs border-l border-neutral-100 text-center">
+         {new Date(u.createdAt).toLocaleDateString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit' })}
       </td>
       <td className="p-4 text-right">
         <button 
@@ -237,8 +260,11 @@ export default function AdminPage() {
                     <tr className="bg-neutral-50 border-b border-neutral-100 text-xs text-neutral-400 uppercase">
                       <th className="p-4 font-bold">Email</th>
                       <th className="p-4 font-bold">Импульсы</th>
-                      <th className="p-4 font-bold">Регистрация</th>
-                      <th className="p-4 font-bold text-right">Действия</th>
+                      <th className="p-4 font-bold border-l border-neutral-100">Сделал Креативов</th>
+                      <th className="p-4 font-bold border-l border-neutral-100">Оценки (👍/👎)</th>
+                      <th className="p-4 font-bold border-l border-neutral-100">Оплаты / Пакеты</th>
+                      <th className="p-4 font-bold border-l border-neutral-100">Регистрация</th>
+                      <th className="p-4 font-bold text-right border-l border-neutral-100">Действия</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">

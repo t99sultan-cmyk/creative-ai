@@ -28,6 +28,28 @@ export async function getAdminDashboardData() {
     // Get all users
     const allUsers = await db.select().from(users).orderBy(desc(users.createdAt)).limit(100);
     
+    // Get all creatives for stats
+    const allCreatives = await db.select().from(creatives);
+    
+    // Get all used promos for stats
+    const usedPromos = await db.select().from(promoCodes).where(eq(promoCodes.isUsed, true));
+
+    // Enrich users with stats
+    const enrichedUsers = allUsers.map(u => {
+      const uCreatives = allCreatives.filter(c => c.userId === u.id);
+      const likes = uCreatives.filter(c => c.feedbackScore === 1).length;
+      const dislikes = uCreatives.filter(c => c.feedbackScore === -1).length;
+      const uPromos = usedPromos.filter(p => p.usedBy === u.id).sort((a,b) => (b.usedAt?.getTime() || 0) - (a.usedAt?.getTime() || 0));
+
+      return {
+        ...u,
+        totalGenerations: uCreatives.length,
+        likes,
+        dislikes,
+        promosUsed: uPromos
+      };
+    });
+    
     // Get all active (unused) promo codes
     const activePromos = await db.select()
                            .from(promoCodes)
@@ -35,15 +57,13 @@ export async function getAdminDashboardData() {
                            .orderBy(desc(promoCodes.createdAt));
                            
     // Basic stats
-    const totalCreatives = await db.select().from(creatives);
-
     return { 
       success: true, 
-      users: allUsers, 
+      users: enrichedUsers, 
       activePromos, 
       stats: {
         totalUsers: allUsers.length,
-        totalGenerations: totalCreatives.length
+        totalGenerations: allCreatives.length
       } 
     };
   } catch (e: any) {
