@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { promoCodes, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 export async function redeemPromoCode(code: string) {
@@ -33,34 +33,36 @@ export async function redeemPromoCode(code: string) {
       return { success: false, error: "Этот промокод уже был активирован." };
     }
 
-    // Since neon-http backend acts a bit differently with transactions, we can run sequential updates safely enough here, 
-    // but ideally we wrap in transaction. Let's try transaction if it's supported:
-    await db.transaction(async (tx) => {
-      // 1. Mark code as used
-      await tx
-        .update(promoCodes)
-        .set({
-          isUsed: true,
-          usedBy: userId,
-          usedAt: new Date(),
-        })
-        .where(eq(promoCodes.code, cleanCode));
-
-      // 2. Fetch current user impulses to add
-      const userRecord = await tx.query.users.findFirst({
-        where: eq(users.id, userId),
-      });
-      
-      const currentImpulses = userRecord?.impulses || 0;
-
-      // 3. Update user impulses
-      await tx
-        .update(users)
-        .set({
-          impulses: currentImpulses + codeRecord.impulses,
-        })
-        .where(eq(users.id, userId));
+    // 1. Fetch current user impulses
+    const userRecord = await db.query.users.findFirst({
+      where: eq(users.id, userId),
     });
+    
+    // 2. Safely add impulses (with lazy creation if needed)
+    if (!userRecord) {
+      const clerkUser = await currentUser();
+      const email = clerkUser?.emailAddresses[0]?.emailAddress || "unknown";
+      await db.insert(users).values({
+        id: userId,
+        email: email,
+        name: clerkUser?.firstName || "User",
+        image: clerkUser?.imageUrl || "",
+        impulses: 17 + codeRecord.impulses,
+      });
+    } else {
+      await db.update(users)
+        .set({ impulses: (userRecord.impulses || 0) + codeRecord.impulses })
+        .where(eq(users.id, userId));
+    }
+
+    // 3. Mark code as used
+    await db.update(promoCodes)
+      .set({
+        isUsed: true,
+        usedBy: userId,
+        usedAt: new Date(),
+      })
+      .where(eq(promoCodes.code, cleanCode));
 
     // Revalidate the page so the impulses balance reflects immediately
     revalidatePath("/editor");
