@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { db } from '@/db';
 import { creatives, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -17,9 +17,26 @@ export async function POST(request: Request) {
     const hasProducts = productImagesBase64 && productImagesBase64.length > 0;
     const cost = isAnimated ? 4 : 3;
 
-    // Check user balance
     const userRecords = await db.select({ impulses: users.impulses }).from(users).where(eq(users.id, userId));
-    const currentImpulses = userRecords[0]?.impulses || 0;
+    let currentImpulses = 0;
+    
+    if (userRecords.length === 0) {
+      const clerkUser = await currentUser();
+      if (clerkUser) {
+        const email = clerkUser.emailAddresses[0]?.emailAddress || "unknown";
+        await db.insert(users).values({
+          id: userId,
+          email: email,
+          name: clerkUser.firstName || "User",
+          image: clerkUser.imageUrl || "",
+          impulses: 17,
+        });
+        currentImpulses = 17;
+      }
+    } else {
+      currentImpulses = userRecords[0].impulses || 0;
+    }
+
     if (currentImpulses < cost) {
        return new Response(JSON.stringify({ error: "Недостаточно импульсов на балансе. Пожалуйста, пополните счет." }), { status: 400 });
     }

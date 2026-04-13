@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 export async function getUserBalance() {
   try {
@@ -17,9 +17,25 @@ export async function getUserBalance() {
       where: eq(users.id, userId),
     });
 
+    if (!userRecord) {
+      // Lazy creation for users who registered before webhooks existed
+      const clerkUser = await currentUser();
+      if (clerkUser) {
+        const email = clerkUser.emailAddresses[0]?.emailAddress || "unknown";
+        await db.insert(users).values({
+          id: userId,
+          email: email,
+          name: clerkUser.firstName || "User",
+          image: clerkUser.imageUrl || "",
+          impulses: 17,
+        });
+        return { success: true, impulses: 17 };
+      }
+    }
+
     return { 
       success: true, 
-      impulses: userRecord?.impulses ?? 17 
+      impulses: userRecord?.impulses ?? 0 
     };
   } catch (error) {
     console.error("Error fetching user balance:", error);
