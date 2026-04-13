@@ -488,11 +488,16 @@ export default function Home() {
         {showHistory && (
           <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm p-4 md:p-10 flex flex-col items-center">
              <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl flex flex-col h-full overflow-hidden">
-                <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
-                   <h2 className="text-2xl font-black flex items-center gap-2"><PackageSearch className="w-6 h-6 text-hermes-500" /> Мой Банк Креативов ({historyItems.length})</h2>
-                   <button onClick={() => setShowHistory(false)} className="w-10 h-10 rounded-full flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 transition-colors">
-                     <X className="w-5 h-5 text-neutral-600" />
-                   </button>
+                <div className="p-6 border-b border-neutral-100">
+                   <div className="flex items-center justify-between mb-3">
+                     <h2 className="text-2xl font-black flex items-center gap-2"><PackageSearch className="w-6 h-6 text-hermes-500" /> Мой Банк Креативов ({historyItems.length})</h2>
+                     <button onClick={() => setShowHistory(false)} className="w-10 h-10 rounded-full flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 transition-colors">
+                       <X className="w-5 h-5 text-neutral-600" />
+                     </button>
+                   </div>
+                   <div className="px-3 py-2 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-lg inline-flex items-center gap-1.5">
+                      ⚠️ Важно: все ваши креативы хранятся ровно 1 месяц, после чего база данных их автоматически удаляет. 
+                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 bg-neutral-50 grid grid-cols-2 md:grid-cols-4 gap-6 content-start">
                    {historyItems.length === 0 ? (

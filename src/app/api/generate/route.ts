@@ -58,8 +58,9 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - ALWAYS include Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>.
    - ALWAYS use modern Google Fonts via CDN.
    - Use GSAP for animations if isAnimated is true.
-4. STRICT BAN ON SOCIAL MEDIA UI:
+4. STRICT BAN ON SOCIAL MEDIA UI & EXTERNAL BUTTONS:
    - Generate the ACTUAL promotional banner. DO NOT include fake Instagram UI (no comments, no avatars).
+   - DO NOT generate external link buttons like "Подробнее", "Узнать подробнее", or "Перейти", because social media ad platforms natively overlay their own link buttons over the creative.
 
 5. BEAUTIFUL LAYOUT & HIGH CONTRAST (CRITICAL):
    - You have FULL CREATIVE FREEDOM to make it look stunning, just like you would on Gemini Canvas.
