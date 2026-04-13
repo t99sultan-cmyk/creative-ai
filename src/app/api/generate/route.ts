@@ -19,8 +19,12 @@ export async function POST(request: Request) {
     const hasProducts = productImagesBase64 && productImagesBase64.length > 0;
     const cost = isAnimated ? 4 : 3;
 
-    const userRecords = await db.select({ impulses: users.impulses }).from(users).where(eq(users.id, userId));
+    const userRecords = await db.select({ impulses: users.impulses, isBanned: users.isBanned }).from(users).where(eq(users.id, userId));
     let currentImpulses = 0;
+    
+    if (userRecords.length > 0 && userRecords[0].isBanned) {
+       return new Response(JSON.stringify({ error: "Ваш аккаунт заблокирован по решению администратора." }), { status: 403 });
+    }
     
     if (userRecords.length === 0) {
       const clerkUser = await currentUser();
@@ -59,9 +63,10 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
 
 5. BEAUTIFUL LAYOUT & HIGH CONTRAST (CRITICAL):
    - You have FULL CREATIVE FREEDOM to make it look stunning, just like you would on Gemini Canvas.
-   - 🔴 PREVENT TEXT OVERLAP: Never let text overlap in a way that makes it unreadable. Use Flexbox or Grid properly. Give elements breathing room and gaps. If you use absolute positioning for floating elements, ensure they do not cover the main text.
-   - You MUST ensure very high contrast. If the background is dark (refer to the Reference Image mood), use white/bright text. If light, use dark text. Use text-shadows or gradients to make text pop!
-   - Ensure the outer container is strictly bounded: \`h-screen w-[100vw] overflow-hidden\`.
+   - 🔴 BUILD ROBUST LAYOUTS: DO NOT rely on haphazard absolute positioning that causes text to overlap with other elements. USE modern CSS Flexbox and CSS Grid. Create structured layouts where elements flow naturally.
+   - 🔴 PREVENT OVERLAPS (CRITICAL): Never let text, badges, or images overlap making things unreadable. Use flex gaps (\`gap-4\`) and proper padding.
+   - Ensure the outer container is bounded: \`max-w-[400px] h-[100vh]\` for 9:16 vertical layouts.
+   - Inject these global CSS rules into your \`<style>\` to lock the viewport: \`html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; background-position: center; background-size: cover; }\`. Your main container wrapper inside body MUST naturally expand or flex without pushing items out of bounds.
 
 6. FORMAT SPECIFICS:
    - The user requested aspect ratio: ${format}.
@@ -76,47 +81,75 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    ${hasProducts ? `- PRODUCT IMAGES: You MUST visually integrate these EXACT cut-out images. Use placeholders \`PRODUCT_IMG_0\`, \`PRODUCT_IMG_1\`. Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="...">\`` : '- NO PRODUCTS PROVIDED. Focus 100% on beautiful typography and background.'}
 `;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.1-pro-preview",
-      systemInstruction: systemPrompt,
-    });
-
-    const parts: any[] = [];
-    parts.push({ text: `Format required: ${format}.\n\nTask (ТЗ): ${prompt}` });
+    const geminiParts: any[] = [];
+    geminiParts.push({ text: `Format required: ${format}.\n\nTask (ТЗ): ${prompt}` });
 
     // Handle references
     if (referenceImagesBase64 && Array.isArray(referenceImagesBase64) && referenceImagesBase64.length > 0) {
-      parts.push({ text: "Here are REFERENCE IMAGES for atmosphere, style, and layout. Recreate this vibe/quality:" });
+      geminiParts.push({ text: "Here are REFERENCE IMAGES for atmosphere, style, and layout. Recreate this vibe/quality:" });
       for (const imgUrl of referenceImagesBase64) {
         let mimeType = "image/jpeg";
         let data = imgUrl;
-        const match = imgUrl.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,(.+)$/);
-        if (match) {
-          mimeType = match[1];
-          data = match[2];
+        if (data.startsWith("data:")) {
+           mimeType = data.split(";")[0].split(":")[1];
+           data = data.split(",")[1];
         }
-        parts.push({ inlineData: { mimeType, data } });
+        geminiParts.push({
+          inlineData: { mimeType, data }
+        });
       }
     }
 
     // Handle actual products
     if (productImagesBase64 && Array.isArray(productImagesBase64) && productImagesBase64.length > 0) {
-      parts.push({ text: "Here are the actual PRODUCT IMAGES without backgrounds. You MUST use these exact images in the HTML creative as graphical assets:" });
+      geminiParts.push({ text: "Here are the actual PRODUCT IMAGES without backgrounds. You MUST use these exact images in the HTML creative as graphical assets:" });
       for (const imgUrl of productImagesBase64) {
-        let mimeType = "image/png"; // Usually PNG due to cut-out
+        let mimeType = "image/png";
         let data = imgUrl;
-        const match = imgUrl.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,(.+)$/);
-        if (match) {
-          mimeType = match[1];
-          data = match[2];
+        if (data.startsWith("data:")) {
+           mimeType = data.split(";")[0].split(":")[1];
+           data = data.split(",")[1];
         }
-        parts.push({ inlineData: { mimeType, data } });
+        geminiParts.push({
+          inlineData: { mimeType, data }
+        });
       }
     }
 
-    const result = await model.generateContent(parts);
-    const rawText = result.response.text();
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) throw new Error("GEMINI_API_KEY is missing");
+
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${geminiApiKey}`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: geminiParts }],
+          generationConfig: {
+             maxOutputTokens: 8192,
+             temperature: 0.7,
+          }
+       })
+    });
+
+    if (!geminiResponse.ok) {
+        const errPayload = await geminiResponse.text();
+        throw new Error(`Gemini API error: ${errPayload}`);
+    }
+
+    const result = await geminiResponse.json();
+    const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
     
+    // Calculate API Cost in KZT (Formula adapted for Gemini 3.1 Pro placeholder pricing: 1.25$ in / 5.00$ out per MTok. 1 USD = 480 KZT)
+    let apiCostKzt = 0;
+    if (result.usageMetadata) {
+       const inTokens = result.usageMetadata.promptTokenCount || 0;
+       const outTokens = result.usageMetadata.candidatesTokenCount || 0;
+       const usdCost = (inTokens / 1_000_000) * 1.25 + (outTokens / 1_000_000) * 5.00;
+       apiCostKzt = usdCost * 480;
+       console.log(`[API Cost] Gemini 3.1 Pro Usage: ${inTokens} in, ${outTokens} out = $${usdCost.toFixed(4)} (~${apiCostKzt.toFixed(2)} KZT)`);
+    }
+
     // Clean up if the model magically returns markdown
     let code = rawText.trim();
     const match = code.match(/```(?:html)?\s*([\s\S]*?)```/);
@@ -143,9 +176,10 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
       await db.insert(creatives).values({
         id: creativeId,
         userId,
-        prompt,
+        prompt: prompt,
         format,
-        cost,
+        cost: cost,
+        apiCostKzt: apiCostKzt,
         htmlCode: code,
       });
     }
@@ -158,7 +192,7 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
       }
     );
   } catch (error: any) {
-    console.error('Gemini Error:', error);
-    return Response.json({ error: error.message || 'Error generating content' }, { status: 500 });
+    console.error('Claude API Error:', error);
+    return Response.json({ error: error.message || 'Error generating content via Claude' }, { status: 500 });
   }
 }

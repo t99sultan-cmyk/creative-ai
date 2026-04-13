@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminDashboardData, createPromoCode, updateUserImpulses, getUserHistory, deletePromoCode } from "@/actions/adminActions";
+import { getAdminDashboardData, createPromoCode, updateUserImpulses, getUserHistory, deletePromoCode, toggleUserBan } from "@/actions/adminActions";
 import { useRouter } from "next/navigation";
-import { CopyIcon, CheckCircleIcon, Edit2Icon, HistoryIcon, XIcon, CheckIcon, TrashIcon } from "lucide-react";
+import { CopyIcon, CheckCircleIcon, Edit2Icon, HistoryIcon, XIcon, CheckIcon, TrashIcon, BanIcon, CheckCircle2Icon } from "lucide-react";
 
 function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => void, onViewHistory: (userId: string) => void }) {
   const [editing, setEditing] = useState(false);
@@ -22,9 +22,23 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
     setSaving(false);
   };
 
+  const handleToggleBan = async () => {
+    setSaving(true);
+    const res = await toggleUserBan(u.id, !u.isBanned);
+    if (res.success) {
+      onRefresh();
+    } else {
+      alert("Ошибка бана: " + res.error);
+    }
+    setSaving(false);
+  };
+
   return (
-    <tr className="hover:bg-neutral-50 transition-colors text-sm">
-      <td className="p-4 font-medium text-neutral-800 break-all">{u.email}</td>
+    <tr className={`hover:bg-neutral-100 transition-colors text-sm ${u.isBanned ? 'bg-red-50/50 opacity-60 grayscale' : 'bg-white'}`}>
+      <td className="p-4 font-medium text-neutral-800 break-all">
+         {u.email}
+         {u.isBanned && <span className="ml-2 text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">BANNED</span>}
+      </td>
       <td className="p-4">
         {editing ? (
           <div className="flex items-center gap-2">
@@ -57,6 +71,11 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
          {u.totalGenerations}
       </td>
       <td className="p-4 border-l border-neutral-100">
+         <span className={`font-bold font-mono text-xs ${u.totalApiCostKzt > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+            {u.totalApiCostKzt > 0 ? `${u.totalApiCostKzt.toFixed(2)} ₸` : '0 ₸'}
+         </span>
+      </td>
+      <td className="p-4 border-l border-neutral-100">
          <div className="flex flex-col text-xs font-bold gap-1">
              {u.likes > 0 && <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded w-max">👍 {u.likes}</span>}
              {u.dislikes > 0 && <span className="text-red-500 bg-red-50 px-2 py-0.5 rounded w-max">👎 {u.dislikes}</span>}
@@ -85,12 +104,22 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
          {new Date(u.createdAt).toLocaleDateString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit' })}
       </td>
       <td className="p-4 text-right">
-        <button 
-          onClick={() => onViewHistory(u.id)}
-          className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 flex items-center gap-2 transition-colors inline-flex"
-        >
-          <HistoryIcon className="w-3.5 h-3.5" /> История
-        </button>
+        <div className="flex flex-col gap-2 items-end">
+          <button 
+            onClick={() => onViewHistory(u.id)}
+            className="text-xs w-full justify-center bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 flex items-center transition-colors"
+          >
+            <HistoryIcon className="w-3.5 h-3.5 mr-1" /> История
+          </button>
+          
+          <button 
+            onClick={handleToggleBan}
+            disabled={saving}
+            className={`text-xs w-full justify-center px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors ${u.isBanned ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+          >
+            {u.isBanned ? <><CheckCircle2Icon className="w-3.5 h-3.5 mr-1" /> Разбан</> : <><BanIcon className="w-3.5 h-3.5 mr-1" /> Забанить</>}
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -108,6 +137,9 @@ export default function AdminPage() {
   const [historyModalUser, setHistoryModalUser] = useState<string | null>(null);
   const [userHistory, setUserHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Sorting
+  const [sortByGenerations, setSortByGenerations] = useState(false);
 
   const init = async () => {
     const res = await getAdminDashboardData();
@@ -164,7 +196,7 @@ export default function AdminPage() {
     setLoadingHistory(true);
     const res = await getUserHistory(userId);
     if (res.success) {
-       setUserHistory(res.history || []);
+       setUserHistory((res.history as any[]) || []);
     } else {
        alert("Ошибка загрузки истории");
     }
@@ -290,7 +322,15 @@ export default function AdminPage() {
                     <tr className="bg-neutral-50 border-b border-neutral-100 text-xs text-neutral-400 uppercase">
                       <th className="p-4 font-bold">Email</th>
                       <th className="p-4 font-bold">Импульсы</th>
-                      <th className="p-4 font-bold border-l border-neutral-100">Сделал Креативов</th>
+                      <th 
+                        className="p-4 font-bold border-l border-neutral-100 cursor-pointer hover:bg-neutral-100 select-none flex items-center gap-1"
+                        onClick={() => setSortByGenerations(!sortByGenerations)}
+                        title="Нажмите для сортировки по наибольшему числу генераций"
+                      >
+                        Сделал Креативов
+                        {sortByGenerations ? ' ⬇️' : ''}
+                      </th>
+                      <th className="p-4 font-bold border-l border-neutral-100">Расход API ₸</th>
                       <th className="p-4 font-bold border-l border-neutral-100">Оценки (👍/👎)</th>
                       <th className="p-4 font-bold border-l border-neutral-100">Оплаты / Пакеты</th>
                       <th className="p-4 font-bold border-l border-neutral-100">Регистрация</th>
@@ -298,7 +338,12 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
-                    {data?.users?.map((u: any) => (
+                    {(data?.users || [])
+                      .sort((a: any, b: any) => {
+                         if (sortByGenerations) return b.totalGenerations - a.totalGenerations;
+                         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Default sort by date desc
+                      })
+                      .map((u: any) => (
                       <UserRow key={u.id} u={u} onRefresh={init} onViewHistory={handleViewHistory} />
                     ))}
                   </tbody>
@@ -341,7 +386,12 @@ export default function AdminPage() {
                       <div className="p-5 flex-1 space-y-4 border-b md:border-b-0 md:border-r border-neutral-100">
                          <div className="flex flex-wrap gap-2 text-xs font-bold font-mono">
                             <span className="bg-neutral-100 px-2 py-1 rounded">Формат: {item.format}</span>
-                            <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded">Стоимость: {item.cost} ⚡</span>
+                            <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded">Токены: {item.cost} ⚡</span>
+                            {item.apiCostKzt > 0 && (
+                               <span className="bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100">
+                                  Расход: {item.apiCostKzt.toFixed(2)} ₸
+                               </span>
+                            )}
                             <span className="bg-neutral-100 px-2 py-1 rounded">{new Date(item.createdAt).toLocaleString("ru-RU")}</span>
                          </div>
                          

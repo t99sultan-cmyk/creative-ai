@@ -10,6 +10,7 @@ import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
 import { getUserCreatives } from "@/actions/getUserCreatives";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 
 type Format = "1:1" | "9:16";
 
@@ -572,14 +573,19 @@ export default function Home() {
           
             <div className="flex flex-col items-end">
               <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Баланс</span>
-              <button 
-                onClick={() => setShowPromoInput(!showPromoInput)}
-                className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 hover:bg-hermes-100 hover:border-hermes-300 transition-colors"
-                title="Активировать промокод"
-              >
-                <span className="font-extrabold text-sm">{impulses === null ? "..." : impulses}</span>
-                <span className="text-sm">⚡</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowPromoInput(!showPromoInput)}
+                  className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 hover:bg-hermes-100 hover:border-hermes-300 transition-colors"
+                  title="Активировать промокод"
+                >
+                  <span className="font-extrabold text-sm">{impulses === null ? "..." : impulses}</span>
+                  <span className="text-sm">⚡</span>
+                </button>
+                <Link href="/checkout" className="px-3 py-1.5 bg-[#f14635] text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center shadow-sm whitespace-nowrap">
+                  Купить
+                </Link>
+              </div>
               <button 
                 onClick={() => setShowHistory(true)}
                 className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600 underline"

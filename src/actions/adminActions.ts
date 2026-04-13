@@ -39,11 +39,13 @@ export async function getAdminDashboardData() {
       const uCreatives = allCreatives.filter(c => c.userId === u.id);
       const likes = uCreatives.filter(c => c.feedbackScore === 1).length;
       const dislikes = uCreatives.filter(c => c.feedbackScore === -1).length;
+      const totalApiCostKzt = uCreatives.reduce((sum, c) => sum + (c.apiCostKzt || 0), 0);
       const uPromos = usedPromos.filter(p => p.usedBy === u.id).sort((a,b) => (b.usedAt?.getTime() || 0) - (a.usedAt?.getTime() || 0));
 
       return {
         ...u,
         totalGenerations: uCreatives.length,
+        totalApiCostKzt,
         likes,
         dislikes,
         promosUsed: uPromos
@@ -132,6 +134,22 @@ export async function updateUserImpulses(userId: string, newBalance: number) {
     return { success: true };
   } catch (e: any) {
     console.error("Error updating user balances:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function toggleUserBan(userId: string, isBanned: boolean) {
+  if (!(await isAdmin())) {
+    return { success: false, error: "Access Denied" };
+  }
+
+  try {
+    await db.update(users)
+      .set({ isBanned })
+      .where(eq(users.id, userId));
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error toggling user ban:", e);
     return { success: false, error: e.message };
   }
 }
