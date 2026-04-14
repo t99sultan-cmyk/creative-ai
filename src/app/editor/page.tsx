@@ -403,7 +403,7 @@ export default function Home() {
         setError("Не удалось скачать картинку (возможно ограничение безопасности браузера).");
       }
     } else {
-      setShowVideoInstruction(true);
+      startVideoRecording();
     }
   };
 
