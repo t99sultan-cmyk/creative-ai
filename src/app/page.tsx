@@ -46,6 +46,17 @@ export default function LandingPage() {
   const [lightboxItem, setLightboxItem] = useState<number | null>(null);
   const [galleryFilter, setGalleryFilter] = useState<'all'|'static'|'animated'>('all');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(90);
+
+  useEffect(() => {
+    let current = 90;
+    const interval = setInterval(() => {
+      current -= 1;
+      if (current < 60) current = 90;
+      setCountdown(current);
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
 
   const lockBodyScroll = (lock: boolean) => {
     if (typeof window !== "undefined") {
@@ -164,8 +175,8 @@ export default function LandingPage() {
           <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="text-left">
             <motion.h1 variants={fadeUp} className="text-[2.5rem] md:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight mb-5 leading-[1.05]">
               Генерируй продающие <br className="hidden md:block" /> 
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-hermes-500 to-[#d95e16]">
-                креативы за 60 секунд
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-hermes-500 to-[#d95e16] tabular-nums inline-block w-[300px] md:w-[480px]">
+                креативы за {countdown} сек
               </span>
             </motion.h1>
             
@@ -224,12 +235,32 @@ export default function LandingPage() {
       </section>
 
       {/* Honest Social Proof / Integration string */}
-      <section className="py-8 bg-neutral-900 border-y border-neutral-800 overflow-hidden relative">
-         <div className="max-w-7xl mx-auto px-4 flex items-center justify-center text-center">
-            <p className="text-white/80 font-medium md:text-lg">
-              Генерируем рекламные креативы для кампаний в <strong className="text-white">Kaspi</strong>, <strong className="text-white">Wildberries</strong>, <strong className="text-white">Ozon</strong>, <strong className="text-white">Instagram</strong>, <strong className="text-white">TikTok</strong>, <strong className="text-white">YouTube</strong>, <strong className="text-white">Freedom</strong> и <strong className="text-white">Choco</strong>.
-            </p>
-         </div>
+      <section className="py-6 bg-neutral-900 border-y border-neutral-800 overflow-hidden relative flex items-center">
+         <div className="absolute inset-y-0 left-0 w-16 md:w-32 bg-gradient-to-r from-neutral-900 to-transparent z-10" />
+         <div className="absolute inset-y-0 right-0 w-16 md:w-32 bg-gradient-to-l from-neutral-900 to-transparent z-10" />
+         <motion.div 
+            animate={{ x: [0, -1500] }}
+            transition={{ duration: 25, ease: "linear", repeat: Infinity }}
+            className="flex w-max gap-12 px-6"
+         >
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex items-center gap-12 text-white/50 font-bold md:text-xl whitespace-nowrap">
+                <span className="hover:text-white transition-colors cursor-default">Kaspi</span>
+                <span className="text-hermes-500/50">•</span>
+                <span className="hover:text-white transition-colors cursor-default">Wildberries</span>
+                <span className="text-hermes-500/50">•</span>
+                <span className="hover:text-white transition-colors cursor-default">Ozon</span>
+                <span className="text-hermes-500/50">•</span>
+                <span className="hover:text-white transition-colors cursor-default">Instagram</span>
+                <span className="text-hermes-500/50">•</span>
+                <span className="hover:text-white transition-colors cursor-default">TikTok</span>
+                <span className="text-hermes-500/50">•</span>
+                <span className="hover:text-white transition-colors cursor-default">YouTube</span>
+                <span className="text-hermes-500/50">•</span>
+                <span className="hover:text-white transition-colors cursor-default">Technodom</span>
+              </div>
+            ))}
+         </motion.div>
       </section>
 
       {/* Gallery Section with Filters */}
@@ -415,8 +446,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mt-12">
+          <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-5 gap-6 items-stretch mt-12">
             {[ 
+              { title: "Пробный", price: "990", impulses: 15, info: "Тест для 1 продукта" },
               { title: "Старт", price: "1 990", impulses: 45, info: "На 1–3 ниши" },
               { title: "Креатор", price: "4 980", impulses: 126, info: "Для малого бизнеса" },
               { title: "Студия", price: "14 980", impulses: 453, info: "ХИТ. A/B тесты", isPro: true },
@@ -433,9 +465,15 @@ export default function LandingPage() {
                    <span className={clsx("text-2xl font-black", plan.isPro ? 'text-hermes-400 drop-shadow-md' : 'text-hermes-600')}>{plan.impulses} <span className="text-sm">Импульсов ⚡</span></span>
                  </div>
                  
-                 <SignInButton mode="modal" fallbackRedirectUrl={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`}>
-                   <button className={clsx("min-h-[56px] w-full mb-6 rounded-2xl font-bold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-hermes-500 hover:bg-hermes-600 shadow-lg shadow-hermes-500/20" : "bg-neutral-900 hover:bg-neutral-800")}>Купить пакет "{plan.title}"</button>
-                 </SignInButton>
+                 {!isSignedIn ? (
+                   <SignInButton mode="modal" fallbackRedirectUrl={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`}>
+                     <button className={clsx("min-h-[56px] w-full mb-6 rounded-2xl font-bold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-hermes-500 hover:bg-hermes-600 shadow-lg shadow-hermes-500/20" : "bg-neutral-900 hover:bg-neutral-800")}>Купить пакет "{plan.title}"</button>
+                   </SignInButton>
+                 ) : (
+                   <Link href={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`} className={clsx("flex items-center justify-center min-h-[56px] w-full mb-6 rounded-2xl font-bold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-hermes-500 hover:bg-hermes-600 shadow-lg shadow-hermes-500/20" : "bg-neutral-900 hover:bg-neutral-800")}>
+                     Купить пакет "{plan.title}"
+                   </Link>
+                 )}
                  
                  <div className={clsx("mt-auto p-4 rounded-xl", plan.isPro ? "bg-white/5" : "bg-neutral-50")}>
                    <p className="text-[10px] uppercase font-bold text-neutral-500 mb-3 text-center">Этого хватит на:</p>
@@ -447,6 +485,16 @@ export default function LandingPage() {
                  </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-16 max-w-5xl mx-auto text-center bg-gradient-to-br from-neutral-900 to-[#120500] p-10 md:p-16 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
+             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 mix-blend-color-dodge"></div>
+             <motion.div animate={{ rotate: 180 }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }} className="absolute -top-32 -left-32 w-64 h-64 bg-hermes-500/20 rounded-full blur-[100px]" />
+             <Sparkles className="w-12 h-12 text-hermes-500 mx-auto mb-6 drop-shadow-[0_0_15px_rgba(217,94,22,0.8)]" />
+             <h3 className="text-2xl md:text-5xl font-black text-white mb-6 relative z-10 tracking-tight leading-tight">Мы стираем границы между идеей и финальным креативом</h3>
+             <p className="text-neutral-400 text-sm md:text-xl max-w-3xl mx-auto leading-relaxed relative z-10 font-medium">
+               Больше никаких мучительных согласований с дизайнерами и переплат за тесты. С AI Creative вы получаете премиальные анимации, сочные креативы и высочайший CTR прямо из браузера за несколько минут.
+             </p>
           </div>
         </div>
       </section>
