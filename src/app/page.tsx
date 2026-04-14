@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Sparkles, Play, Image as ImageIcon, Zap, Target, BarChart3, TrendingUp, CheckCircle2, ChevronDown, Star, ShoppingBag, ShoppingCart, MessageSquare, Menu, X, LayoutDashboard, Upload, Eye, MousePointerClick, Download, ArrowRight, HelpCircle } from "lucide-react";
+import { Sparkles, Play, Image as ImageIcon, Zap, Target, BarChart3, TrendingUp, CheckCircle2, ChevronDown, Star, ShoppingBag, ShoppingCart, MessageSquare, Menu, X, LayoutDashboard, Upload, Eye, MousePointerClick, Download, ArrowRight, HelpCircle, Rocket, Crown, Building2, RefreshCw, Gift } from "lucide-react";
 import clsx from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
@@ -466,81 +466,138 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing and Results */}
-      <section id="pricing" className="py-16 md:py-24 bg-neutral-50/80">
-        <div className="max-w-7xl mx-auto px-4 lg:px-6">
+      {/* Pricing and Results */}
+      <section id="pricing" className="py-16 md:py-24 bg-neutral-50/80 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-hermes-500/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+        <div className="max-w-7xl mx-auto px-4 lg:px-6 relative z-10">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-5xl font-extrabold mb-4">Выгодные пакеты Импульсов ⚡</h2>
-            <p className="text-neutral-500 md:text-lg mb-8">
-              Каждый креатив стоит свою цену: 1 статика = 3 Импульса, 1 анимация = 4 Импульса.
-            </p>
+            <h2 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight">Выбери свой тариф и начни создавать креативы выгодно</h2>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 rounded-full shadow-sm text-sm md:text-base font-medium text-neutral-600 mb-8">
+              <span className="w-2 h-2 rounded-full bg-hermes-500 animate-pulse"></span>
+              1 статичный креатив = <b>3 Импульса</b> <span className="text-neutral-300 mx-2">•</span> 1 анимированный = <b>4 Импульса</b>
+            </div>
 
-            <div className="max-w-xl mx-auto md:bg-white md:rounded-2xl md:shadow-sm md:border md:border-neutral-200 md:p-8 text-left">
-              <h4 className="font-bold md:text-xl mb-6 text-center">Сколько креативов я получу при бюджете...</h4>
-              <input 
-                type="range" min="1990" max="49980" step="1000" 
-                value={calcBudget} 
-                onChange={(e) => setCalcBudget(Number(e.target.value))}
-                className="w-full accent-hermes-500 cursor-grab active:cursor-grabbing h-2 mb-6"
-              />
-              <div className="flex justify-between items-center text-sm mb-6 border-b border-neutral-100 pb-6">
-                <span className="text-neutral-500">Ваш бюджет:</span>
-                <span className="font-black text-2xl md:text-3xl text-hermes-600">{calcBudget.toLocaleString('ru-RU')} ₸</span>
+            <div className="max-w-2xl mx-auto bg-white rounded-3xl shadow-xl shadow-neutral-200/50 border border-neutral-100 p-6 md:p-10 text-left relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-hermes-400 to-orange-400"></div>
+              <h4 className="font-extrabold md:text-2xl mb-8 text-center text-neutral-800">Калькулятор бюджета 🧮</h4>
+              
+              <div className="mb-8">
+                <div className="flex justify-between text-sm text-neutral-500 font-bold mb-4">
+                  <span>Мин (1 990 ₸)</span>
+                  <span className="text-hermes-600 bg-hermes-50 px-3 py-1 rounded-full">{calcBudget.toLocaleString('ru-RU')} ₸ Ваш бюджет</span>
+                  <span>Макс (49 980 ₸)</span>
+                </div>
+                <input 
+                  type="range" min="1990" max="49980" step="1000" 
+                  value={calcBudget} 
+                  onChange={(e) => setCalcBudget(Number(e.target.value))}
+                  className="w-full h-3 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-hermes-500 hover:accent-hermes-600 transition-all shadow-inner"
+                />
               </div>
-              <div className="space-y-3">
-                 <p className="text-sm text-neutral-600">На эту сумму вы получите <b>~{calcImpulses} Импульсов</b>. Это позволит сгенерировать:</p>
-                 <div className="flex items-center gap-3 bg-hermes-50 text-hermes-800 p-4 rounded-xl border border-hermes-100 font-bold">
-                   <ImageIcon className="w-5 h-5" /> До {countStatic} статичных креативов
-                 </div>
-                 <div className="flex items-center justify-center text-neutral-400 font-bold text-xs">ИЛИ</div>
-                 <div className="flex items-center gap-3 bg-neutral-900 text-white p-4 rounded-xl font-bold">
-                   <Play className="w-5 h-5 text-hermes-400" /> До {countAnimated} анимированных (9:16)
-                 </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-5 bg-gradient-to-br from-neutral-900 to-neutral-800 rounded-2xl text-white shadow-lg relative overflow-hidden flex flex-col justify-center">
+                  <div className="absolute -right-6 -bottom-6 opacity-10"><Zap className="w-32 h-32" /></div>
+                  <p className="text-sm text-neutral-400 mb-1 font-medium">Вы получите мгновенно:</p>
+                  <p className="text-3xl font-black text-white relative z-10"><span className="text-hermes-400">~{calcImpulses}</span> Импульсов</p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-bold text-neutral-300">
+                    Лучший выбор: 
+                    <span className="px-2 py-1 bg-hermes-500 text-white rounded shadow-md">
+                      Пакет "{calcBudget >= 49980 ? 'Бизнес' : calcBudget >= 14980 ? 'Студия' : calcBudget >= 4980 ? 'Креатор' : 'Старт'}"
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-4 bg-hermes-50 p-4 rounded-2xl border border-hermes-100 transition-transform hover:-translate-y-1">
+                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0"><ImageIcon className="w-5 h-5 text-hermes-600" /></div>
+                    <div>
+                      <p className="text-xs text-neutral-500 font-bold uppercase tracking-wider mb-0.5">Это хватит на</p>
+                      <p className="font-extrabold text-neutral-800"><span className="text-hermes-600 text-xl">~{countStatic}</span> статичных</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4 bg-purple-50 p-4 rounded-2xl border border-purple-100 transition-transform hover:-translate-y-1">
+                     <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0"><Play className="w-5 h-5 text-purple-600 ml-1" /></div>
+                     <div>
+                       <p className="text-xs text-neutral-500 font-bold uppercase tracking-wider mb-0.5">Либо на</p>
+                       <p className="font-extrabold text-neutral-800"><span className="text-purple-600 text-xl">~{countAnimated}</span> анимированных</p>
+                     </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mt-12">
+          <div className="flex flex-col md:grid md:grid-cols-2 xl:grid-cols-4 gap-6 xl:gap-4 items-stretch mt-16 max-w-6xl mx-auto">
             {[ 
-              { title: "Старт", price: "1 990", impulses: 45, info: "На 1–3 ниши" },
-              { title: "Креатор", price: "4 980", impulses: 126, info: "Для малого бизнеса" },
-              { title: "Студия", price: "14 980", impulses: 453, info: "ХИТ. A/B тесты", isPro: true },
-              { title: "Бизнес", price: "49 980", impulses: 1899, info: "Для мощных агентств" }
+              { title: "Старт", price: "1 990", impulses: 45, info: "На 1–3 ниши", icon: <Rocket className="w-6 h-6"/> },
+              { title: "Креатор", price: "4 980", impulses: 126, info: "Для малого бизнеса", icon: <Zap className="w-6 h-6"/> },
+              { title: "Студия", price: "14 980", impulses: 453, info: "ХИТ. A/B тесты", isPro: true, icon: <Crown className="w-6 h-6"/> },
+              { title: "Бизнес", price: "49 980", impulses: 1899, info: "Для мощных агентств", icon: <Building2 className="w-6 h-6"/> }
             ].map((plan, i) => (
-              <div key={i} className={clsx("p-6 md:p-8 rounded-[2rem] flex flex-col h-full relative group", plan.isPro ? "bg-neutral-900 text-white border-2 border-hermes-500 shadow-xl" : "bg-white border border-neutral-200")}>
-                 {plan.isPro && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-hermes-400 to-hermes-600 text-white px-4 py-1.5 rounded-full text-xs font-black uppercase shadow-lg shadow-hermes-500/30">Самый частый</div>}
-                 <h3 className="text-xl font-bold mb-2">{plan.title}</h3>
-                 <p className={clsx("text-sm mb-4 h-10", plan.isPro ? "text-neutral-400" : "text-neutral-500")}>{plan.info}</p>
-                 <span className="text-3xl font-extrabold mb-4 block">{plan.price} ₸</span>
+              <div key={i} className={clsx("p-6 md:p-8 rounded-[2rem] flex flex-col h-full relative group transition-all duration-300", plan.isPro ? "bg-neutral-900 text-white border-2 border-hermes-500 shadow-2xl xl:scale-105 z-10" : "bg-white border border-neutral-200 hover:shadow-xl hover:-translate-y-1")}>
+                 {plan.isPro && <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-hermes-400 to-hermes-600 text-white px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest shadow-lg shadow-hermes-500/40 border border-white/20 whitespace-nowrap">Самый популярный</div>}
                  
-                 <div className={clsx("text-center py-3 px-3 rounded-2xl border flex flex-col items-center justify-center mb-6", plan.isPro ? "bg-neutral-800 border-neutral-700/50 shadow-inner" : "bg-hermes-50 border-hermes-100")}>
-                   <span className={clsx("text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1", plan.isPro ? 'text-white' : 'text-neutral-500')}>Вы получаете</span>
-                   <span className={clsx("text-2xl font-black", plan.isPro ? 'text-hermes-400 drop-shadow-md' : 'text-hermes-600')}>{plan.impulses} <span className="text-sm">Импульсов ⚡</span></span>
+                 <div className="flex items-center gap-3 mb-4">
+                    <div className={clsx("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm", plan.isPro ? "bg-hermes-500/20 text-hermes-400 border border-hermes-500/30" : "bg-neutral-100 text-neutral-600 border border-neutral-200")}>
+                      {plan.icon}
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black">{plan.title}</h3>
+                      <p className={clsx("text-xs font-bold uppercase tracking-wider", plan.isPro ? "text-neutral-400" : "text-neutral-400")}>{plan.info}</p>
+                    </div>
                  </div>
                  
+                 <div className="mb-6 pb-6 border-b border-dashed border-neutral-200/20">
+                   <span className="text-3xl lg:text-4xl font-black block">{plan.price} ₸</span>
+                 </div>
+                 
+                 <div className={clsx("text-center py-4 px-4 rounded-2xl flex flex-col items-center justify-center mb-6", plan.isPro ? "bg-gradient-to-b from-neutral-800 to-neutral-800/50 shadow-inner border border-white/5" : "bg-hermes-50/50 border border-hermes-50")}>
+                   <span className={clsx("text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1", plan.isPro ? 'text-neutral-400' : 'text-neutral-500')}>Вы получаете</span>
+                   <span className={clsx("text-3xl font-black", plan.isPro ? 'text-white' : 'text-neutral-800')}>{plan.impulses} <span className={clsx("text-sm", plan.isPro ? "text-hermes-400": "text-hermes-500")}>⚡</span></span>
+                 </div>
+                 
+                 <div className={clsx("mt-auto p-5 rounded-2xl mb-8", plan.isPro ? "bg-white/5 border border-white/10" : "bg-neutral-50 border border-neutral-100")}>
+                   <p className="text-[11px] uppercase font-black tracking-widest text-neutral-500 mb-4 text-center">Этого хватит на:</p>
+                   <ul className="space-y-4">
+                     <li className="flex items-center gap-3 text-sm font-medium"><ImageIcon className={clsx("w-5 h-5 shrink-0", plan.isPro ? "text-hermes-400" : "text-neutral-400")} /> <span><b className="text-lg font-black mr-1">~{Math.floor(plan.impulses/3)}</b> статичных</span></li>
+                     <li className="flex items-center justify-center text-[10px] font-bold text-neutral-400 relative"><span className={clsx("w-full h-[1px] absolute opacity-20", plan.isPro ? "bg-neutral-600" : "bg-neutral-300")}></span><span className={clsx("relative px-2", plan.isPro ? "bg-neutral-900" : "bg-neutral-50")}>ИЛИ</span></li>
+                     <li className="flex items-center gap-3 text-sm font-medium"><Play className={clsx("w-5 h-5 shrink-0", plan.isPro ? "text-hermes-400" : "text-neutral-400")} /> <span><b className="text-lg font-black mr-1">~{Math.floor(plan.impulses/4)}</b> анимированных</span></li>
+                   </ul>
+                 </div>
+
                  {!isSignedIn ? (
                    <SignInButton mode="modal" fallbackRedirectUrl={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`}>
-                     <button className={clsx("relative overflow-hidden group min-h-[56px] w-full mb-6 rounded-2xl font-extrabold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-gradient-to-r from-hermes-400 to-hermes-600 shadow-[0_0_20px_rgba(217,94,22,0.4)] animate-pulse hover:shadow-[0_0_30px_rgba(217,94,22,0.6)]" : "bg-neutral-900 hover:bg-neutral-800")}>
-                       <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out skew-x-12" />
+                     <button className={clsx("w-full py-4 text-center rounded-[1rem] font-black text-sm active:scale-95 transition-all shadow-lg", plan.isPro ? "bg-gradient-to-r from-hermes-400 to-hermes-600 text-white shadow-hermes-500/30 hover:shadow-hermes-500/50" : "bg-neutral-900 text-white hover:bg-neutral-800")}>
                        Купить пакет "{plan.title}"
                      </button>
                    </SignInButton>
                  ) : (
-                   <Link href={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`} className={clsx("relative overflow-hidden group flex items-center justify-center min-h-[56px] w-full mb-6 rounded-2xl font-extrabold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-gradient-to-r from-hermes-400 to-hermes-600 shadow-[0_0_20px_rgba(217,94,22,0.4)] animate-pulse hover:shadow-[0_0_30px_rgba(217,94,22,0.6)]" : "bg-neutral-900 hover:bg-neutral-800")}>
-                     <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out skew-x-12" />
+                   <Link href={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`} className={clsx("w-full py-4 flex items-center justify-center rounded-[1rem] font-black text-sm active:scale-95 transition-all shadow-lg", plan.isPro ? "bg-gradient-to-r from-hermes-400 to-hermes-600 text-white shadow-hermes-500/30 hover:shadow-hermes-500/50" : "bg-neutral-900 text-white hover:bg-neutral-800")}>
                      Купить пакет "{plan.title}"
                    </Link>
                  )}
-                 
-                 <div className={clsx("mt-auto p-4 rounded-xl", plan.isPro ? "bg-white/5" : "bg-neutral-50")}>
-                   <p className="text-[10px] uppercase font-bold text-neutral-500 mb-3 text-center">Этого хватит на:</p>
-                   <ul className="space-y-3">
-                     <li className="flex items-center gap-3 text-sm"><ImageIcon className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/3)}</b> статичных креативов</li>
-                     <li className="flex items-center justify-center text-[10px] font-bold text-neutral-400 relative"><span className="bg-neutral-400 w-full h-[1px] absolute opacity-20"></span><span className={clsx("relative px-2", plan.isPro ? "bg-neutral-900" : "bg-neutral-50")}>ЛИБО</span></li>
-                     <li className="flex items-center gap-3 text-sm"><Play className={clsx("w-4 h-4 shrink-0", plan.isPro ? "text-hermes-500" : "text-hermes-500")} /> <b className="text-lg">~{Math.floor(plan.impulses/4)}</b> анимированных креативов</li>
-                   </ul>
-                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="max-w-4xl mx-auto mt-16 grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+             <div className="p-6 md:p-8 bg-white border border-neutral-200 rounded-3xl flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow">
+               <div className="w-12 h-12 bg-neutral-100 rounded-2xl flex items-center justify-center shrink-0 border border-neutral-200"><RefreshCw className="w-6 h-6 text-neutral-600" /></div>
+               <div>
+                 <h4 className="font-extrabold text-lg mb-2">Pay-as-you-go</h4>
+                 <p className="text-sm text-neutral-500 leading-relaxed font-medium">Закончились Импульсы? Вы всегда можете докупить их по фиксированной цене: <b className="text-neutral-800">149 ₸</b> за статичный и <b className="text-neutral-800">449 ₸</b> за анимированный креатив.</p>
+               </div>
+             </div>
+             <div className="p-6 md:p-8 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-3xl flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+               <div className="absolute -right-4 -bottom-4 opacity-50"><Gift className="w-32 h-32 text-orange-200" /></div>
+               <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shrink-0 border border-orange-200 shadow-sm relative z-10"><Gift className="w-6 h-6 text-hermes-500" /></div>
+               <div className="relative z-10">
+                 <h4 className="font-extrabold text-lg text-hermes-900 mb-2">Бонус при любой покупке</h4>
+                 <p className="text-sm text-hermes-800/80 leading-relaxed font-medium">При покупке абсолютно любого пакета мы сразу дарим вам <b className="text-hermes-700 bg-white px-1.5 py-0.5 rounded shadow-sm">+10 Импульсов</b> в подарок 🎁</p>
+               </div>
+             </div>
           </div>
 
           <div className="mt-16 max-w-5xl mx-auto text-center bg-gradient-to-br from-neutral-900 to-[#120500] p-10 md:p-16 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
