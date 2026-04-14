@@ -413,60 +413,38 @@ export default function Home() {
 
   const startVideoRecording = async () => {
     setShowVideoInstruction(false);
-
-    // Simple detection for mobile phones where screen recording is impossible
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    if (isMobile) {
-      setError("Функция захвата Видео недоступна на мобильных устройствах. Для экспорта MP4 нужен компьютер или интеграция платного API-сервиса.");
-      return;
-    }
+    setIsRecording(true);
 
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser" }, audio: false });
-      
-      const mimeType = MediaRecorder.isTypeSupported("video/mp4") 
-              ? "video/mp4" 
-              : MediaRecorder.isTypeSupported("video/webm; codecs=vp9") 
-              ? "video/webm; codecs=vp9" 
-              : "video/webm";
-              
-      const ext = mimeType.includes("mp4") ? "mp4" : "webm";
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      
-      const chunks: BlobPart[] = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-      
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `creative-video-${Date.now()}.${ext}`;
-        link.click();
-        setIsRecording(false);
-      };
+      // Отправляем HTML на наш приватный VPN-с-рендером
+      const response = await fetch("https://194.32.140.217.nip.io/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          html: code,
+          format: format
+        })
+      });
 
-      const currentIframe = iframeRef.current as any;
-      const originalCode = currentIframe.srcdoc || currentIframe.getAttribute('srcdoc') || code;
-      currentIframe.srcdoc = '';
-      
-      setTimeout(() => {
-        if(currentIframe) currentIframe.srcdoc = originalCode;
-        setIsRecording(true);
-        mediaRecorder.start();
-        
-        setTimeout(() => {
-          if(mediaRecorder.state !== "inactive") mediaRecorder.stop();
-          stream.getTracks().forEach(t => t.stop());
-        }, 6500);
-      }, 300);
+      if (!response.ok) {
+        throw new Error("Render Failed");
+      }
 
+      // Получаем готовый MP4
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const ext = "mp4";
+      
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `creative-video-${Date.now()}.${ext}`;
+      link.click();
+      
+      setTimeout(() => window.URL.revokeObjectURL(url), 5000);
     } catch (err) {
       console.error("Recording failed", err);
-      setError("Запись видео была отменена или не поддерживается на вашем устройстве.");
+      setError("Ошибка рендера. Сервер перегружен или недоступен.");
+    } finally {
       setIsRecording(false);
     }
   };
