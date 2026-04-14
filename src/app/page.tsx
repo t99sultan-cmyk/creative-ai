@@ -47,14 +47,26 @@ export default function LandingPage() {
   const [galleryFilter, setGalleryFilter] = useState<'all'|'static'|'animated'>('all');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(90);
+  const [priceCounter, setPriceCounter] = useState(290);
 
   useEffect(() => {
-    let current = 90;
+    let currentCount = 90;
+    let currentPrice = 290;
     const interval = setInterval(() => {
-      current -= 1;
-      if (current < 60) current = 90;
-      setCountdown(current);
-    }, 100);
+      let changed = false;
+      if (currentCount > 60) {
+        currentCount -= 1;
+        setCountdown(currentCount);
+        changed = true;
+      }
+      if (currentPrice > 79) {
+        currentPrice -= 5;
+        if (currentPrice < 79) currentPrice = 79;
+        setPriceCounter(currentPrice);
+        changed = true;
+      }
+      if (!changed) clearInterval(interval);
+    }, 40);
     return () => clearInterval(interval);
   }, []);
 
@@ -181,17 +193,20 @@ export default function LandingPage() {
             </motion.h1>
             
             <motion.h2 variants={fadeUp} className="text-lg md:text-2xl text-neutral-600 mb-8 font-medium">
-              Без дизайнера. Без ожидания. От 79 ₸ за штуку.
+              Без дизайнера. Без ожидания. От <span className="tabular-nums font-black text-hermes-500">{priceCounter} ₸</span> за штуку.
             </motion.h2>
             
             <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center gap-4">
               {!isSignedIn ? (
-                <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
-                  <button className="min-h-[56px] lg:min-h-[64px] group w-full sm:w-auto flex items-center justify-center gap-2 px-8 bg-hermes-500 hover:bg-hermes-600 active:scale-95 text-white font-extrabold rounded-[1.25rem] text-lg transition-all shadow-xl shadow-hermes-500/20">
-                    <Zap className="w-5 h-5 fill-white" />
-                    Получить 17 Импульсов бесплатно
-                  </button>
-                </SignInButton>
+                <div className="flex flex-col sm:w-auto w-full items-center">
+                  <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
+                    <button className="min-h-[56px] lg:min-h-[64px] group w-full sm:w-auto flex items-center justify-center gap-2 px-8 bg-hermes-500 hover:bg-hermes-600 active:scale-95 text-white font-extrabold rounded-[1.25rem] text-lg transition-all shadow-xl shadow-hermes-500/20">
+                      <Zap className="w-5 h-5 fill-white animate-pulse" />
+                      Получить бесплатный тест (18 ⚡)
+                    </button>
+                  </SignInButton>
+                  <p className="text-[10px] sm:text-xs text-neutral-500 font-bold mt-2 text-center opacity-80">Хватит на 6 статичных или 4 анимированных!</p>
+                </div>
               ) : (
                 <Link href="/editor" className="min-h-[56px] lg:min-h-[64px] group w-full sm:w-auto flex items-center justify-center gap-2 px-8 bg-hermes-500 hover:bg-hermes-600 active:scale-95 text-white font-extrabold rounded-[1.25rem] text-lg transition-all shadow-xl shadow-hermes-500/20">
                   <Zap className="w-5 h-5 fill-white" />
@@ -446,9 +461,8 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-5 gap-6 items-stretch mt-12">
+          <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mt-12">
             {[ 
-              { title: "Пробный", price: "990", impulses: 15, info: "Тест для 1 продукта" },
               { title: "Старт", price: "1 990", impulses: 45, info: "На 1–3 ниши" },
               { title: "Креатор", price: "4 980", impulses: 126, info: "Для малого бизнеса" },
               { title: "Студия", price: "14 980", impulses: 453, info: "ХИТ. A/B тесты", isPro: true },
@@ -467,10 +481,14 @@ export default function LandingPage() {
                  
                  {!isSignedIn ? (
                    <SignInButton mode="modal" fallbackRedirectUrl={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`}>
-                     <button className={clsx("min-h-[56px] w-full mb-6 rounded-2xl font-bold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-hermes-500 hover:bg-hermes-600 shadow-lg shadow-hermes-500/20" : "bg-neutral-900 hover:bg-neutral-800")}>Купить пакет "{plan.title}"</button>
+                     <button className={clsx("relative overflow-hidden group min-h-[56px] w-full mb-6 rounded-2xl font-extrabold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-gradient-to-r from-hermes-400 to-hermes-600 shadow-[0_0_20px_rgba(217,94,22,0.4)] animate-pulse hover:shadow-[0_0_30px_rgba(217,94,22,0.6)]" : "bg-neutral-900 hover:bg-neutral-800")}>
+                       <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out skew-x-12" />
+                       Купить пакет "{plan.title}"
+                     </button>
                    </SignInButton>
                  ) : (
-                   <Link href={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`} className={clsx("flex items-center justify-center min-h-[56px] w-full mb-6 rounded-2xl font-bold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-hermes-500 hover:bg-hermes-600 shadow-lg shadow-hermes-500/20" : "bg-neutral-900 hover:bg-neutral-800")}>
+                   <Link href={`/checkout?plan=${plan.title}&price=${plan.price}&impulses=${plan.impulses}`} className={clsx("relative overflow-hidden group flex items-center justify-center min-h-[56px] w-full mb-6 rounded-2xl font-extrabold text-sm active:scale-95 transition-all text-white", plan.isPro ? "bg-gradient-to-r from-hermes-400 to-hermes-600 shadow-[0_0_20px_rgba(217,94,22,0.4)] animate-pulse hover:shadow-[0_0_30px_rgba(217,94,22,0.6)]" : "bg-neutral-900 hover:bg-neutral-800")}>
+                     <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out skew-x-12" />
                      Купить пакет "{plan.title}"
                    </Link>
                  )}
