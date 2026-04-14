@@ -180,42 +180,47 @@ export default function LandingPage() {
       </AnimatePresence>
 
       {/* Hero Section */}
-      <section className="relative pt-12 lg:pt-20 pb-16 lg:pb-32 overflow-hidden flex items-center lg:min-h-[80vh]">
+      <section className="relative pt-12 lg:pt-20 pb-16 lg:pb-32 overflow-hidden flex items-center lg:min-h-[90vh]">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-hermes-100/60 rounded-full blur-3xl -z-10" />
         
         <div className="max-w-7xl mx-auto px-4 lg:px-6 grid lg:grid-cols-2 gap-10 lg:gap-16 items-center z-10 relative">
-          <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="text-left">
+          <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="text-left w-full">
             <motion.h1 variants={fadeUp} className="text-[2.5rem] md:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight mb-5 leading-[1.05]">
-              Генерируй продающие <br className="hidden md:block" /> 
+              Создай свой первый продающий <br className="hidden md:block" /> 
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-hermes-500 to-[#d95e16] tabular-nums inline-block w-[300px] md:w-[480px]">
-                креативы за {countdown} сек
+                креатив бесплатно за {countdown} сек
               </span>
             </motion.h1>
             
-            <motion.h2 variants={fadeUp} className="text-lg md:text-2xl text-neutral-600 mb-8 font-medium">
-              Без дизайнера. Без ожидания. От <span className="tabular-nums font-black text-hermes-500">{priceCounter} ₸</span> за штуку.
+            <motion.h2 variants={fadeUp} className="text-lg md:text-2xl text-neutral-600 mb-8 font-medium leading-relaxed">
+              Через искусственный интеллект. Без дизайнера и монтажа. Для Reels, TikTok, Instagram и YouTube Shorts
             </motion.h2>
             
-            <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center gap-4">
-              {!isSignedIn ? (
-                <div className="flex flex-col sm:w-auto w-full items-center">
+            <motion.div variants={fadeUp} className="flex flex-col w-full max-w-2xl gap-4">
+              <div className="flex flex-col xl:flex-row items-stretch gap-4">
+                {!isSignedIn ? (
                   <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
-                    <button className="min-h-[56px] lg:min-h-[64px] group w-full sm:w-auto flex items-center justify-center gap-2 px-8 bg-hermes-500 hover:bg-hermes-600 active:scale-95 text-white font-extrabold rounded-[1.25rem] text-lg transition-all shadow-xl shadow-hermes-500/20">
-                      <Zap className="w-5 h-5 fill-white animate-pulse" />
-                      Получить бесплатный тест (18 ⚡)
+                    <button className="min-h-[64px] lg:min-h-[72px] flex-1 w-full flex items-center justify-center gap-2 px-4 shadow-[0_0_20px_rgba(217,94,22,0.4)] bg-gradient-to-r from-hermes-400 to-hermes-600 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(217,94,22,0.5)] active:scale-95 text-white font-black rounded-2xl md:rounded-[1.5rem] text-sm sm:text-lg lg:text-[1.1rem] transition-all">
+                      <Zap className="w-5 h-5 sm:w-6 sm:h-6 fill-white animate-pulse shrink-0" />
+                      Создать первый креатив бесплатно
                     </button>
                   </SignInButton>
-                  <p className="text-[10px] sm:text-xs text-neutral-500 font-bold mt-2 text-center opacity-80">Хватит на 6 статичных или 4 анимированных!</p>
-                </div>
-              ) : (
-                <Link href="/editor" className="min-h-[56px] lg:min-h-[64px] group w-full sm:w-auto flex items-center justify-center gap-2 px-8 bg-hermes-500 hover:bg-hermes-600 active:scale-95 text-white font-extrabold rounded-[1.25rem] text-lg transition-all shadow-xl shadow-hermes-500/20">
-                  <Zap className="w-5 h-5 fill-white" />
-                  Перейти к генерации
-                </Link>
-              )}
-              <a href="#gallery" className="min-h-[56px] lg:min-h-[64px] w-full sm:w-auto flex items-center justify-center px-8 font-bold rounded-[1.25rem] text-lg text-neutral-700 bg-neutral-100 hover:bg-neutral-200 active:scale-95 transition-all">
-                Посмотреть примеры
-              </a>
+                ) : (
+                  <Link href="/editor" className="min-h-[64px] lg:min-h-[72px] flex-1 w-full flex items-center justify-center gap-2 px-4 shadow-[0_0_20px_rgba(217,94,22,0.4)] bg-gradient-to-r from-hermes-400 to-hermes-600 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(217,94,22,0.5)] active:scale-95 text-white font-black rounded-2xl md:rounded-[1.5rem] text-sm sm:text-lg lg:text-[1.1rem] transition-all">
+                    <Zap className="w-5 h-5 sm:w-6 sm:h-6 fill-white animate-pulse shrink-0" />
+                    Перейти к генерации
+                  </Link>
+                )}
+                <a href="#gallery" className="min-h-[56px] lg:min-h-[72px] xl:w-auto px-6 lg:px-8 flex items-center justify-center font-bold rounded-2xl md:rounded-[1.5rem] text-sm sm:text-lg text-neutral-700 bg-neutral-100 hover:bg-neutral-200 active:scale-95 transition-all whitespace-nowrap">
+                  Как это работает
+                </a>
+              </div>
+              
+              <div className="text-[11px] md:text-[13px] text-neutral-500 font-bold mt-2 text-center xl:text-left opacity-90 leading-relaxed border p-4 rounded-xl bg-neutral-50/50">
+                При регистрации дарим 17 Импульсов<br/>
+                <span className="text-hermes-500">→ 3 статичных + 2 анимированных креатива</span><br/>
+                Без карты • Без обязательств • Отмена в один клик
+              </div>
             </motion.div>
           </motion.div>
           
@@ -246,6 +251,39 @@ export default function LandingPage() {
             </div>
             <motion.div animate={{ x: ["-10%", "100%", "-10%"] }} transition={{ duration: 4, ease: "easeInOut", repeat: Infinity }} className="absolute inset-y-0 w-1 bg-white/80 shadow-[0_0_10px_white] z-20" />
           </motion.div>
+        </div>
+      </section>
+
+      {/* Free Trial Hook Block */}
+      <section className="py-16 md:py-24 bg-gradient-to-b from-white to-neutral-50 border-b border-neutral-100 relative">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]"></div>
+        <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
+          <h2 className="text-3xl md:text-5xl font-extrabold text-neutral-900 mb-6 tracking-tight">Попробуй бесплатно прямо сейчас</h2>
+          <p className="text-lg md:text-xl text-neutral-600 font-medium max-w-2xl mx-auto mb-10 leading-relaxed">
+            Бесплатно разработай свой первый продающий креатив за <span className="font-bold text-hermes-500 tabular-nums">{countdown} секунд</span>. ИИ сделает всю работу — тебе останется только скачать и запустить в рекламу.
+          </p>
+          
+          <div className="flex flex-col items-center">
+            {!isSignedIn ? (
+              <SignInButton mode="modal" fallbackRedirectUrl="/editor" signUpFallbackRedirectUrl="/editor">
+                <button className="min-h-[64px] px-10 bg-hermes-500 hover:bg-hermes-600 active:scale-95 text-white font-black rounded-2xl md:rounded-[1.5rem] text-lg md:text-xl transition-all shadow-xl shadow-hermes-500/30 w-full sm:w-auto">
+                  Начать создавать бесплатно
+                </button>
+              </SignInButton>
+            ) : (
+              <Link href="/editor" className="min-h-[64px] px-10 flex items-center justify-center bg-hermes-500 hover:bg-hermes-600 active:scale-95 text-white font-black rounded-2xl md:rounded-[1.5rem] text-lg md:text-xl transition-all shadow-xl shadow-hermes-500/30 w-full sm:w-auto">
+                  Начать создавать бесплатно
+              </Link>
+            )}
+            <div className="flex items-center gap-2 mt-6 p-3 bg-white/60 backdrop-blur-sm rounded-xl border border-neutral-200 shadow-sm">
+               <div className="flex -space-x-2 mr-2">
+                 <img src="https://i.pravatar.cc/100?img=1" className="w-8 h-8 rounded-full border-2 border-white"/>
+                 <img src="https://i.pravatar.cc/100?img=2" className="w-8 h-8 rounded-full border-2 border-white"/>
+                 <img src="https://i.pravatar.cc/100?img=3" className="w-8 h-8 rounded-full border-2 border-white"/>
+               </div>
+               <p className="text-[11px] md:text-sm font-bold text-neutral-600">Уже более <strong className="text-hermes-500">2400 человек</strong> сделали свой первый креатив бесплатно за последнюю неделю</p>
+            </div>
+          </div>
         </div>
       </section>
 
