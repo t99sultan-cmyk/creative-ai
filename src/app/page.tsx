@@ -217,8 +217,8 @@ export default function LandingPage() {
               </div>
               
               <div className="text-[11px] md:text-[13px] text-neutral-500 font-bold mt-2 text-center xl:text-left opacity-90 leading-relaxed border p-4 rounded-xl bg-neutral-50/50">
-                При регистрации дарим 17 Импульсов<br/>
-                <span className="text-hermes-500">→ 3 статичных + 2 анимированных креатива</span><br/>
+                При регистрации дарим 10 Импульсов<br/>
+                <span className="text-hermes-500">→ 2 статичных и 1 анимированный креатив</span><br/>
                 Без карты • Без обязательств • Отмена в один клик
               </div>
             </motion.div>

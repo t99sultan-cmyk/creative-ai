@@ -63,7 +63,7 @@ export async function POST(req: Request) {
           email,
           name,
           image: image_url || '',
-          impulses: 17, // 17 free impulses
+          impulses: 10, // 10 free impulses
         })
         console.log(`User ${id} created in database via webhook`);
       } catch (err) {
