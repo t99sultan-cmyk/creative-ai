@@ -89,6 +89,9 @@ export default function Home() {
   const [promoSuccess, setPromoSuccess] = useState("");
   const [activeCreativeId, setActiveCreativeId] = useState<string | null>(null);
   
+  const [backgroundVideoUrl, setBackgroundVideoUrl] = useState<string | null>(null);
+  const [isBackgroundRendering, setIsBackgroundRendering] = useState(false);
+  
   // History
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -158,6 +161,42 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem("creative_animated", isAnimated.toString());
   }, [isAnimated]);
+
+  // Background Pre-Rendering
+  useEffect(() => {
+    if (!code || !isAnimated) return;
+    
+    if (backgroundVideoUrl) {
+      URL.revokeObjectURL(backgroundVideoUrl);
+      setBackgroundVideoUrl(null);
+    }
+    
+    let isMounted = true;
+    const runPreRender = async () => {
+      setIsBackgroundRendering(true);
+      try {
+        const response = await fetch("https://194.32.140.217.nip.io/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ html: code, format })
+        });
+        if (response.ok && isMounted) {
+          const blob = await response.blob();
+          setBackgroundVideoUrl(URL.createObjectURL(blob));
+        }
+      } catch (err) {
+        console.error("Background render failed", err);
+      } finally {
+        if (isMounted) setIsBackgroundRendering(false);
+      }
+    };
+    
+    runPreRender();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [code, isAnimated, format]);
 
   // Handle Progress Timer (Percentage 0 to 95) with Dynamic Texts
   useEffect(() => {
@@ -373,37 +412,45 @@ export default function Home() {
     if (!iframeRef.current) return;
 
     if (!isAnimated) {
-      if (!iframeRef.current.contentDocument) {
-        setError("Не удалось получить доступ к содержимому креатива. Попробуйте обновить страницу.");
-        return;
-      }
+      setIsRecording(true);
       try {
-        const bodyContent = iframeRef.current.contentDocument.body;
-        const rect = iframeRef.current.getBoundingClientRect();
-        
-        const dataUrl = await toPng(bodyContent, { 
-          cacheBust: true, 
-          pixelRatio: 2, 
-          backgroundColor: '#ffffff',
-          skipFonts: true,
-          width: rect.width,
-          height: rect.height,
-          style: {
-            width: `${rect.width}px`,
-            height: `${rect.height}px`,
-            overflow: 'hidden'
-          }
+        const response = await fetch("https://194.32.140.217.nip.io/screenshot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            html: code,
+            format: format
+          })
         });
+
+        if (!response.ok) {
+          throw new Error("Screenshot Failed");
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        
         const link = document.createElement("a");
+        link.href = url;
         link.download = `creative-static-${Date.now()}.png`;
-        link.href = dataUrl;
         link.click();
+        
+        setTimeout(() => window.URL.revokeObjectURL(url), 5000);
       } catch (err) {
-        console.error("Error downloading image", err);
-        setError("Не удалось скачать картинку (возможно ограничение безопасности браузера).");
+        console.error("Screenshot capture failed", err);
+        setError("Ошибка скачивания. Сервер перегружен или недоступен.");
+      } finally {
+        setIsRecording(false);
       }
     } else {
-      startVideoRecording();
+      if (backgroundVideoUrl) {
+        const link = document.createElement("a");
+        link.href = backgroundVideoUrl;
+        link.download = `creative-instant-${Date.now()}.mp4`;
+        link.click();
+      } else {
+        startVideoRecording();
+      }
     }
   };
 
@@ -481,7 +528,7 @@ export default function Home() {
                    {historyItems.length === 0 ? (
                       <div className="col-span-full py-20 text-center text-neutral-400 font-bold">Вы пока не создали ни одного креатива.</div>
                    ) : historyItems.map((item: any, idx: number) => (
-                      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group hover:shadow-md transition-all cursor-pointer" onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setShowHistory(false); setMobileTab('canvas'); }}>
+                      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group hover:shadow-md transition-all cursor-pointer" onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setFormat(item.format || '9:16'); setIsAnimated(item.cost > 3); setShowHistory(false); setMobileTab('canvas'); }}>
                          <div className="flex-1 relative aspect-[9/16] bg-neutral-100 pointer-events-none overflow-hidden flex items-center justify-center">
                              <div className="relative w-full h-full" style={{ containerType: 'inline-size' }}>
                                <iframe 
@@ -888,8 +935,8 @@ export default function Home() {
                 isRecording ? "opacity-90 cursor-wait bg-hermes-50 border-hermes-200" : "hover:bg-neutral-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] hover:-translate-y-0.5"
                )}
              >
-               {isRecording ? <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-1"/> : <Download className="w-4 h-4" />}
-               {isRecording ? "Идет запись (еще пару сек)..." : `Скачать ${isAnimated ? "MP4 / Видео" : "PNG"}`}
+               {isRecording || (isAnimated && isBackgroundRendering && !backgroundVideoUrl) ? <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-1"/> : <Download className="w-4 h-4" />}
+               {isRecording || (isAnimated && isBackgroundRendering && !backgroundVideoUrl) ? "Подготовка HD (еще пару сек)..." : `Скачать ${isAnimated ? "MP4 / Видео" : "PNG"}`}
              </button>
            </div>
         )}
