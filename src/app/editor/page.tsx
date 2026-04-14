@@ -951,7 +951,7 @@ export default function Home() {
 
         {/* AI Learning Loop Feedback UI */}
         {code && !isRecording && (
-          <div className="absolute bottom-24 md:bottom-8 z-20 flex flex-col items-center gap-3 w-[90%] max-w-[340px] bg-white p-4 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-neutral-200">
+          <div className="relative mt-8 z-20 shrink-0 flex flex-col items-center gap-3 w-[90%] max-w-[340px] bg-white p-4 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-neutral-200">
              {!feedbackSubmitted ? (
                 <div className="w-full flex justify-between items-center">
                    <p className="text-xs font-bold text-neutral-800">Оцените результат:</p>
