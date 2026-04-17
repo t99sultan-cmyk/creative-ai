@@ -110,9 +110,31 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [showHistoryWarning, setShowHistoryWarning] = useState(true);
   const [downloadedItems, setDownloadedItems] = useState<string[]>([]);
+  const [backgroundStatuses, setBackgroundStatuses] = useState<Record<string, string>>({});
 
   // "View Mode" properties based on either the canvas OR the active history item
   const activeCreativeCode = activeCreativeId ? historyItems.find(i => i.id === activeCreativeId)?.htmlCode || code : code;
+
+  useEffect(() => {
+    if (!showHistory || historyItems.length === 0) return;
+    let isPolling = true;
+    const fetchStatuses = async () => {
+      const itemsToCheck = historyItems.filter(item => item.htmlCode?.includes('gsap') && !downloadedItems.includes(item.id));
+      for (const item of itemsToCheck) {
+        if (!isPolling) break;
+        try {
+          const res = await fetch(`https://194.32.140.217.nip.io/progress/${item.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            setBackgroundStatuses(prev => ({...prev, [item.id]: data.status}));
+          }
+        } catch(e) {}
+      }
+      if (isPolling) setTimeout(fetchStatuses, 5000);
+    };
+    fetchStatuses();
+    return () => { isPolling = false; };
+  }, [showHistory, historyItems, downloadedItems]);
 
   useEffect(() => {
     if (showHistory) {
@@ -206,7 +228,7 @@ export default function Home() {
 
   // Background Pre-Rendering
   useEffect(() => {
-    if (!code || !isAnimated) return;
+    if (!code || !isAnimated || !activeCreativeId) return;
     
     setBackgroundJobId(null);
     
@@ -214,10 +236,10 @@ export default function Home() {
     const runPreRender = async () => {
       setIsBackgroundRendering(true);
       try {
-        const response = await fetch("https://213.155.20.115.nip.io/render", {
+        const response = await fetch("https://194.32.140.217.nip.io/render", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ html: code, format })
+          body: JSON.stringify({ html: code, format, creativeId: activeCreativeId })
         });
         if (response.ok && isMounted) {
           const data = await response.json();
@@ -235,7 +257,7 @@ export default function Home() {
     return () => {
       isMounted = false;
     };
-  }, [code, isAnimated, format]);
+  }, [code, isAnimated, format, activeCreativeId]);
 
   // Handle Progress Timer (Percentage 0 to 95) with Dynamic Texts
   useEffect(() => {
@@ -540,72 +562,61 @@ export default function Home() {
     setShowVideoInstruction(false);
     setIsRecording(true);
 
+    const targetId = preExistingJobId || activeCreativeId;
+    if (!targetId || !code) {
+      setError("Не найден ID креатива для рендера");
+      setIsRecording(false);
+      return;
+    }
+
     try {
-      // Initialize Server-Sent Events connection to Cloud Run
-      const CLOUD_URL = "https://creative-cloud-renderer-694906438875.europe-west4.run.app/render";
+      const CLOUD_URL = "https://194.32.140.217.nip.io/render";
+      
+      setRenderPhase('Подключение к серверу очереди...');
+      setRenderProgress(0);
 
       const response = await fetch(CLOUD_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: code, format })
+        // Pass targetId so server uses it for polling
+        body: JSON.stringify({ html: code, format, creativeId: targetId })
       });
 
-      if (!response.ok) throw new Error("Cloud Render Failed: " + response.statusText);
+      if (!response.ok) throw new Error("Cloud Render Queue Failed: " + response.statusText);
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder("utf-8");
-      
-      let finalVideoUrl = "";
+      let isDone = false;
+      let checkError = "";
+      setRenderPhase('В очереди (вы можете свернуть приложение)...');
 
-      if (reader) {
-        setRenderPhase('Подключение к облаку...');
-        setRenderProgress(0);
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const messages = chunk.split('\n\n');
-          
-          for (const message of messages) {
-            if (!message.trim()) continue;
-            
-            const lines = message.split('\n');
-            let eventName = 'message';
-            let dataStr = '';
-
-            for (const line of lines) {
-              if (line.startsWith('event:')) eventName = line.replace('event:', '').trim();
-              if (line.startsWith('data:')) dataStr = line.replace('data:', '').trim();
-            }
-
-            if (dataStr) {
-              try {
-                const data = JSON.parse(dataStr);
-                
-                if (eventName === 'error') {
-                  throw new Error(data.message || "Cloud Stream Error");
-                }
-                
-                if (data.phase) setRenderPhase(data.phase);
-                if (data.progress !== undefined) setRenderProgress(data.progress);
-                
-                if (eventName === 'complete' && data.url) {
-                  finalVideoUrl = data.url;
-                }
-              } catch(e) {
-                // Ignore JSON parsing errors for partial chunks
-              }
+      // Polling loop
+      while (!isDone) {
+        await new Promise(r => setTimeout(r, 4000));
+        
+        try {
+          const pollRes = await fetch(`https://194.32.140.217.nip.io/progress/${targetId}`);
+          if (pollRes.ok) {
+            const data = await pollRes.json();
+            if (data.status === 'processing') {
+              setRenderPhase('Рендеринг (работает Puppeteer)...');
+            } else if (data.status === 'done') {
+              isDone = true;
+            } else if (data.status === 'error') {
+              checkError = 'Ошибка при генерации на фоновом сервере.';
+              break;
             }
           }
+        } catch (e) {
+          console.warn("Polling error, retrying...", e);
         }
       }
 
-      if (!finalVideoUrl) throw new Error("Видео не было сгенерировано (сбой потока).");
+      if (checkError) throw new Error(checkError);
 
-      // Fetch blob to bypass automatic browser open and force download
-      const videoRes = await fetch(finalVideoUrl);
+      setRenderPhase('Скачивание видеофайла на устройство...');
+      
+      const videoRes = await fetch(`https://194.32.140.217.nip.io/download/${targetId}`);
+      if (!videoRes.ok) throw new Error("Video download failed. Not found.");
+
       const videoBlob = await videoRes.blob();
       const blobUrl = URL.createObjectURL(videoBlob);
 
