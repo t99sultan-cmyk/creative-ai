@@ -337,7 +337,7 @@ export default function Home() {
     if (error) setError(""); 
   };
 
-  const handleGenerate = async (isRemix: boolean = false) => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError("Пожалуйста, введите ТЗ для генерации.");
       return;
@@ -1089,7 +1089,7 @@ export default function Home() {
             </div>
           ) : (
             <button
-              onClick={() => handleGenerate(false)}
+              onClick={() => handleGenerate()}
               disabled={isLoading || isRemovingBg || !prompt.trim()}
               className={clsx(
                 "w-full py-4 rounded-xl font-bold text-white transition-all duration-300 flex flex-col items-center justify-center gap-1 relative overflow-hidden",
@@ -1243,7 +1243,7 @@ export default function Home() {
                     setRemixSourceCode(activeCreativeCode);
                     setActiveCreativeId(null);
                  } else if (prompt.trim()) {
-                    handleGenerate(false);
+                    handleGenerate();
                     setMobileTab('canvas');
                  }
               } else {
