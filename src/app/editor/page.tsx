@@ -758,9 +758,14 @@ export default function Home() {
                                   ) : renderJobs[item.id] ? (
                                     <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
                                       <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
-                                      Рендер: {Math.floor(Math.min(95, 10 + ((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * 85))}%
+                                      Сборка: {Math.floor(Math.min(95, 10 + ((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * 85))}%
                                     </span>
                                   ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id].startsWith('processing'))) ? (
+                                    <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
+                                      <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
+                                      В очереди
+                                    </span>
+                                  ) : (
                                     <span className="bg-orange-50 text-orange-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-orange-200 flex items-center gap-0.5">
                                       Новый
                                     </span>
