@@ -117,9 +117,29 @@ export default function Home() {
 
   useEffect(() => {
     if (!showHistory || historyItems.length === 0) return;
+    
+    // Cross-device Sync: Map DB 'rendering:' strings into local background jobs
+    try {
+      const currentLocaltorage = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
+      let changed = false;
+      historyItems.forEach((item: any) => {
+         if (item.videoUrl && item.videoUrl.startsWith('rendering:')) {
+             const startTime = parseInt(item.videoUrl.split(':')[1]);
+             if (!currentLocaltorage[item.id]) {
+                 currentLocaltorage[item.id] = { startTime, totalFrames: item.format === '9:16' ? 450 : 300, format: item.format || '9:16' };
+                 changed = true;
+             }
+         }
+      });
+      if (changed) {
+          localStorage.setItem('backgroundRenderJobs', JSON.stringify(currentLocaltorage));
+          setRenderJobs(currentLocaltorage);
+      }
+    } catch(e) {}
+
     let isPolling = true;
     const fetchStatuses = async () => {
-      const itemsToCheck = historyItems.filter(item => item.htmlCode?.includes('gsap') && !downloadedItems.includes(item.id));
+      const itemsToCheck = historyItems.filter((item: any) => item.htmlCode?.includes('gsap') && !downloadedItems.includes(item.id));
       for (const item of itemsToCheck) {
         if (!isPolling) break;
         try {
