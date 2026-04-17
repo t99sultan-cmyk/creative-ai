@@ -592,7 +592,7 @@ export default function Home() {
       let isDone = false;
       let checkError = "";
       setRenderPhase('В очереди Cloud Run (около 1 минуты)...');
-      setRenderProgress(40);
+      setRenderProgress(10);
 
       const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
       const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${targetId}.mp4`;
@@ -603,16 +603,22 @@ export default function Home() {
         await new Promise(r => setTimeout(r, 2000));
         attempts++;
         
+        // Математически симулируем движение прогресс-бара от 10% до 95% за время рендера (~90 секунд)
+        let simulatedProgress = 10 + Math.min(85, attempts * (85 / 45)); 
+        setRenderProgress(simulatedProgress);
+
+        if (attempts < 4) setRenderPhase('☁️ Инициализация сервера Cloud Run...');
+        else if (attempts < 12) setRenderPhase('🎞️ Рендеринг: Покадровая запись анимаций...');
+        else if (attempts < 25) setRenderPhase('⚙️ Рендеринг: Кодирование видео H.264 (FFmpeg)...');
+        else if (attempts < 35) setRenderPhase('☁️ Выгрузка MP4 файла в облачное хранилище...');
+        else setRenderPhase('🔄 Финализация файла... еще чуть-чуть');
+
         try {
           const pollRes = await fetch(fileUrl, { method: 'HEAD' });
           if (pollRes.ok) {
               setRenderProgress(100);
-              setRenderPhase(`Видео готово! Подготовка загрузки...`);
+              setRenderPhase(`✅ Видео готово! Скачиваем на устройство...`);
               isDone = true;
-          } else {
-             // Just indicate we are waiting
-             if (attempts > 5) setRenderProgress(60);
-             if (attempts > 15) setRenderProgress(80);
           }
         } catch (e) {
           console.warn("Polling error, retrying...", e);
@@ -1227,8 +1233,8 @@ export default function Home() {
                  </div>
                )}
                {isRecording && (
-                 <p className="text-[10px] font-medium text-neutral-500 mt-2 text-center normal-case leading-tight px-1 drop-shadow-sm">
-                   Сборка идет на сервере. Приложение должно оставаться открытым, чтобы видео скачалось вам на телефон. Можете пока отойти выпить кофе ☕
+                 <p className="text-[10px] sm:text-xs font-medium text-neutral-500 mt-3 text-center normal-case leading-snug px-2 drop-shadow-sm max-w-sm mx-auto opacity-80">
+                   Рендеринг запущен в облаке. Можете закрыть вкладку или свернуть приложение — готовое видео появится в "Мои Креативы", и вы скачаете его позже.
                  </p>
                )}
              </button>
