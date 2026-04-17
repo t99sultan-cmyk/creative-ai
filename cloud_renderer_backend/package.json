@@ -1,0 +1,14 @@
+{
+  "name": "creative-cloud-renderer",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "timecut": "^0.3.3",
+    "@google-cloud/storage": "^7.15.0"
+  }
+}
