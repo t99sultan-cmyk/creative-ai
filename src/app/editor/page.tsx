@@ -130,7 +130,9 @@ export default function Home() {
           }
         } catch(e) {}
       }
-      if (isPolling) setTimeout(fetchStatuses, 5000);
+      if (isPolling) {
+        setTimeout(fetchStatuses, itemsToCheck.length > 0 ? 2000 : 10000);
+      }
     };
     fetchStatuses();
     return () => { isPolling = false; };
@@ -744,6 +746,7 @@ export default function Home() {
                                <div className={`shadow-lg bg-white rounded-xl overflow-hidden relative ${isVertical ? 'aspect-[9/16] w-[200px]' : 'aspect-square w-[200px]'}`}>
                                   <iframe 
                                      srcDoc={item.htmlCode} 
+                                     loading="lazy"
                                      className="absolute inset-0 border-0 pointer-events-none origin-top-left"
                                      style={{ 
                                         width: isVertical ? '400px' : '500px', 
@@ -1206,8 +1209,8 @@ export default function Home() {
              <button 
                onClick={handleDownloadClick}
                disabled={isLoading || isRemovingBg || isRecording}
-               className={clsx("flex-grow md:flex-grow-0 px-6 py-3 shrink-0 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-sm font-bold text-neutral-800 transition-all flex flex-col items-center justify-center gap-1", 
-                isRecording ? "opacity-100 cursor-wait bg-hermes-50 border-hermes-200 min-w-[200px]" : "hover:bg-neutral-50 hover:-translate-y-0.5 flex-row"
+               className={clsx("flex-grow md:flex-grow-0 px-6 py-3 shrink-0 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-sm font-bold text-neutral-800 transition-all flex items-center justify-center gap-1", 
+                isRecording ? "flex-col opacity-100 cursor-wait bg-hermes-50 border-hermes-200 min-w-[200px]" : "hover:bg-neutral-50 hover:-translate-y-0.5 flex-row"
                )}
              >
                <div className="flex items-center gap-2">
