@@ -89,6 +89,15 @@ export default function Home() {
   const [promoCode, setPromoCode] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [promoSuccess, setPromoSuccess] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [activeCreativeId, setActiveCreativeId] = useState<string | null>(null);
   
   // Moved below historyItems
@@ -1126,7 +1135,7 @@ export default function Home() {
 
       {/* Main Canvas Area */}
       <section className={clsx(
-        "flex-1 relative flex-col items-center justify-center p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-hidden pt-16 md:pt-8 w-full",
+        "flex-1 relative flex-col items-center justify-start md:justify-center p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-40 md:pb-8 pt-8 md:pt-8 w-full min-h-screen",
         mobileTab === 'canvas' ? "flex" : "hidden md:flex"
       )}>
         
@@ -1158,14 +1167,19 @@ export default function Home() {
                    <div className="bg-hermes-500 h-1.5 transition-all duration-1000 ease-linear" style={{ width: `${renderProgress}%` }}></div>
                  </div>
                )}
+               {isRecording && (
+                 <p className="text-[10px] font-medium text-neutral-500 mt-2 text-center normal-case leading-tight px-1 drop-shadow-sm">
+                   Сборка идет на сервере. Приложение должно оставаться открытым, чтобы видео скачалось вам на телефон. Можете пока отойти выпить кофе ☕
+                 </p>
+               )}
              </button>
            </div>
         )}
 
         {code ? (
           <div 
-            className="relative z-10 bg-white overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-500 ease-out flex items-center justify-center pointer-events-auto"
-            style={getCanvasStyle()}
+            className="relative z-10 bg-white overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-500 ease-out flex items-center justify-center pointer-events-auto rounded-[32px] shrink-0 mt-20 md:mt-0"
+            style={format === '9:16' ? { width: '360px', height: '640px' } : { width: isMobile ? '350px' : '500px', height: isMobile ? '350px' : '500px' }}
           >
             <iframe
               key={iframeKey}
@@ -1177,7 +1191,7 @@ export default function Home() {
               style={{
                 width: format === '9:16' ? '400px' : '500px',
                 height: format === '9:16' ? '711px' : '500px',
-                transform: format === '9:16' ? 'scale(0.9)' : 'scale(1)',
+                transform: format === '9:16' ? 'scale(0.9)' : (isMobile ? 'scale(0.7)' : 'scale(1)'),
                 transformOrigin: 'center center',
                 border: 'none',
               }}
