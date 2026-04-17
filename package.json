@@ -11,8 +11,12 @@
   "dependencies": {
     "@clerk/nextjs": "^7.0.12",
     "@google/generative-ai": "^0.24.1",
+    "@google-cloud/tasks": "^5.0.0",
     "@imgly/background-removal": "^1.7.0",
     "@neondatabase/serverless": "^1.0.2",
+    "@remotion/cli": "^4.0.448",
+    "@remotion/paths": "^4.0.448",
+    "@remotion/player": "^4.0.448",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
@@ -22,6 +26,7 @@
     "next": "16.2.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "remotion": "^4.0.448",
     "svix": "^1.90.0",
     "tailwind-merge": "^3.5.0"
   },

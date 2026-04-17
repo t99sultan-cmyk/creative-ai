@@ -48,6 +48,7 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(90);
   const [priceCounter, setPriceCounter] = useState(290);
+  const [sliderPosition, setSliderPosition] = useState(50);
 
   useEffect(() => {
     let currentCount = 90;
@@ -226,30 +227,52 @@ export default function LandingPage() {
           
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.2 }}
-            className="relative w-full aspect-[4/5] lg:aspect-square bg-neutral-100 rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden group"
+            className="relative w-full aspect-[4/5] lg:aspect-square bg-neutral-100 rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden group touch-none select-none"
           >
-            <div className="absolute inset-0 flex">
-               <div className="w-1/2 h-full bg-white relative overflow-hidden border-r border-neutral-200/50">
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-300">
-                     <ShoppingCart className="w-16 h-16 mb-4 opacity-50" />
-                     <p className="font-bold uppercase tracking-widest text-xs">Товар на белом фоне</p>
-                  </div>
-                  <div className="absolute bottom-4 left-4 bg-black/5 backdrop-blur-md text-neutral-600 text-xs font-bold px-3 py-1.5 rounded-lg border border-black/5">Было</div>
+            {/* The Before Image Container */}
+            <div className="absolute inset-0 bg-white" style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}>
+               <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-300">
+                  <ShoppingCart className="w-16 h-16 mb-4 opacity-50" />
+                  <p className="font-bold uppercase tracking-widest text-xs">Товар на белом фоне</p>
                </div>
-               <div className="w-1/2 h-full relative overflow-hidden bg-gradient-to-br from-hermes-600 via-hermes-500 to-purple-900">
-                  <motion.div 
-                    animate={{ rotate: 360, scale: [1, 1.2, 1] }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                    className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] opacity-30 mix-blend-overlay bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"
-                  />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-4 text-center">
-                     <Sparkles className="w-16 h-16 mb-4 hidden md:block animate-pulse fill-white text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]" />
-                     <p className="font-black text-white text-sm md:text-xl uppercase drop-shadow-md tracking-wide">Неоновый<br/>Киберпанк<br/>Стиль</p>
-                     <div className="mt-4 px-3 py-1 bg-white/20 border border-white/40 rounded backdrop-blur-md text-white text-[10px] md:text-xs tracking-widest uppercase animate-pulse font-bold">CTR +47%</div>
-                  </div>
-                  <div className="absolute bottom-4 left-4 bg-white/10 text-white backdrop-blur-md text-[10px] md:text-xs font-bold px-3 py-1.5 border border-white/20 rounded-lg z-20">Стало через 60 сек</div>
+               <div className="absolute bottom-4 left-4 bg-black/5 backdrop-blur-md text-neutral-600 text-xs font-bold px-3 py-1.5 rounded-lg border border-black/5">Было</div>
+            </div>
+
+            {/* The After Image Container */}
+            <div className="absolute inset-0 bg-gradient-to-br from-hermes-600 via-hermes-500 to-purple-900" style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }}>
+               <motion.div 
+                 animate={{ rotate: 360, scale: [1, 1.2, 1] }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                 className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] opacity-30 mix-blend-overlay bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent pointer-events-none"
+               />
+               <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-4 text-center">
+                  <Sparkles className="w-16 h-16 mb-4 hidden md:block animate-pulse fill-white text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]" />
+                  <p className="font-black text-white text-sm md:text-xl uppercase drop-shadow-md tracking-wide">Неоновый<br/>Киберпанк<br/>Стиль</p>
+                  <div className="mt-4 px-3 py-1 bg-white/20 border border-white/40 rounded backdrop-blur-md text-white text-[10px] md:text-xs tracking-widest uppercase font-bold">CTR +47%</div>
+               </div>
+               <div className="absolute bottom-4 right-4 bg-white/10 text-white backdrop-blur-md text-[10px] md:text-xs font-bold px-3 py-1.5 border border-white/20 rounded-lg z-20">Стало через 60 сек</div>
+            </div>
+
+            {/* Slider Divider Line */}
+            <div className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_15px_white] z-20 pointer-events-none" style={{ left: `calc(${sliderPosition}% - 2px)` }}>
+               {/* Custom Handle Thumb */}
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center shadow-lg shadow-black/30 border border-neutral-100">
+                 <div className="flex items-center gap-1">
+                   <div className="w-[3px] h-4 bg-neutral-300 rounded-full"></div>
+                   <div className="w-[3px] h-4 bg-neutral-300 rounded-full"></div>
+                   <div className="w-[3px] h-4 bg-neutral-300 rounded-full"></div>
+                 </div>
                </div>
             </div>
-            <motion.div animate={{ x: ["-10%", "100%", "-10%"] }} transition={{ duration: 4, ease: "easeInOut", repeat: Infinity }} className="absolute inset-y-0 w-1 bg-white/80 shadow-[0_0_10px_white] z-20" />
+
+            {/* Hidden Input Range for proper drag tracking */}
+            <input 
+              type="range"
+              min="0" max="100"
+              value={sliderPosition}
+              onChange={(e) => setSliderPosition(Number(e.target.value))}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-30 m-0 p-0"
+              title="Slide to compare"
+            />
           </motion.div>
         </div>
       </section>

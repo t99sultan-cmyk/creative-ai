@@ -123,10 +123,14 @@ export default function Home() {
       for (const item of itemsToCheck) {
         if (!isPolling) break;
         try {
-          const res = await fetch(`https://194.32.140.217.nip.io/progress/${item.id}`);
+          // Check if Google Cloud Storage has the file yet
+          const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
+          const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${item.id}.mp4`;
+          const res = await fetch(fileUrl, { method: 'HEAD' });
           if (res.ok) {
-            const data = await res.json();
-            setBackgroundStatuses(prev => ({...prev, [item.id]: data.status}));
+            setBackgroundStatuses(prev => ({...prev, [item.id]: 'done'}));
+          } else {
+             setBackgroundStatuses(prev => ({...prev, [item.id]: 'queued'}));
           }
         } catch(e) {}
       }
@@ -238,7 +242,7 @@ export default function Home() {
     const runPreRender = async () => {
       setIsBackgroundRendering(true);
       try {
-        const response = await fetch("https://194.32.140.217.nip.io/render", {
+        const response = await fetch("/api/render", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ html: code, format, creativeId: activeCreativeId })
@@ -572,10 +576,10 @@ export default function Home() {
     }
 
     try {
-      const CLOUD_URL = "https://194.32.140.217.nip.io/render";
+      const CLOUD_URL = "/api/render";
       
-      setRenderPhase('Подключение к серверу очереди...');
-      setRenderProgress(0);
+      setRenderPhase('Подключение к оркестратору Google Cloud...');
+      setRenderProgress(10);
 
       const response = await fetch(CLOUD_URL, {
         method: "POST",
@@ -587,40 +591,40 @@ export default function Home() {
 
       let isDone = false;
       let checkError = "";
-      setRenderPhase('В очереди (около 1 минуты)...');
+      setRenderPhase('В очереди Cloud Run (около 1 минуты)...');
+      setRenderProgress(40);
 
-      while (!isDone) {
+      const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
+      const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${targetId}.mp4`;
+
+      // Wait up to 5 minutes for Google Cloud Run to process
+      let attempts = 0;
+      while (!isDone && attempts < 150) {
         await new Promise(r => setTimeout(r, 2000));
+        attempts++;
         
         try {
-          const pollRes = await fetch(`https://194.32.140.217.nip.io/progress/${targetId}`);
+          const pollRes = await fetch(fileUrl, { method: 'HEAD' });
           if (pollRes.ok) {
-            const data = await pollRes.json();
-            if (data.status.startsWith('processing')) {
-              const perc = parseInt(data.status.split(':')[1]) || 0;
-              setRenderProgress(perc);
-              setRenderPhase(`Рендеринг видео... ${perc}%`);
-            } else if (data.status === 'done') {
               setRenderProgress(100);
               setRenderPhase(`Видео готово! Подготовка загрузки...`);
               isDone = true;
-            } else if (data.status === 'queued') {
-              setRenderPhase('В очереди (около 1 минуты)...');
-            } else if (data.status === 'error') {
-              checkError = 'Ошибка при генерации на фоновом сервере.';
-              break;
-            }
+          } else {
+             // Just indicate we are waiting
+             if (attempts > 5) setRenderProgress(60);
+             if (attempts > 15) setRenderProgress(80);
           }
         } catch (e) {
           console.warn("Polling error, retrying...", e);
         }
       }
 
-      if (checkError) throw new Error(checkError);
+      if (!isDone) throw new Error("Превышено время ожидания рендера в Google Cloud.");
 
       setRenderPhase('Скачивание видеофайла на устройство...');
       
-      const videoRes = await fetch(`https://194.32.140.217.nip.io/download/${targetId}`);
+      // We directly download the finished file from Google Storage!
+      const videoRes = await fetch(fileUrl);
       if (!videoRes.ok) throw new Error("Video download failed. Not found.");
 
       const videoBlob = await videoRes.blob();
