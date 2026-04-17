@@ -210,16 +210,15 @@ export default function Home() {
       // Ensure progress bar updates visually for active canvas creative
       if (activeCreativeId && currentJobs[activeCreativeId] && checkIsTabActive()) {
          const job = currentJobs[activeCreativeId];
-         const elapsedSec = (Date.now() - job.startTime) / 1000;
-         const framesDone = Math.min(job.totalFrames - 5, Math.floor((elapsedSec / 90) * job.totalFrames));
+         const elapsedSec = Math.floor((Date.now() - job.startTime) / 1000);
          
-         if (framesDone < 20) setRenderPhase('☁️ Инициализация сервера Cloud Run...');
-         else if (framesDone < 150) setRenderPhase(`🎞️ Покадровая запись: ${framesDone} / ${job.totalFrames} кадров`);
-         else if (framesDone < 300) setRenderPhase(`⚙️ Кодирование H.264: ${framesDone} / ${job.totalFrames} кадров`);
-         else if (framesDone < job.totalFrames - 10) setRenderPhase(`☁️ Выгрузка MP4 в облако (${framesDone} / ${job.totalFrames})...`);
-         else setRenderPhase('🔄 Финализация файла... еще чуть-чуть');
+         if (elapsedSec < 5) setRenderPhase(`☁️ Инициализация сервера Cloud Run... (${elapsedSec} сек)`);
+         else if (elapsedSec < 45) setRenderPhase(`🎞️ Покадровая запись анимации... (${elapsedSec} сек)`);
+         else if (elapsedSec < 75) setRenderPhase(`⚙️ Кодирование H.264 (FFmpeg)... (${elapsedSec} сек)`);
+         else setRenderPhase(`☁️ Сохранение файла в хранилище... (${elapsedSec} сек)`);
 
-         setRenderProgress(10 + Math.min(85, (framesDone / job.totalFrames) * 85));
+         // Visual progress bar that fills up over ~90 seconds but never fully stops moving
+         setRenderProgress(10 + Math.min(85, (elapsedSec / 90) * 85));
          setIsRecording(true);
       }
 
@@ -778,7 +777,7 @@ export default function Home() {
                                   ) : renderJobs[item.id] ? (
                                     <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
                                       <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
-                                      Сборка: {Math.floor(Math.min(95, 10 + ((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * 85))}%
+                                      Сборка: {Math.floor((Date.now() - renderJobs[item.id].startTime) / 1000)} сек
                                     </span>
                                   ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id].startsWith('processing'))) ? (
                                     <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
@@ -823,13 +822,13 @@ export default function Home() {
                                {renderJobs[item.id] && (
                                   <div className="absolute inset-x-4 bottom-4 z-30 bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-2xl border border-neutral-200/60 flex flex-col gap-1.5">
                                       <div className="flex justify-between items-center text-[10px] font-black text-neutral-800 uppercase">
-                                          <span>Сборка кадров</span>
-                                          <span className="text-hermes-500">
-                                            {Math.max(0, Math.min(renderJobs[item.id].totalFrames - 5, Math.floor(((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * renderJobs[item.id].totalFrames)))} / {renderJobs[item.id].totalFrames}
+                                          <span>Облачный рендер</span>
+                                          <span className="text-hermes-500 font-mono">
+                                            {Math.floor((Date.now() - renderJobs[item.id].startTime) / 1000)} сек
                                           </span>
                                       </div>
                                       <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
-                                          <div className="h-full bg-gradient-to-r from-hermes-400 to-hermes-600 transition-all duration-1000 ease-linear rounded-full" style={{ width: `${Math.min(95, 10 + ((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * 85)}%` }}></div>
+                                          <div className="h-full bg-gradient-to-r from-hermes-400 to-hermes-500 transition-all duration-1000 ease-linear rounded-full" style={{ width: `${Math.min(95, 10 + ((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * 85)}%` }}></div>
                                       </div>
                                   </div>
                                )}
