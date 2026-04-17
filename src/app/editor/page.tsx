@@ -108,10 +108,19 @@ export default function Home() {
   // History
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showHistoryWarning, setShowHistoryWarning] = useState(true);
   const [downloadedItems, setDownloadedItems] = useState<string[]>([]);
 
   // "View Mode" properties based on either the canvas OR the active history item
   const activeCreativeCode = activeCreativeId ? historyItems.find(i => i.id === activeCreativeId)?.htmlCode || code : code;
+
+  useEffect(() => {
+    if (showHistory) {
+      setShowHistoryWarning(true);
+      const timer = setTimeout(() => setShowHistoryWarning(false), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [showHistory]);
 
 
   useEffect(() => {
@@ -637,7 +646,7 @@ export default function Home() {
              <div className="w-full h-[100dvh] sm:h-full max-w-6xl bg-white sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
                 <div className="p-4 sm:p-6 border-b border-neutral-100 flex-shrink-0">
                    <div className="flex items-center justify-between mb-0 sm:mb-3">
-                     <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><PackageSearch className="w-5 h-5 sm:w-6 sm:h-6 text-hermes-500" /> Мой Банк ({historyItems.length})</h2>
+                     <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><PackageSearch className="w-5 h-5 sm:w-6 sm:h-6 text-hermes-500" /> Мои креативы ({historyItems.length})</h2>
                      <button onClick={() => setShowHistory(false)} className="w-10 h-10 rounded-full flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 transition-colors">
                        <X className="w-5 h-5 text-neutral-600" />
                      </button>
@@ -652,9 +661,15 @@ export default function Home() {
                            который еще не скачивался.
                         </p>
                      </div>
-                     <div className="px-3 py-2 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-lg inline-flex items-center gap-1.5">
-                        ⚠️ Внимание: из-за большого веса файлов, история хранится на наших серверах 30 дней. Скачивайте видео к себе на компьютер для вечного хранения!
-                     </div>
+                     <AnimatePresence>
+                       {showHistoryWarning && (
+                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                           <div className="px-3 py-2 mt-2 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 w-full">
+                              ⚠️ Внимание: из-за большого веса файлов, история хранится на наших серверах 30 дней. Скачивайте видео к себе на компьютер для вечного хранения!
+                           </div>
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
                    </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-neutral-100/50 flex flex-col sm:flex-row sm:flex-wrap gap-4 md:gap-6 items-center sm:items-start sm:justify-start content-start">
@@ -794,7 +809,7 @@ export default function Home() {
                 onClick={() => setShowHistory(true)}
                 className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600 underline"
               >
-                Мой Банк ({historyItems.length})
+                Мои креативы ({historyItems.length})
               </button>
             </div>
         </div>
@@ -1073,7 +1088,7 @@ export default function Home() {
         <div className="p-6 border-t border-neutral-200/50 bg-white/50 backdrop-blur-sm z-20 hidden md:block">
           {activeCreativeId ? (
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-neutral-500 font-bold text-center">Вы просматриваете креатив из Банка</p>
+              <p className="text-xs text-neutral-500 font-bold text-center">Вы просматриваете креатив из ваших сохранений</p>
               
               <button
                 onClick={() => { setRemixSourceCode(activeCreativeCode); setActiveCreativeId(null); }}
@@ -1140,22 +1155,30 @@ export default function Home() {
       )}>
         
         {code && (
-           <div className="absolute top-8 right-8 z-20 flex items-center gap-3">
+           <div className="absolute top-4 left-4 right-4 md:top-8 md:auto md:left-auto md:right-8 z-20 flex flex-wrap items-center justify-end gap-2 md:gap-3">
+             <button
+               onClick={() => { setMobileTab('controls'); setShowHistory(true); }}
+               className="md:hidden flex-1 max-w-[140px] px-4 py-3 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-xs font-bold text-neutral-800 transition-all flex items-center justify-center gap-1.5 hover:bg-neutral-50 active:scale-95"
+             >
+               <PackageSearch className="w-4 h-4" /> Мои креативы
+             </button>
+             
              {isAnimated && (
                <button 
                  onClick={handleReplay}
                  disabled={isLoading || isRemovingBg || isRecording}
-                 className="w-12 h-12 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-neutral-800 transition-all flex items-center justify-center hover:bg-neutral-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] hover:-translate-y-0.5"
+                 className="w-12 h-12 shrink-0 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-neutral-800 transition-all flex items-center justify-center hover:bg-neutral-50 hover:-translate-y-0.5"
                  title="Повторить анимацию"
                >
                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                </button>
              )}
+             
              <button 
                onClick={handleDownloadClick}
                disabled={isLoading || isRemovingBg || isRecording}
-               className={clsx("px-6 py-3 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full font-bold text-neutral-800 transition-all flex flex-col items-center justify-center gap-1", 
-                isRecording ? "opacity-100 cursor-wait bg-hermes-50 border-hermes-200 min-w-[280px]" : "hover:bg-neutral-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] hover:-translate-y-0.5 flex-row"
+               className={clsx("flex-grow md:flex-grow-0 px-6 py-3 shrink-0 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-sm font-bold text-neutral-800 transition-all flex flex-col items-center justify-center gap-1", 
+                isRecording ? "opacity-100 cursor-wait bg-hermes-50 border-hermes-200 min-w-[200px]" : "hover:bg-neutral-50 hover:-translate-y-0.5 flex-row"
                )}
              >
                <div className="flex items-center gap-2">
