@@ -578,7 +578,6 @@ export default function Home() {
       const response = await fetch(CLOUD_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Pass targetId so server uses it for polling
         body: JSON.stringify({ html: code, format, creativeId: targetId })
       });
 
@@ -586,20 +585,25 @@ export default function Home() {
 
       let isDone = false;
       let checkError = "";
-      setRenderPhase('В очереди (вы можете свернуть приложение)...');
+      setRenderPhase('В очереди (около 1 минуты)...');
 
-      // Polling loop
       while (!isDone) {
-        await new Promise(r => setTimeout(r, 4000));
+        await new Promise(r => setTimeout(r, 2000));
         
         try {
           const pollRes = await fetch(`https://194.32.140.217.nip.io/progress/${targetId}`);
           if (pollRes.ok) {
             const data = await pollRes.json();
-            if (data.status === 'processing') {
-              setRenderPhase('Рендеринг (работает Puppeteer)...');
+            if (data.status.startsWith('processing')) {
+              const perc = parseInt(data.status.split(':')[1]) || 0;
+              setRenderProgress(perc);
+              setRenderPhase(`Рендеринг видео... ${perc}%`);
             } else if (data.status === 'done') {
+              setRenderProgress(100);
+              setRenderPhase(`Видео готово! Подготовка загрузки...`);
               isDone = true;
+            } else if (data.status === 'queued') {
+              setRenderPhase('В очереди (около 1 минуты)...');
             } else if (data.status === 'error') {
               checkError = 'Ошибка при генерации на фоновом сервере.';
               break;
@@ -703,6 +707,20 @@ export default function Home() {
                                   {isDownloaded ? (
                                     <span className="bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-green-200 flex items-center gap-0.5">
                                       <Check className="w-3 h-3" /> Скачано
+                                    </span>
+                                  ) : backgroundStatuses[item.id] === 'done' ? (
+                                    <span 
+                                      onClick={(e) => { e.stopPropagation(); startVideoRecording(item.id); }}
+                                      className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-blue-200 flex items-center gap-0.5 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm"
+                                    >
+                                      <span>✅ Скачать видео</span>
+                                    </span>
+                                  ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id].startsWith('processing'))) ? (
+                                    <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
+                                      <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
+                                      {(backgroundStatuses[item.id] === 'queued') 
+                                         ? 'В очереди' 
+                                         : `Сборка ${backgroundStatuses[item.id].split(':')[1] || 0}%`}
                                     </span>
                                   ) : (
                                     <span className="bg-orange-50 text-orange-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-orange-200 flex items-center gap-0.5">
@@ -1161,7 +1179,7 @@ export default function Home() {
 
       {/* Main Canvas Area */}
       <section className={clsx(
-        "flex-1 relative flex-col items-center justify-start md:justify-center p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-40 md:pb-8 pt-8 md:pt-8 w-full min-h-screen",
+        "flex-1 relative flex-col items-center justify-start md:justify-center p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-[300px] md:pb-12 pt-8 md:pt-8 w-full min-h-screen",
         mobileTab === 'canvas' ? "flex" : "hidden md:flex"
       )}>
         
@@ -1193,8 +1211,8 @@ export default function Home() {
                )}
              >
                <div className="flex items-center gap-2">
-                 {isRecording || (isAnimated && isBackgroundRendering && !backgroundJobId) ? <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-1"/> : <Download className="w-4 h-4" />}
-                 {isRecording || (isAnimated && isBackgroundRendering && !backgroundJobId) ? (!isAnimated ? "Кроппинг изображения..." : renderPhase) : `Скачать ${isAnimated ? "MP4 / Видео" : "PNG"}`}
+                 {isRecording ? <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-1"/> : <Download className="w-4 h-4" />}
+                 {isRecording ? (!isAnimated ? "Кроппинг изображения..." : renderPhase) : `Скачать ${isAnimated ? "MP4 / Видео" : "PNG"}`}
                </div>
                {isRecording && isAnimated && (
                  <div className="w-full bg-neutral-200 rounded-full h-1.5 mt-1 overflow-hidden">
