@@ -110,9 +110,9 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [showHistoryWarning, setShowHistoryWarning] = useState(true);
   const [downloadedItems, setDownloadedItems] = useState<string[]>([]);
-  const [backgroundStatuses, setBackgroundStatuses] = useState<Record<string, string>>({});
-
   // "View Mode" properties based on either the canvas OR the active history item
+  const [backgroundStatuses, setBackgroundStatuses] = useState<Record<string, string>>({});
+  const [renderJobs, setRenderJobs] = useState<Record<string, { startTime: number, totalFrames: number, format: string }>>({});
   const activeCreativeCode = activeCreativeId ? historyItems.find(i => i.id === activeCreativeId)?.htmlCode || code : code;
 
   useEffect(() => {
@@ -167,6 +167,87 @@ export default function Home() {
   };
 
   const isUIBlocked = isLoading || isRemovingBg || isRecording || isRedeeming;
+
+  // Global Background Render Poller (Persists across page refresh!)
+  useEffect(() => {
+    const saved = localStorage.getItem('backgroundRenderJobs');
+    if (saved) {
+      try { setRenderJobs(JSON.parse(saved)); } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    const activeKeys = Object.keys(renderJobs);
+    if (!activeKeys.length) return;
+
+    let isPolling = true;
+    const interval = setInterval(async () => {
+      if (!isPolling) return;
+      const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
+      const jobsToUpdate = { ...currentJobs };
+      let updated = false;
+
+      // Ensure progress bar updates visually for active canvas creative
+      if (activeCreativeId && currentJobs[activeCreativeId] && checkIsTabActive()) {
+         const job = currentJobs[activeCreativeId];
+         const elapsedSec = (Date.now() - job.startTime) / 1000;
+         const framesDone = Math.min(job.totalFrames - 5, Math.floor((elapsedSec / 90) * job.totalFrames));
+         
+         if (framesDone < 20) setRenderPhase('☁️ Инициализация сервера Cloud Run...');
+         else if (framesDone < 150) setRenderPhase(`🎞️ Покадровая запись: ${framesDone} / ${job.totalFrames} кадров`);
+         else if (framesDone < 300) setRenderPhase(`⚙️ Кодирование H.264: ${framesDone} / ${job.totalFrames} кадров`);
+         else if (framesDone < job.totalFrames - 10) setRenderPhase(`☁️ Выгрузка MP4 в облако (${framesDone} / ${job.totalFrames})...`);
+         else setRenderPhase('🔄 Финализация файла... еще чуть-чуть');
+
+         setRenderProgress(10 + Math.min(85, (framesDone / job.totalFrames) * 85));
+         setIsRecording(true);
+      }
+
+      for (const id of activeKeys) {
+        if (!currentJobs[id]) continue;
+        try {
+          const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
+          const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${id}.mp4`;
+          const pollRes = await fetch(fileUrl, { method: 'HEAD' });
+          if (pollRes.ok) {
+            // Processing done
+            delete jobsToUpdate[id];
+            updated = true;
+            setBackgroundStatuses(prev => ({...prev, [id]: 'done'}));
+            
+            // Auto download ONLY if user is actively watching THIS specific creative load
+            if (id === activeCreativeId && isRecording) {
+               setRenderProgress(100);
+               setRenderPhase(`✅ Видео готово! Скачиваем на устройство...`);
+               setTimeout(async () => {
+                 const videoRes = await fetch(fileUrl);
+                 if (videoRes.ok) {
+                    const videoBlob = await videoRes.blob();
+                    const blobUrl = URL.createObjectURL(videoBlob);
+                    const link = document.createElement("a");
+                    link.href = blobUrl; link.download = `creative_${currentJobs[id].format}_4k.mp4`;
+                    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                    URL.revokeObjectURL(blobUrl);
+                    markItemAsDownloaded(id);
+                 }
+                 setIsRecording(false);
+               }, 1000);
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (updated) {
+         setRenderJobs(jobsToUpdate);
+         localStorage.setItem('backgroundRenderJobs', JSON.stringify(jobsToUpdate));
+      } else {
+         setRenderJobs(jobsToUpdate); // trigger local frame visual updates
+      }
+    }, 1000);
+    return () => { isPolling = false; clearInterval(interval); };
+  }, [renderJobs, activeCreativeId, isRecording]);
+
+  const checkIsTabActive = () => true;
 
   useEffect(() => {
     async function fetchData() {
@@ -571,85 +652,32 @@ export default function Home() {
     const targetId = preExistingJobId || activeCreativeId;
     if (!targetId || !code) {
       setError("Не найден ID креатива для рендера");
-      setIsRecording(false);
-      return;
+      setIsRecording(false); return;
     }
 
     try {
       const CLOUD_URL = "/api/render";
-      
       setRenderPhase('Подключение к оркестратору Google Cloud...');
-      setRenderProgress(10);
+      setRenderProgress(5);
 
-      const response = await fetch(CLOUD_URL, {
+      // Save to background jobs map explicitly for 450 frames
+      const totalFrames = format === '9:16' ? 450 : 300;
+      const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
+      currentJobs[targetId] = { startTime: Date.now(), totalFrames, format };
+      setRenderJobs(currentJobs);
+      localStorage.setItem('backgroundRenderJobs', JSON.stringify(currentJobs));
+
+      fetch(CLOUD_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ html: code, format, creativeId: targetId })
-      });
+      }).catch(err => console.error(err));
 
-      if (!response.ok) throw new Error("Cloud Render Queue Failed: " + response.statusText);
-
-      let isDone = false;
-      let checkError = "";
-      setRenderPhase('В очереди Cloud Run (около 1 минуты)...');
-      setRenderProgress(10);
-
-      const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
-      const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${targetId}.mp4`;
-
-      // Wait up to 5 minutes for Google Cloud Run to process
-      let attempts = 0;
-      while (!isDone && attempts < 150) {
-        await new Promise(r => setTimeout(r, 2000));
-        attempts++;
-        
-        // Математически симулируем движение прогресс-бара от 10% до 95% за время рендера (~90 секунд)
-        let simulatedProgress = 10 + Math.min(85, attempts * (85 / 45)); 
-        setRenderProgress(simulatedProgress);
-
-        if (attempts < 4) setRenderPhase('☁️ Инициализация сервера Cloud Run...');
-        else if (attempts < 12) setRenderPhase('🎞️ Рендеринг: Покадровая запись анимаций...');
-        else if (attempts < 25) setRenderPhase('⚙️ Рендеринг: Кодирование видео H.264 (FFmpeg)...');
-        else if (attempts < 35) setRenderPhase('☁️ Выгрузка MP4 файла в облачное хранилище...');
-        else setRenderPhase('🔄 Финализация файла... еще чуть-чуть');
-
-        try {
-          const pollRes = await fetch(fileUrl, { method: 'HEAD' });
-          if (pollRes.ok) {
-              setRenderProgress(100);
-              setRenderPhase(`✅ Видео готово! Скачиваем на устройство...`);
-              isDone = true;
-          }
-        } catch (e) {
-          console.warn("Polling error, retrying...", e);
-        }
-      }
-
-      if (!isDone) throw new Error("Превышено время ожидания рендера в Google Cloud.");
-
-      setRenderPhase('Скачивание видеофайла на устройство...');
-      
-      // We directly download the finished file from Google Storage!
-      const videoRes = await fetch(fileUrl);
-      if (!videoRes.ok) throw new Error("Video download failed. Not found.");
-
-      const videoBlob = await videoRes.blob();
-      const blobUrl = URL.createObjectURL(videoBlob);
-
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = `creative_${format}_4k.mp4`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
-
-      markItemAsDownloaded(activeCreativeId);
+      // Do nothing else! The global useEffect poller handles the progress bars & downloading!
 
     } catch (err) {
-      console.error("Recording failed", err);
+      console.error("Recording start failed", err);
       setError("Ошибка рендера. Сервер перегружен или недоступен.");
-    } finally {
       setIsRecording(false);
     }
   };
@@ -727,14 +755,12 @@ export default function Home() {
                                     >
                                       <span>✅ Скачать видео</span>
                                     </span>
-                                  ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id].startsWith('processing'))) ? (
+                                  ) : renderJobs[item.id] ? (
                                     <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
                                       <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
-                                      {(backgroundStatuses[item.id] === 'queued') 
-                                         ? 'В очереди' 
-                                         : `Сборка ${backgroundStatuses[item.id].split(':')[1] || 0}%`}
+                                      Рендер: {Math.floor(Math.min(95, 10 + ((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * 85))}%
                                     </span>
-                                  ) : (
+                                  ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id].startsWith('processing'))) ? (
                                     <span className="bg-orange-50 text-orange-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-orange-200 flex items-center gap-0.5">
                                       Новый
                                     </span>
@@ -767,6 +793,21 @@ export default function Home() {
                                   />
                                   <div className="absolute inset-0 bg-transparent z-10" />
                                </div>
+
+                               {/* RENDER PROGRESS OVERLAY (Gallery) */}
+                               {renderJobs[item.id] && (
+                                  <div className="absolute inset-x-4 bottom-4 z-30 bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-2xl border border-neutral-200/60 flex flex-col gap-1.5">
+                                      <div className="flex justify-between items-center text-[10px] font-black text-neutral-800 uppercase">
+                                          <span>Сборка кадров</span>
+                                          <span className="text-hermes-500">
+                                            {Math.max(0, Math.min(renderJobs[item.id].totalFrames - 5, Math.floor(((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * renderJobs[item.id].totalFrames)))} / {renderJobs[item.id].totalFrames}
+                                          </span>
+                                      </div>
+                                      <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
+                                          <div className="h-full bg-gradient-to-r from-hermes-400 to-hermes-600 transition-all duration-1000 ease-linear rounded-full" style={{ width: `${Math.min(95, 10 + ((Date.now() - renderJobs[item.id].startTime) / 1000 / 90) * 85)}%` }}></div>
+                                      </div>
+                                  </div>
+                               )}
 
                                {/* Hover overlay */}
                                <div onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setPrompt(item.prompt || ""); setFormat(item.format || '9:16'); setIsAnimated(item.htmlCode?.includes('gsap') || item.cost > 3); setShowHistory(false); setMobileTab('canvas'); }} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all duration-300 z-20">
