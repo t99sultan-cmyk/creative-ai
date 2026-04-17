@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check } from "lucide-react";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -9,6 +9,7 @@ import { useUser } from "@clerk/nextjs";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
 import { getUserCreatives } from "@/actions/getUserCreatives";
+import { deleteUserCreative } from "@/actions/deleteUserCreative";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
@@ -51,6 +52,7 @@ const optimizeImageToWebP = (blob: Blob, maxWidth = 800): Promise<string> => {
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
+  const [remixSourceCode, setRemixSourceCode] = useState<string | null>(null);
   const [format, setFormat] = useState<Format>("9:16");
   const [isAnimated, setIsAnimated] = useState<boolean>(true);
   const [generationsCount, setGenerationsCount] = useState<number>(1);
@@ -89,12 +91,34 @@ export default function Home() {
   const [promoSuccess, setPromoSuccess] = useState("");
   const [activeCreativeId, setActiveCreativeId] = useState<string | null>(null);
   
-  const [backgroundVideoUrl, setBackgroundVideoUrl] = useState<string | null>(null);
+  // Moved below historyItems
+  const [backgroundJobId, setBackgroundJobId] = useState<string | null>(null);
   const [isBackgroundRendering, setIsBackgroundRendering] = useState(false);
-  
+  const [renderPhase, setRenderPhase] = useState<string>('Инициализация...');
+  const [renderProgress, setRenderProgress] = useState<number>(0);
   // History
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [downloadedItems, setDownloadedItems] = useState<string[]>([]);
+
+  // "View Mode" properties based on either the canvas OR the active history item
+  const activeCreativeCode = activeCreativeId ? historyItems.find(i => i.id === activeCreativeId)?.htmlCode || code : code;
+
+
+  useEffect(() => {
+    const saved = localStorage.getItem('downloadedCreativeIds');
+    if (saved) setDownloadedItems(JSON.parse(saved));
+  }, []);
+
+  const markItemAsDownloaded = (id: string | null) => {
+    if (!id) return;
+    setDownloadedItems(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      localStorage.setItem('downloadedCreativeIds', JSON.stringify(next));
+      return next;
+    });
+  };
 
   const isUIBlocked = isLoading || isRemovingBg || isRecording || isRedeeming;
 
@@ -166,23 +190,20 @@ export default function Home() {
   useEffect(() => {
     if (!code || !isAnimated) return;
     
-    if (backgroundVideoUrl) {
-      URL.revokeObjectURL(backgroundVideoUrl);
-      setBackgroundVideoUrl(null);
-    }
+    setBackgroundJobId(null);
     
     let isMounted = true;
     const runPreRender = async () => {
       setIsBackgroundRendering(true);
       try {
-        const response = await fetch("https://194.32.140.217.nip.io/render", {
+        const response = await fetch("https://213.155.20.115.nip.io/render", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ html: code, format })
         });
         if (response.ok && isMounted) {
-          const blob = await response.blob();
-          setBackgroundVideoUrl(URL.createObjectURL(blob));
+          const data = await response.json();
+          setBackgroundJobId(data.jobId);
         }
       } catch (err) {
         console.error("Background render failed", err);
@@ -229,6 +250,8 @@ export default function Home() {
     setProductImages([]);
     setPendingProductFile(null);
     setCode(null);
+    setActiveCreativeId(null);
+    setRemixSourceCode(null);
     setError("");
     setGenerationsCount(1);
     localStorage.removeItem("creative_prompt");
@@ -314,7 +337,7 @@ export default function Home() {
     if (error) setError(""); 
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (isRemix: boolean = false) => {
     if (!prompt.trim()) {
       setError("Пожалуйста, введите ТЗ для генерации.");
       return;
@@ -325,44 +348,72 @@ export default function Home() {
     const refBase64 = referenceImages.map(img => img.dataUrl);
     const prodBase64 = productImages.map(img => img.dataUrl);
 
+    // Use explicit remix base if selected
+    const htmlCodeToRemix = remixSourceCode || undefined;
+
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 95000); // 95 seconds timeout
+      const results = [];
+      
+      for (let i = 0; i < generationsCount; i++) {
+        // Show iteration in loading state if multiple
+        if (generationsCount > 1) {
+           // We safely override the loading text
+           setLoadingText(`Генерация ${i + 1} из ${generationsCount}...`);
+        }
 
-      const promises = Array.from({ length: generationsCount }).map((_, idx) => {
-        const iterationPrompt = prompt + (idx > 0 && generationsCount > 1 ? ` [Сделай альтернативную версию ${idx + 1}, немного поменяй композицию]` : '');
-        return fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt: iterationPrompt,
-            format,
-            isAnimated,
-            referenceImagesBase64: refBase64,
-            productImagesBase64: prodBase64,
-          }),
-          signal: controller.signal
-        }).then(r => r.json());
-      });
+        const iterationPrompt = prompt + (i > 0 && generationsCount > 1 ? ` [Сделай альтернативную версию ${i + 1}, немного поменяй композицию]` : '');
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 360000); // 360s local timeout
 
-      const results = await Promise.all(promises);
-      clearTimeout(timeoutId);
-
-      // Check for errors in ANY response
-      for (const data of results) {
-         if (data.error) {
-           const errMsg = data.error.toLowerCase();
-           if (errMsg.includes("503") || errMsg.includes("high demand")) {
-             throw new Error("Сервера перегружены из-за высокого спроса! Подождите 15-30 секунд.");
-           }
-           throw new Error(data.error);
-         }
+        try {
+          const res = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt: iterationPrompt,
+              format,
+              isAnimated,
+              referenceImagesBase64: refBase64,
+              productImagesBase64: prodBase64,
+              remixHtmlCode: htmlCodeToRemix
+            }),
+            signal: controller.signal
+          });
+          
+          const data = await res.json();
+          clearTimeout(timeoutId);
+          
+          if (data.error) {
+             const errMsg = data.error.toLowerCase();
+             if (errMsg.includes("503") || errMsg.includes("high demand")) {
+               throw new Error(`Сервера перегружены из-за высокого спроса! Ошибка на варианте ${i+1}. Подождите.`);
+             }
+             throw new Error(data.error);
+          }
+          
+          results.push(data);
+          
+          // Optionally, immediately load the first one while others render in bg
+          if (i === 0) {
+            setCode(data.code);
+            if (data.creativeId) setActiveCreativeId(data.creativeId);
+          }
+          
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          if (err.name === 'AbortError') throw new Error(`Таймаут (превышено время ожидания) на ${i+1} варианте.`);
+          throw err; // Re-throw to be caught by outer catch
+        }
       }
 
-      // Automatically load the FIRST generated variation into the main canvas
-      setCode(results[0].code);
-      if (results[0].creativeId) {
-        setActiveCreativeId(results[0].creativeId);
+      if (results.length > 0) {
+        // Automatically load the FIRST generated variation into the main canvas
+        setCode(results[0].code);
+        if (results[0].creativeId) {
+          setActiveCreativeId(results[0].creativeId);
+        }
+        setRemixSourceCode(null); // Clear remix source after successful generation
       }
 
       // Update History Bank
@@ -408,13 +459,27 @@ export default function Home() {
     }
   };
 
+  const handleDeleteCreative = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await deleteUserCreative(id);
+      if (res.success) {
+        setHistoryItems(prev => prev.filter(item => item.id !== id));
+      } else {
+        console.error("Failed to delete", res.error);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleDownloadClick = async () => {
     if (!iframeRef.current) return;
 
     if (!isAnimated) {
       setIsRecording(true);
       try {
-        const response = await fetch("https://194.32.140.217.nip.io/screenshot", {
+        const response = await fetch("https://creative-cloud-renderer-694906438875.europe-west4.run.app/screenshot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -435,6 +500,8 @@ export default function Home() {
         link.download = `creative-static-${Date.now()}.png`;
         link.click();
         
+        markItemAsDownloaded(activeCreativeId);
+        
         setTimeout(() => window.URL.revokeObjectURL(url), 5000);
       } catch (err) {
         console.error("Screenshot capture failed", err);
@@ -443,14 +510,7 @@ export default function Home() {
         setIsRecording(false);
       }
     } else {
-      if (backgroundVideoUrl) {
-        const link = document.createElement("a");
-        link.href = backgroundVideoUrl;
-        link.download = `creative-instant-${Date.now()}.mp4`;
-        link.click();
-      } else {
-        startVideoRecording();
-      }
+      startVideoRecording(backgroundJobId || undefined);
     }
   };
 
@@ -458,36 +518,89 @@ export default function Home() {
     setIframeKey(prev => prev + 1);
   };
 
-  const startVideoRecording = async () => {
+  const startVideoRecording = async (preExistingJobId?: string) => {
     setShowVideoInstruction(false);
     setIsRecording(true);
 
     try {
-      // Отправляем HTML на наш приватный VPN-с-рендером
-      const response = await fetch("https://194.32.140.217.nip.io/render", {
+      // Initialize Server-Sent Events connection to Cloud Run
+      const CLOUD_URL = "https://creative-cloud-renderer-694906438875.europe-west4.run.app/render";
+
+      const response = await fetch(CLOUD_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          html: code,
-          format: format
-        })
+        body: JSON.stringify({ html: code, format })
       });
 
-      if (!response.ok) {
-        throw new Error("Render Failed");
+      if (!response.ok) throw new Error("Cloud Render Failed: " + response.statusText);
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      let finalVideoUrl = "";
+
+      if (reader) {
+        setRenderPhase('Подключение к облаку...');
+        setRenderProgress(0);
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const messages = chunk.split('\n\n');
+          
+          for (const message of messages) {
+            if (!message.trim()) continue;
+            
+            const lines = message.split('\n');
+            let eventName = 'message';
+            let dataStr = '';
+
+            for (const line of lines) {
+              if (line.startsWith('event:')) eventName = line.replace('event:', '').trim();
+              if (line.startsWith('data:')) dataStr = line.replace('data:', '').trim();
+            }
+
+            if (dataStr) {
+              try {
+                const data = JSON.parse(dataStr);
+                
+                if (eventName === 'error') {
+                  throw new Error(data.message || "Cloud Stream Error");
+                }
+                
+                if (data.phase) setRenderPhase(data.phase);
+                if (data.progress !== undefined) setRenderProgress(data.progress);
+                
+                if (eventName === 'complete' && data.url) {
+                  finalVideoUrl = data.url;
+                }
+              } catch(e) {
+                // Ignore JSON parsing errors for partial chunks
+              }
+            }
+          }
+        }
       }
 
-      // Получаем готовый MP4
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const ext = "mp4";
-      
+      if (!finalVideoUrl) throw new Error("Видео не было сгенерировано (сбой потока).");
+
+      // Fetch blob to bypass automatic browser open and force download
+      const videoRes = await fetch(finalVideoUrl);
+      const videoBlob = await videoRes.blob();
+      const blobUrl = URL.createObjectURL(videoBlob);
+
       const link = document.createElement("a");
-      link.href = url;
-      link.download = `creative-video-${Date.now()}.${ext}`;
+      link.href = blobUrl;
+      link.download = `creative_${format}_4k.mp4`;
+      document.body.appendChild(link);
       link.click();
-      
-      setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      markItemAsDownloaded(activeCreativeId);
+
     } catch (err) {
       console.error("Recording failed", err);
       setError("Ошибка рендера. Сервер перегружен или недоступен.");
@@ -511,44 +624,94 @@ export default function Home() {
       {/* HISTORY BANK OVERLAY */}
       <AnimatePresence>
         {showHistory && (
-          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm p-4 md:p-10 flex flex-col items-center">
-             <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl flex flex-col h-full overflow-hidden">
-                <div className="p-6 border-b border-neutral-100">
-                   <div className="flex items-center justify-between mb-3">
-                     <h2 className="text-2xl font-black flex items-center gap-2"><PackageSearch className="w-6 h-6 text-hermes-500" /> Мой Банк Креативов ({historyItems.length})</h2>
+          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm p-0 sm:p-4 md:p-10 flex flex-col items-center">
+             <div className="w-full h-[100dvh] sm:h-full max-w-6xl bg-white sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+                <div className="p-4 sm:p-6 border-b border-neutral-100 flex-shrink-0">
+                   <div className="flex items-center justify-between mb-0 sm:mb-3">
+                     <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><PackageSearch className="w-5 h-5 sm:w-6 sm:h-6 text-hermes-500" /> Мой Банк ({historyItems.length})</h2>
                      <button onClick={() => setShowHistory(false)} className="w-10 h-10 rounded-full flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 transition-colors">
                        <X className="w-5 h-5 text-neutral-600" />
                      </button>
                    </div>
-                   <div className="px-3 py-2 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-lg inline-flex items-center gap-1.5">
-                      ⚠️ Важно: все ваши креативы хранятся ровно 1 месяц, после чего база данных их автоматически удаляет. 
+                   
+                   <div className="flex flex-col gap-2">
+                     <div className="px-3 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 text-xs font-medium rounded-lg flex items-start gap-2">
+                        <span className="text-xl leading-none mt-0.5">💡</span>
+                        <p>
+                           <b>Как это работает:</b> Выберите любой креатив, чтобы открыть его в редакторе. 
+                           Статусы показывают, был ли файл <b>«Скачан»</b> на ваш ПК ранее, или это свежесозданный <b>«Новый»</b> креатив, 
+                           который еще не скачивался.
+                        </p>
+                     </div>
+                     <div className="px-3 py-2 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-lg inline-flex items-center gap-1.5">
+                        ⚠️ Внимание: из-за большого веса файлов, история хранится на наших серверах 30 дней. Скачивайте видео к себе на компьютер для вечного хранения!
+                     </div>
                    </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6 bg-neutral-50 grid grid-cols-2 md:grid-cols-4 gap-6 content-start">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-neutral-100/50 flex flex-col sm:flex-row sm:flex-wrap gap-4 md:gap-6 items-center sm:items-start sm:justify-start content-start">
                    {historyItems.length === 0 ? (
-                      <div className="col-span-full py-20 text-center text-neutral-400 font-bold">Вы пока не создали ни одного креатива.</div>
-                   ) : historyItems.map((item: any, idx: number) => (
-                      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group hover:shadow-md transition-all cursor-pointer" onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setFormat(item.format || '9:16'); setIsAnimated(item.cost > 3); setShowHistory(false); setMobileTab('canvas'); }}>
-                         <div className="flex-1 relative aspect-[9/16] bg-neutral-100 pointer-events-none overflow-hidden flex items-center justify-center">
-                             <div className="relative w-full h-full" style={{ containerType: 'inline-size' }}>
-                               <iframe 
-                                 srcDoc={item.htmlCode}
-                                 className="absolute top-0 left-0 border-0"
-                                 style={{ width: '400px', height: item.format === '9:16' ? '711px' : '400px', transform: 'scale(calc(100cqw / 400))', transformOrigin: 'top left' }}
-                                 sandbox="allow-same-origin"
-                               />
-                             </div>
-                             <div className="absolute inset-0 bg-transparent z-10" />
-                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity font-bold z-20">
-                               <Sparkles className="w-6 h-6 mb-2" /> Загрузить
-                             </div>
-                         </div>
-                         <div className="p-3 border-t border-neutral-100 bg-white">
-                            <p className="text-[10px] font-bold text-neutral-400 mb-1">{new Date(item.createdAt).toLocaleString('ru-RU', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} • {item.format}</p>
-                            <p className="text-xs font-bold text-neutral-800 line-clamp-2 leading-tight">{item.prompt}</p>
-                         </div>
-                      </div>
-                   ))}
+                      <div className="w-full text-center text-neutral-400 font-bold py-20 bg-white rounded-3xl border border-neutral-100">Вы пока не создали ни одного креатива.</div>
+                   ) : (
+                      historyItems.map((item: any) => {
+                        const isVertical = item.format === '9:16' || !item.format;
+                        const isDownloaded = downloadedItems.includes(item.id);
+                        
+                        return (
+                          <div key={item.id} className="bg-white rounded-[24px] shadow-sm border border-neutral-200 overflow-hidden relative group flex flex-col w-full max-w-[320px] sm:w-[232px] shrink-0 hover:shadow-xl hover:border-neutral-300 transition-all duration-300 hover:-translate-y-1">
+                            
+                            {/* Top Bar: Format, Date & Delete */}
+                            <div className="flex justify-between items-center p-3 border-b border-neutral-100 bg-white/50 backdrop-blur-md">
+                               <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="bg-neutral-100/80 text-neutral-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-neutral-200/50">
+                                     {item.format || '9:16'}
+                                  </span>
+                                  {isDownloaded ? (
+                                    <span className="bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-green-200 flex items-center gap-0.5">
+                                      <Check className="w-3 h-3" /> Скачано
+                                    </span>
+                                  ) : (
+                                    <span className="bg-orange-50 text-orange-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-orange-200 flex items-center gap-0.5">
+                                      Новый
+                                    </span>
+                                  )}
+                               </div>
+                               <button 
+                                  onClick={(e) => handleDeleteCreative(item.id, e)}
+                                  className="text-neutral-300 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-red-50 shrink-0"
+                                  title="Удалить"
+                               >
+                                  <Trash2 className="w-4 h-4" />
+                               </button>
+                            </div>
+
+                            {/* Creative Preview */}
+                            <div 
+                               className="w-full bg-neutral-50/50 flex items-center justify-center p-4 cursor-pointer relative"
+                            >
+                               <div className={`shadow-lg bg-white rounded-xl overflow-hidden relative ${isVertical ? 'aspect-[9/16] w-[200px]' : 'aspect-square w-[200px]'}`}>
+                                  <iframe 
+                                     srcDoc={item.htmlCode} 
+                                     className="absolute inset-0 border-0 pointer-events-none origin-top-left"
+                                     style={{ 
+                                        width: isVertical ? '400px' : '500px', 
+                                        height: isVertical ? '711px' : '500px', 
+                                        transform: isVertical ? 'scale(0.5)' : 'scale(0.4)',
+                                     }}
+                                     sandbox="allow-scripts allow-same-origin"
+                                  />
+                                  <div className="absolute inset-0 bg-transparent z-10" />
+                               </div>
+
+                               {/* Hover overlay */}
+                               <div onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setPrompt(item.prompt || ""); setFormat(item.format || '9:16'); setIsAnimated(item.htmlCode?.includes('gsap') || item.cost > 3); setShowHistory(false); setMobileTab('canvas'); }} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all duration-300 z-20">
+                                  <div className="bg-white text-neutral-900 font-black px-5 py-3 rounded-2xl flex items-center gap-2 shadow-2xl transform scale-90 group-hover:scale-100 transition-all duration-300">
+                                     <Sparkles className="w-4 h-4" /> Посмотреть
+                                  </div>
+                               </div>
+                            </div>
+                          </div>
+                      )})
+                   )}
                 </div>
              </div>
           </div>
@@ -651,7 +814,22 @@ export default function Home() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        <div className={clsx("flex-1 overflow-y-auto p-6 space-y-8 relative z-20", activeCreativeId && "pointer-events-none opacity-60 grayscale-[0.2]")}>
+          
+          {remixSourceCode && !activeCreativeId && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
+               <div className="bg-amber-100 p-1.5 rounded-lg shrink-0 mt-0.5">
+                 <Sparkles className="w-4 h-4 text-amber-600" />
+               </div>
+               <div className="flex-1">
+                 <h4 className="text-xs font-bold text-amber-900 mb-0.5">Режим Ремикса Активирован</h4>
+                 <p className="text-[10px] text-amber-800 leading-tight">Прошлый креатив загружен в память ИИ. Измените настройки ниже, перепишите ТЗ и нажмите "Создать".</p>
+               </div>
+               <button onClick={() => setRemixSourceCode(null)} className="shrink-0 p-1 hover:bg-amber-200/50 rounded-md transition-colors" title="Отменить ремикс">
+                 <X className="w-4 h-4 text-amber-600" />
+               </button>
+            </div>
+          )}
           
           {/* Format Selection */}
           <div className="space-y-3">
@@ -675,7 +853,7 @@ export default function Home() {
                   )}
                 >
                   {f === "9:16" && <Smartphone className="w-4 h-4" />}
-                  {f === "1:1" && <div className="border-2 border-inherit rounded-sm w-4 h-4" />}
+                  {f === "1:1" && <div className="border-2 border-current rounded-sm w-4 h-4" />}
                   {f}
                 </button>
               ))}
@@ -744,42 +922,45 @@ export default function Home() {
           </div>
 
           {/* Reference Image Upload */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-neutral-400" />
-                Референс (стиль / дизайн)
-              </span>
-              <span className="text-xs text-neutral-400 font-medium">{referenceImages.length}/{MAX_IMAGES}</span>
-            </h2>
-            
-            <div className="flex flex-wrap gap-2">
-              {referenceImages.map((img, i) => (
-                <div key={i} className={clsx("relative group w-16 h-16 rounded-lg border border-neutral-200 overflow-hidden shadow-sm flex items-center justify-center", isLoading && "opacity-50")}>
-                  <img src={img.dataUrl} alt={`Ref ${i}`} className="w-full h-full object-cover" />
-                  {!isLoading && (
-                    <button
-                      onClick={() => removeReference(i)}
-                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+          {!remixSourceCode && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-neutral-400" />
+                  Референс (стиль / дизайн)
+                </span>
+                <span className="text-xs text-neutral-400 font-medium">{referenceImages.length}/{MAX_IMAGES}</span>
+              </h2>
               
-              {referenceImages.length < MAX_IMAGES && (
-                <label className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center transition-all", isLoading ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-neutral-500 hover:bg-neutral-50 text-neutral-400 hover:text-neutral-500")}>
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleReferenceUpload} disabled={isLoading} />
-                  <Upload className="w-5 h-5" />
-                </label>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {referenceImages.map((img, i) => (
+                  <div key={i} className={clsx("relative group w-16 h-16 rounded-lg border border-neutral-200 overflow-hidden shadow-sm flex items-center justify-center", isLoading && "opacity-50")}>
+                    <img src={img.dataUrl} alt={`Ref ${i}`} className="w-full h-full object-cover" />
+                    {!isLoading && (
+                      <button
+                        onClick={() => removeReference(i)}
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                
+                {referenceImages.length < MAX_IMAGES && (
+                  <label className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center transition-all", isLoading ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-neutral-500 hover:bg-neutral-50 text-neutral-400 hover:text-neutral-500")}>
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleReferenceUpload} disabled={isLoading} />
+                    <Upload className="w-5 h-5" />
+                  </label>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Product Image Upload */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold flex items-center justify-between">
+          {/* Product Image Upload (Temporarily hidden per user request until fully refined) */}
+          {false && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <PackageSearch className="w-4 h-4 text-hermes-500" />
                 Исходник, продукт или объект
@@ -836,6 +1017,7 @@ export default function Home() {
               </div>
             )}
           </div>
+          )}
 
           {/* Prompt + Clear Button */}
           <div className="space-y-3">
@@ -856,13 +1038,16 @@ export default function Home() {
             </h2>
             <textarea
               disabled={isLoading}
+              readOnly={!!activeCreativeId}
               maxLength={500}
-              className={clsx("w-full h-40 bg-white border border-neutral-200 rounded-xl p-4 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500 transition-all resize-none shadow-sm placeholder:text-neutral-400", isLoading && "opacity-50 cursor-not-allowed")}
+              className={clsx("w-full bg-white border border-neutral-200 rounded-xl p-4 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500 transition-all resize-none shadow-sm placeholder:text-neutral-400", isLoading ? "opacity-50 cursor-not-allowed" : activeCreativeId ? "opacity-70 bg-neutral-50 h-24" : "h-40")}
               placeholder="Опишите, что вы хотите... Например: 'Минималистичный рекламный постер с зелеными акцентами для курса по Upwork. Сделай крупный заголовок и кнопку Принять участие 👇'"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
           </div>
+
+          {/* Old remix instruction field is removed as per user request to just use the main prompt in new Edit Mode! */}
 
           {error && (
             <div className="p-4 bg-red-50 text-red-600 text-sm rounded-xl border-2 border-red-100 font-medium leading-relaxed">
@@ -877,36 +1062,65 @@ export default function Home() {
         </div>
 
         <div className="p-6 border-t border-neutral-200/50 bg-white/50 backdrop-blur-sm z-20 hidden md:block">
-          <button
-            onClick={handleGenerate}
-            disabled={isLoading || isRemovingBg || !prompt.trim()}
-            className={clsx(
-              "w-full py-4 rounded-xl font-bold text-white transition-all duration-300 flex flex-col items-center justify-center gap-1 relative overflow-hidden",
-              isLoading || isRemovingBg || !prompt.trim()
-                ? "bg-neutral-300 cursor-not-allowed text-neutral-600 shadow-none"
-                : "bg-neutral-900 hover:bg-hermes-500 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-hermes-500/30"
-            )}
-          >
-            {isLoading ? (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <Loader2 className="w-4 h-4 animate-spin opacity-70" />
-                  <span className="text-xs opacity-70 uppercase tracking-widest font-bold">СБОРКА... {loadingProgress}%</span>
-                </div>
-                <span className="text-[13px]">{loadingText}</span>
-              </>
-            ) : (
-              <span className="flex flex-col items-center gap-0.5 text-base relative">
-                <span className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5" />
-                  Создать Креатив
+          {activeCreativeId ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-neutral-500 font-bold text-center">Вы просматриваете креатив из Банка</p>
+              
+              <button
+                onClick={() => { setRemixSourceCode(activeCreativeCode); setActiveCreativeId(null); }}
+                className="w-full py-4 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 shadow-xl shadow-amber-500/30 text-white cursor-pointer active:scale-95 transition-all flex flex-col items-center justify-center gap-0.5"
+              >
+                 <span className="flex items-center gap-2 text-base">
+                   <Sparkles className="w-5 h-5 text-white" />
+                   Использовать для Ремикса
+                 </span>
+                 <span className="text-[10px] uppercase font-bold opacity-90">(Разблокировать настройки)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setRemixSourceCode(null); setCode(""); setActiveCreativeId(null); setPrompt(""); setReferenceImages([]); setProductImages([]);
+                }}
+                disabled={isLoading}
+                className="w-full py-3 rounded-xl font-bold bg-neutral-900 hover:bg-neutral-800 text-white cursor-pointer active:scale-95 transition-all text-sm flex justify-center items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" /> Закрыть (Сброс)
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleGenerate(false)}
+              disabled={isLoading || isRemovingBg || !prompt.trim()}
+              className={clsx(
+                "w-full py-4 rounded-xl font-bold text-white transition-all duration-300 flex flex-col items-center justify-center gap-1 relative overflow-hidden",
+                isLoading || isRemovingBg || !prompt.trim()
+                  ? "bg-neutral-300 cursor-not-allowed text-neutral-600 shadow-none"
+                  : remixSourceCode
+                  ? "bg-amber-500 hover:bg-amber-600 shadow-lg hover:shadow-amber-500/30 active:scale-95"
+                  : "bg-neutral-900 hover:bg-hermes-500 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-hermes-500/30 active:scale-95"
+              )}
+            >
+              {isLoading ? (
+                <>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Loader2 className="w-4 h-4 animate-spin opacity-70" />
+                    <span className="text-xs opacity-70 uppercase tracking-widest font-bold">СБОРКА... {loadingProgress}%</span>
+                  </div>
+                  <span className="text-[13px]">{loadingText}</span>
+                </>
+              ) : (
+                <span className="flex flex-col items-center gap-0.5 text-base relative">
+                  <span className="flex items-center gap-2">
+                    {remixSourceCode ? <Sparkles className="w-5 h-5"/> : <Sparkles className="w-5 h-5" />}
+                    {remixSourceCode ? "Создать Ремикс" : "Создать Креатив"}
+                  </span>
+                  <span className="text-[10px] uppercase font-bold opacity-80 flex items-center justify-center gap-1">
+                    (Спишется {currentCost * generationsCount} ⚡)
+                  </span>
                 </span>
-                <span className="text-[10px] uppercase font-bold opacity-80 flex items-center justify-center gap-1">
-                  (Спишется {currentCost} ⚡)
-                </span>
-              </span>
-            )}
-          </button>
+              )}
+            </button>
+          )}
         </div>
       </aside>
 
@@ -931,12 +1145,19 @@ export default function Home() {
              <button 
                onClick={handleDownloadClick}
                disabled={isLoading || isRemovingBg || isRecording}
-               className={clsx("px-6 py-3 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full font-bold text-neutral-800 transition-all flex items-center gap-2", 
-                isRecording ? "opacity-90 cursor-wait bg-hermes-50 border-hermes-200" : "hover:bg-neutral-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] hover:-translate-y-0.5"
+               className={clsx("px-6 py-3 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full font-bold text-neutral-800 transition-all flex flex-col items-center justify-center gap-1", 
+                isRecording ? "opacity-100 cursor-wait bg-hermes-50 border-hermes-200 min-w-[280px]" : "hover:bg-neutral-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] hover:-translate-y-0.5 flex-row"
                )}
              >
-               {isRecording || (isAnimated && isBackgroundRendering && !backgroundVideoUrl) ? <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-1"/> : <Download className="w-4 h-4" />}
-               {isRecording || (isAnimated && isBackgroundRendering && !backgroundVideoUrl) ? "Подготовка HD (еще пару сек)..." : `Скачать ${isAnimated ? "MP4 / Видео" : "PNG"}`}
+               <div className="flex items-center gap-2">
+                 {isRecording || (isAnimated && isBackgroundRendering && !backgroundJobId) ? <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-1"/> : <Download className="w-4 h-4" />}
+                 {isRecording || (isAnimated && isBackgroundRendering && !backgroundJobId) ? (!isAnimated ? "Кроппинг изображения..." : renderPhase) : `Скачать ${isAnimated ? "MP4 / Видео" : "PNG"}`}
+               </div>
+               {isRecording && isAnimated && (
+                 <div className="w-full bg-neutral-200 rounded-full h-1.5 mt-1 overflow-hidden">
+                   <div className="bg-hermes-500 h-1.5 transition-all duration-1000 ease-linear" style={{ width: `${renderProgress}%` }}></div>
+                 </div>
+               )}
              </button>
            </div>
         )}
@@ -963,8 +1184,11 @@ export default function Home() {
             />
           </div>
         ) : (
-          <div className="z-10 flex flex-col items-center justify-center text-neutral-400 space-y-6">
-            <div className="w-24 h-24 rounded-full border border-neutral-200 bg-white flex items-center justify-center shadow-lg shadow-black/5">
+          <div 
+             className="z-10 flex flex-col items-center justify-center text-neutral-400 p-8 border-2 border-dashed border-neutral-300 rounded-[32px] bg-white/50 backdrop-blur-md transition-all duration-300 ease-out shadow-sm"
+             style={getCanvasStyle()}
+          >
+            <div className="w-24 h-24 rounded-full border border-neutral-200 bg-white flex items-center justify-center shadow-lg shadow-black/5 mb-6">
               <Frame className="w-10 h-10 text-neutral-300" />
             </div>
             <div className="text-center">
@@ -1015,32 +1239,48 @@ export default function Home() {
           <button
             onClick={() => {
               if (mobileTab === 'controls') {
-                 if (prompt.trim()) {
-                    handleGenerate();
+                 if (activeCreativeId) {
+                    setRemixSourceCode(activeCreativeCode);
+                    setActiveCreativeId(null);
+                 } else if (prompt.trim()) {
+                    handleGenerate(false);
                     setMobileTab('canvas');
                  }
               } else {
                  setMobileTab('controls');
               }
             }}
-            disabled={isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls')}
+            disabled={isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls' && !activeCreativeId)}
             className={clsx(
-              "w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center text-white shadow-xl shadow-hermes-500/30 border-[5px] border-white transition-all duration-300",
-              isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls')
+              "w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center text-white shadow-xl border-[5px] border-white transition-all duration-300",
+              isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls' && !activeCreativeId)
                 ? "bg-neutral-300 shadow-none hover:scale-100 cursor-not-allowed border-neutral-100"
-                : "bg-black hover:bg-hermes-500 hover:scale-105 active:scale-95 hover:border-hermes-50"
+                : activeCreativeId && mobileTab === 'controls'
+                ? "bg-amber-500 shadow-amber-500/30 hover:bg-amber-600 hover:scale-105 active:scale-95 hover:border-amber-50"
+                : remixSourceCode && mobileTab === 'controls'
+                ? "bg-amber-500 shadow-amber-500/30 hover:bg-amber-600 hover:scale-105 active:scale-95 hover:border-amber-50"
+                : "bg-black shadow-hermes-500/30 hover:bg-hermes-500 hover:scale-105 active:scale-95 hover:border-hermes-50"
             )}
           >
             {isLoading ? (
                <Loader2 className="w-8 h-8 text-white animate-spin" />
             ) : mobileTab === 'controls' ? (
-               <Zap className="w-8 h-8 text-white fill-white/20" />
+               activeCreativeId || remixSourceCode ? (
+                 <div className="flex flex-col items-center">
+                   <Sparkles className="w-6 h-6 text-white mb-0.5" />
+                   <span className="text-[8px] font-black uppercase text-center leading-none">
+                     {activeCreativeId ? "В ремикс" : "Ремикс"}
+                   </span>
+                 </div>
+               ) : (
+                 <Zap className="w-8 h-8 text-white fill-white/20" />
+               )
             ) : (
                <Sparkles className="w-7 h-7 text-white" />
             )}
           </button>
-          {!isLoading && prompt.trim() && mobileTab === 'controls' && (
-             <span className="absolute -top-1 -right-1 bg-hermes-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce ring-2 ring-white">{currentCost}</span>
+          {!isLoading && prompt.trim() && mobileTab === 'controls' && !activeCreativeId && (
+             <span className="absolute -top-1 -right-1 bg-hermes-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce ring-2 ring-white">{currentCost * generationsCount}</span>
           )}
         </div>
 
@@ -1063,3 +1303,4 @@ export default function Home() {
     </main>
   );
 }
+// Trigger turbopack rebuild

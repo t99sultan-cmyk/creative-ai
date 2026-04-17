@@ -1,40 +1,35 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { auth, currentUser } from '@clerk/nextjs/server';
-import { db } from '@/db';
-import { creatives, users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { NextResponse } from 'next/server';
+import { db } from "@/db";
+import { users, creatives } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { auth } from "@clerk/nextjs/server";
+import crypto from "crypto";
 
-export const maxDuration = 60; // Allow Vercel functions to run up to 60s
+export const maxDuration = 300;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
     const { userId } = await auth();
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Не авторизован" }), { status: 401 });
+       return new Response(JSON.stringify({ error: "Не авторизован" }), { status: 401 });
     }
 
-    const { prompt, format, isAnimated, referenceImagesBase64, productImagesBase64 } = await request.json();
-    const hasProducts = productImagesBase64 && productImagesBase64.length > 0;
-    const cost = isAnimated ? 4 : 3;
-
-    const userRecords = await db.select({ impulses: users.impulses, isBanned: users.isBanned }).from(users).where(eq(users.id, userId));
+    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode } = await req.json();
+    
+    const cost = 3;
     let currentImpulses = 0;
-    
-    if (userRecords.length > 0 && userRecords[0].isBanned) {
-       return new Response(JSON.stringify({ error: "Ваш аккаунт заблокирован по решению администратора." }), { status: 403 });
-    }
-    
+
+    const userRecords = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (userRecords.length === 0) {
-      const clerkUser = await currentUser();
-      if (clerkUser) {
-        const email = clerkUser.emailAddresses[0]?.emailAddress || "unknown";
+      const resp = await fetch("https://api.clerk.com/v1/users/" + userId, {
+        headers: { Authorization: "Bearer " + process.env.CLERK_SECRET_KEY }
+      });
+      if (resp.ok) {
+        const clerkUser = await resp.json();
         await db.insert(users).values({
           id: userId,
-          email: email,
-          name: clerkUser.firstName || "User",
-          image: clerkUser.imageUrl || "",
+          email: clerkUser.email_addresses[0].email_address,
+          name: clerkUser.first_name || "Пользователь",
           impulses: 17,
         });
         currentImpulses = 17;
@@ -63,9 +58,9 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - DO NOT generate external link buttons like "Подробнее", "Узнать подробнее", or "Перейти", because social media ad platforms natively overlay their own link buttons over the creative.
 
 5. BEAUTIFUL LAYOUT & HIGH CONTRAST (CRITICAL):
-   - You have FULL CREATIVE FREEDOM to make it look stunning, just like you would on Gemini Canvas.
+   - You have FULL CREATIVE FREEDOM to make it look stunning.
    - 🔴 BUILD ROBUST LAYOUTS: DO NOT rely on haphazard absolute positioning that causes text to overlap with other elements. USE modern CSS Flexbox and CSS Grid. Create structured layouts where elements flow naturally.
-   - 🔴 PREVENT OVERLAPS (CRITICAL): Never let text, badges, or images overlap making things unreadable. Use flex gaps (\`gap-4\`) and proper padding.
+   - 🔴 PREVENT OVERLAPS & TIGHT SPACING (CRITICAL): Never let text, badges, checkmarks, or list items overlap with or tightly hug the central graphics/products! Always use generous padding (\`p-4\`), margins (\`m-4\`), and rich flex/grid gaps (\`gap-6\` or \`gap-8\`). Elements placed around a central visual MUST be pushed outwards so they maintain clean, breathable white space around the visual.
    - Ensure the outer container is bounded: \`max-w-[400px] h-[100vh]\` for 9:16 vertical layouts.
    - Inject these global CSS rules into your \`<style>\` to lock the viewport: \`html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; background-position: center; background-size: cover; }\`. Your main container wrapper inside body MUST naturally expand or flex without pushing items out of bounds.
 
@@ -75,19 +70,27 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - If 1:1: Make it a perfect square.
 
 7. ANIMATIONS (${isAnimated ? 'ON' : 'OFF'}):
-   - ${isAnimated ? 'You MUST animate the typography and elements beautifully using CSS keyframes or GSAP.' : 'NO animations. Output must be perfectly static.'}
+   - ${isAnimated ? 'You MUST animate the typography and elements beautifully using CSS keyframes or GSAP. Ensure all animations have `yoyo: true, repeat: -1` so the video loops seamlessly.' : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
 
 8. HIGHLIGHTS & PRODUCT INTEGRATION:
    - Highlight 3-5 power words in a vibrant color (like text-yellow-400 or a gradient).
-   ${hasProducts ? `- PRODUCT IMAGES: You MUST visually integrate these EXACT cut-out images. Use placeholders \`PRODUCT_IMG_0\`, \`PRODUCT_IMG_1\`. Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="...">\`` : '- NO PRODUCTS PROVIDED. Focus 100% on beautiful typography and background.'}
+   ${productImagesBase64 && productImagesBase64.length > 0 ? `- PRODUCT IMAGES: You MUST visually integrate these EXACT cut-out images. Use placeholders \`PRODUCT_IMG_0\`, \`PRODUCT_IMG_1\`. Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="...">\`` : '- NO PRODUCTS PROVIDED. Focus 100% on beautiful typography and background.'}
 `;
 
-    const geminiParts: any[] = [];
-    geminiParts.push({ text: `Format required: ${format}.\n\nTask (ТЗ): ${prompt}` });
+    const claudeContent: any[] = [];
+    
+    if (remixHtmlCode) {
+      claudeContent.push({ 
+        type: "text", 
+        text: `Format required: ${format}.\n\nOriginal Task (ТЗ): ${prompt}\n\nIMPORTANT: THIS IS A REMIX REQUEST! The user wants to modify an existing creative.\nBelow is the previous HTML code. RE-USE this structure completely. Keep the layout, core vibe, and animations identical, but make the changes requested by the user. Return the fully updated HTML code:\n\n\`\`\`html\n${remixHtmlCode}\n\`\`\`` 
+      });
+    } else {
+      claudeContent.push({ type: "text", text: `Format required: ${format}.\n\nTask (ТЗ): ${prompt}` });
+    }
 
     // Handle references
     if (referenceImagesBase64 && Array.isArray(referenceImagesBase64) && referenceImagesBase64.length > 0) {
-      geminiParts.push({ text: "Here are REFERENCE IMAGES for atmosphere, style, and layout. Recreate this vibe/quality:" });
+      claudeContent.push({ type: "text", text: "Here are REFERENCE IMAGES for atmosphere, style, and layout. Recreate this vibe/quality:" });
       for (const imgUrl of referenceImagesBase64) {
         let mimeType = "image/jpeg";
         let data = imgUrl;
@@ -95,15 +98,16 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
            mimeType = data.split(";")[0].split(":")[1];
            data = data.split(",")[1];
         }
-        geminiParts.push({
-          inlineData: { mimeType, data }
+        claudeContent.push({
+          type: "image",
+          source: { type: "base64", media_type: mimeType, data: data }
         });
       }
     }
 
     // Handle actual products
     if (productImagesBase64 && Array.isArray(productImagesBase64) && productImagesBase64.length > 0) {
-      geminiParts.push({ text: "Here are the actual PRODUCT IMAGES without backgrounds. You MUST use these exact images in the HTML creative as graphical assets:" });
+      claudeContent.push({ type: "text", text: "Here are the actual PRODUCT IMAGES without backgrounds. You MUST use these exact images in the HTML creative as graphical assets:" });
       for (const imgUrl of productImagesBase64) {
         let mimeType = "image/png";
         let data = imgUrl;
@@ -111,44 +115,47 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
            mimeType = data.split(";")[0].split(":")[1];
            data = data.split(",")[1];
         }
-        geminiParts.push({
-          inlineData: { mimeType, data }
+        claudeContent.push({
+          type: "image",
+          source: { type: "base64", media_type: mimeType, data: data }
         });
       }
     }
 
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    if (!geminiApiKey) throw new Error("GEMINI_API_KEY is missing");
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY is missing");
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${geminiApiKey}`, {
+    const claudeResponse = await fetch(`https://api.anthropic.com/v1/messages`, {
        method: "POST",
-       headers: { "Content-Type": "application/json" },
+       headers: { 
+         "Content-Type": "application/json",
+         "x-api-key": anthropicApiKey,
+         "anthropic-version": "2023-06-01"
+       },
        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: "user", parts: geminiParts }],
-          generationConfig: {
-             maxOutputTokens: 8192,
-             temperature: 0.7,
-          }
+          model: "claude-opus-4-7",
+          system: systemPrompt,
+          max_tokens: 8192,
+          messages: [{ role: "user", content: claudeContent }]
        })
     });
 
-    if (!geminiResponse.ok) {
-        const errPayload = await geminiResponse.text();
-        throw new Error(`Gemini API error: ${errPayload}`);
+    if (!claudeResponse.ok) {
+        const errPayload = await claudeResponse.text();
+        throw new Error(`Claude API error: ${errPayload}`);
     }
 
-    const result = await geminiResponse.json();
-    const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const result = await claudeResponse.json();
+    const rawText = result.content?.[0]?.text || "";
     
-    // Calculate API Cost in KZT (Formula adapted for Gemini 3.1 Pro placeholder pricing: 1.25$ in / 5.00$ out per MTok. 1 USD = 480 KZT)
+    // Calculate API Cost (Placeholder for Claude 3.7 Sonnet: 3$ in / 15$ out per MTok. 1 USD = 480 KZT)
     let apiCostKzt = 0;
-    if (result.usageMetadata) {
-       const inTokens = result.usageMetadata.promptTokenCount || 0;
-       const outTokens = result.usageMetadata.candidatesTokenCount || 0;
-       const usdCost = (inTokens / 1_000_000) * 1.25 + (outTokens / 1_000_000) * 5.00;
+    if (result.usage) {
+       const inTokens = result.usage.input_tokens || 0;
+       const outTokens = result.usage.output_tokens || 0;
+       const usdCost = (inTokens / 1_000_000) * 3.00 + (outTokens / 1_000_000) * 15.00;
        apiCostKzt = usdCost * 480;
-       console.log(`[API Cost] Gemini 3.1 Pro Usage: ${inTokens} in, ${outTokens} out = $${usdCost.toFixed(4)} (~${apiCostKzt.toFixed(2)} KZT)`);
+       console.log(`[API Cost] Claude Usage: ${inTokens} in, ${outTokens} out = $${usdCost.toFixed(4)} (~${apiCostKzt.toFixed(2)} KZT)`);
     }
 
     // Clean up if the model magically returns markdown
@@ -160,7 +167,7 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
 
     // Replace placeholders with real Base64 data
     if (productImagesBase64 && Array.isArray(productImagesBase64)) {
-      productImagesBase64.forEach((imgBase64, index) => {
+      productImagesBase64.forEach((imgBase64: string, index: number) => {
         // Handle all occurrences of PRODUCT_IMG_X
         const searchPattern = new RegExp(`PRODUCT_IMG_${index}`, 'g');
         code = code.replace(searchPattern, imgBase64);
