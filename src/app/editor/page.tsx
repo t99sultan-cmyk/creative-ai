@@ -742,7 +742,7 @@ export default function Home() {
               <button onClick={() => setShowVideoInstruction(false)} className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors">
                 Отмена
               </button>
-              <button onClick={startVideoRecording} className="flex-1 py-3 px-4 bg-hermes-600 hover:bg-hermes-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-hermes-600/30">
+              <button onClick={() => startVideoRecording()} className="flex-1 py-3 px-4 bg-hermes-600 hover:bg-hermes-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-hermes-600/30">
                 Понятно, Начать
               </button>
             </div>
@@ -976,7 +976,7 @@ export default function Home() {
                   </button>
                 )}
                 <div className="w-14 h-14 bg-neutral-50 rounded-lg border border-neutral-100 overflow-hidden shrink-0">
-                  <img src={pendingProductFile.dataUrl} className={clsx("w-full h-full object-contain", isRemovingBg && "opacity-50")} />
+                  <img src={pendingProductFile?.dataUrl} className={clsx("w-full h-full object-contain", isRemovingBg && "opacity-50")} />
                 </div>
                 <div className="flex-1 relative z-20">
                   <p className="text-xs font-bold text-neutral-800 mb-2">Что делаем с фото?</p>
