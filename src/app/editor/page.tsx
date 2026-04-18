@@ -279,12 +279,10 @@ export default function Home() {
                       document.body.appendChild(link); link.click(); document.body.removeChild(link);
                       URL.revokeObjectURL(blobUrl);
                    } else {
-                      // Fallback if browser is being tricky
-                      window.open(fileUrl, '_blank');
+                      window.location.href = `/api/download?url=${encodeURIComponent(fileUrl)}`;
                    }
                  } catch(err) {
-                   // If CORS blocks the fetch, default to opening the public URL in a new tab
-                   window.open(fileUrl, '_blank');
+                   window.location.href = `/api/download?url=${encodeURIComponent(fileUrl)}`;
                  }
                  markItemAsDownloaded(id);
                  setIsRecording(false);
