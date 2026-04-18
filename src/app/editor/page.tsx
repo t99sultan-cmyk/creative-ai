@@ -269,16 +269,24 @@ export default function Home() {
                setRenderProgress(100);
                setRenderPhase(`✅ Видео готово! Скачиваем на устройство...`);
                setTimeout(async () => {
-                 const videoRes = await fetch(fileUrl);
-                 if (videoRes.ok) {
-                    const videoBlob = await videoRes.blob();
-                    const blobUrl = URL.createObjectURL(videoBlob);
-                    const link = document.createElement("a");
-                    link.href = blobUrl; link.download = `creative_${currentJobs[id].format}_4k.mp4`;
-                    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-                    URL.revokeObjectURL(blobUrl);
-                    markItemAsDownloaded(id);
+                 try {
+                   const videoRes = await fetch(fileUrl);
+                   if (videoRes.ok) {
+                      const videoBlob = await videoRes.blob();
+                      const blobUrl = URL.createObjectURL(videoBlob);
+                      const link = document.createElement("a");
+                      link.href = blobUrl; link.download = `creative_${currentJobs[id].format}.mp4`;
+                      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                      URL.revokeObjectURL(blobUrl);
+                   } else {
+                      // Fallback if browser is being tricky
+                      window.open(fileUrl, '_blank');
+                   }
+                 } catch(err) {
+                   // If CORS blocks the fetch, default to opening the public URL in a new tab
+                   window.open(fileUrl, '_blank');
                  }
+                 markItemAsDownloaded(id);
                  setIsRecording(false);
                }, 1000);
             }
