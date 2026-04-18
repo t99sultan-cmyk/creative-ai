@@ -125,9 +125,17 @@ export default function Home() {
       historyItems.forEach((item: any) => {
          if (item.videoUrl && item.videoUrl.startsWith('rendering:')) {
              const startTime = parseInt(item.videoUrl.split(':')[1]);
-             if (!currentLocaltorage[item.id]) {
-                 currentLocaltorage[item.id] = { startTime, totalFrames: item.format === '9:16' ? 450 : 300, format: item.format || '9:16' };
-                 changed = true;
+             // Add timeout check: if it's been more than 10 minutes, ignore DB render state
+             if (Date.now() - startTime < 10 * 60 * 1000) {
+                 if (!currentLocaltorage[item.id]) {
+                     currentLocaltorage[item.id] = { startTime, totalFrames: item.format === '9:16' ? 450 : 300, format: item.format || '9:16' };
+                     changed = true;
+                 }
+             } else {
+                 if (currentLocaltorage[item.id]) {
+                     delete currentLocaltorage[item.id];
+                     changed = true;
+                 }
              }
          }
       });
@@ -230,6 +238,20 @@ export default function Home() {
 
       for (const id of activeKeys) {
         if (!currentJobs[id]) continue;
+        
+        const jobElapsed = Date.now() - currentJobs[id].startTime;
+        if (jobElapsed > 10 * 60 * 1000) {
+            // 10 minutes timeout - silently mark as failed locally so we don't infinitely poll
+            delete jobsToUpdate[id];
+            updated = true;
+            setBackgroundStatuses(prev => ({...prev, [id]: 'error'}));
+            if (id === activeCreativeId && isRecording) {
+                setIsRecording(false);
+                setError("Слишком долгое ожидание. Процесс прерван по тайм-ауту (сервер отдыхает).");
+            }
+            continue;
+        }
+
         try {
           const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
           const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${id}.mp4`;
@@ -789,6 +811,10 @@ export default function Home() {
                                     <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
                                       <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
                                       В очереди
+                                    </span>
+                                  ) : backgroundStatuses[item.id] === 'error' ? (
+                                    <span className="bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-red-200 flex items-center gap-0.5">
+                                      Тайм-аут
                                     </span>
                                   ) : (
                                     <span className="bg-orange-50 text-orange-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-orange-200 flex items-center gap-0.5">
