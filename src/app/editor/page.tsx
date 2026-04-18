@@ -151,14 +151,14 @@ export default function Home() {
       for (const item of itemsToCheck) {
         if (!isPolling) break;
         try {
-          // Check if Google Cloud Storage has the file yet
-          const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
-          const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${item.id}.mp4`;
-          const res = await fetch(fileUrl, { method: 'HEAD' });
+          const res = await fetch(`/api/check-render?id=${item.id}`);
           if (res.ok) {
-            setBackgroundStatuses(prev => ({...prev, [item.id]: 'done'}));
-          } else {
-             setBackgroundStatuses(prev => ({...prev, [item.id]: 'queued'}));
+            const data = await res.json();
+            if (data.ready) {
+              setBackgroundStatuses(prev => ({...prev, [item.id]: 'done'}));
+            } else {
+              setBackgroundStatuses(prev => ({...prev, [item.id]: 'queued'}));
+            }
           }
         } catch(e) {}
       }
@@ -254,10 +254,11 @@ export default function Home() {
         }
 
         try {
-          const bucket = process.env.NEXT_PUBLIC_GCP_BUCKET || 'creative-coder-outputs-dev';
-          const fileUrl = `https://storage.googleapis.com/${bucket}/renders/${id}.mp4`;
-          const pollRes = await fetch(fileUrl, { method: 'HEAD' });
+          const pollRes = await fetch(`/api/check-render?id=${id}`);
           if (pollRes.ok) {
+            const data = await pollRes.json();
+            if (data.ready && data.url) {
+              const fileUrl = data.url;
             // Processing done
             delete jobsToUpdate[id];
             updated = true;
@@ -281,9 +282,10 @@ export default function Home() {
                  setIsRecording(false);
                }, 1000);
             }
-          }
-        } catch (e) {}
-      }
+             }
+           }
+         } catch (e) {}
+       }
 
       if (updated) {
          setRenderJobs(jobsToUpdate);
