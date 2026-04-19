@@ -6,7 +6,7 @@ import {
   Sparkles, Play, Image as ImageIcon, Zap, Target, 
   BarChart3, CheckCircle2, ChevronDown, Star, 
   MessageSquare, Menu, X, MousePointerClick, Download, 
-  ArrowRight, Rocket, Crown, Gift, HandClick, Quote, 
+  ArrowRight, Rocket, Crown, Gift, Quote,
   DollarSign, Smartphone, Video, Check, RefreshCw, Building2
 } from "lucide-react";
 import clsx from "clsx";
