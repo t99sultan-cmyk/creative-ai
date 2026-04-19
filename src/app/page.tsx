@@ -89,7 +89,7 @@ export default function LandingPage() {
                  <Link href="/editor" className="text-sm font-bold text-neutral-900 bg-neutral-100 border-neutral-200 hover:bg-neutral-200 border-neutral-300 px-4 py-2 rounded-full border border-neutral-200 backdrop-blur-md transition-all">
                    В студию
                  </Link>
-                 <UserButton afterSignOutUrl="/" />
+                 <UserButton />
                </div>
             ) : (
                <>
