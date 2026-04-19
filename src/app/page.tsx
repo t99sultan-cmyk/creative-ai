@@ -20,7 +20,19 @@ const transformations = [
   { id: 3, name: "Фитнес-студия", style: "Dynamic / Бесплатная тренировка", time: "58 сек", ctr: "+55%", imgRaw: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", imgGen: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", videoGen: "/fitnes.mp4" },
 ];
 
-const pricingTiers = [
+type PricingTier = {
+  name: string;
+  desc: string;
+  price: string;
+  impulses: number;
+  features: string[];
+  btn: string;
+  action: string;
+  bonus?: string;
+  isHit?: boolean;
+};
+
+const pricingTiers: PricingTier[] = [
   { name: "Старт", desc: "На 1–3 ниши", price: "~1 990 ₸", impulses: 60, features: ["~15 статичных креативов", "ИЛИ ~11 анимированных", "Высокое качество 4K", "Без водяных знаков"], btn: "Начать со Старта", action: "buy" },
   { name: "Креатор", desc: "Для малого бизнеса", price: "~4 980 ₸", impulses: 150, features: ["~42 статичных креатива", "ИЛИ ~31 анимированных", "Удаление фона", "Все форматы (9:16, 1:1)"], btn: "Выбрать Креатор", action: "buy" },
   { name: "Студия", desc: "ХИТ. A/B тесты", isHit: true, price: "~14 980 ₸", impulses: 453, features: ["~151 статичных креативов", "ИЛИ ~113 анимированных", "Студийный свет и тени", "Приоритет в очереди"], btn: "Купить Студию", action: "buy" },
