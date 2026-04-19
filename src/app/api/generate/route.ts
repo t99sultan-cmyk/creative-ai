@@ -14,7 +14,7 @@ export async function POST(req: Request) {
        return new Response(JSON.stringify({ error: "Не авторизован" }), { status: 401 });
     }
 
-    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode } = await req.json();
+    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode, remixScreenshotBase64, strictClone } = await req.json();
     
     const cost = 3;
     let currentImpulses = 0;
@@ -57,8 +57,9 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - Generate the ACTUAL promotional banner. DO NOT include fake Instagram UI (no comments, no avatars).
    - DO NOT generate external link buttons like "Подробнее", "Узнать подробнее", or "Перейти", because social media ad platforms natively overlay their own link buttons over the creative.
 
-5. BEAUTIFUL LAYOUT & HIGH CONTRAST (CRITICAL):
+5. BEAUTIFUL LAYOUT & BRANDING AWARENESS (CRITICAL):
    - You have FULL CREATIVE FREEDOM to make it look stunning.
+   - 🔴 NO UNREQUESTED CLIP ART: DO NOT hallucinate or generate literal SVG/emoji representations of brand names! If the brand is "Золотое Яблоко", do NOT draw literal apples. If it's "Tiger", do not draw a tiger. Your visual decorations should be abstract, geometric, elegant, CSS gradients, or typography-focused. The user's provided PRODUCT IMAGES are the ONLY real-world objects you should display.
    - 🔴 BUILD ROBUST LAYOUTS: DO NOT rely on haphazard absolute positioning that causes text to overlap with other elements. USE modern CSS Flexbox and CSS Grid. Create structured layouts where elements flow naturally.
    - 🔴 PREVENT OVERLAPS & TIGHT SPACING (CRITICAL): Never let text, badges, checkmarks, or list items overlap with or tightly hug the central graphics/products! Always use generous padding (\`p-4\`), margins (\`m-4\`), and rich flex/grid gaps (\`gap-6\` or \`gap-8\`). Elements placed around a central visual MUST be pushed outwards so they maintain clean, breathable white space around the visual.
    - Ensure the outer container is bounded: \`max-w-[400px] h-[100vh]\` for 9:16 vertical layouts.
@@ -75,15 +76,54 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
 8. HIGHLIGHTS & PRODUCT INTEGRATION:
    - Highlight 3-5 power words in a vibrant color (like text-yellow-400 or a gradient).
    ${productImagesBase64 && productImagesBase64.length > 0 ? `- PRODUCT IMAGES: You MUST visually integrate these EXACT cut-out images. Use placeholders \`PRODUCT_IMG_0\`, \`PRODUCT_IMG_1\`. Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="...">\`` : '- NO PRODUCTS PROVIDED. Focus 100% on beautiful typography and background.'}
+
+${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
+- EXACT ALIGNMENT & SPACING: You MUST copy the exact spatial layout, padding, and proportions of the reference image. The spacing (breathing room) around the visual and text must be identical to the reference.
+- OVERLAPPING ELEMENTS: If the reference has elements (like floating badges, pills, or buttons) that overlap the boundary between an image and the background, you MUST perfectly replicate this overlap using CSS (e.g., absolute positioning, 'translate-y-[-50%]', 'z-index'). Do NOT let 'overflow-hidden' clip them off. Do not cramp them.
+- EXACT COLORS & TYPOGRAPHY: You MUST strictly use the exact color palette (backgrounds, fonts, accents) and font weights seen in the reference image. DO NOT hallucinate new colors based on the product.
+- Your job is to output HTML/CSS that produces a 1:1 structural copy of the reference with only the product and text swapped out.` : `9. CREATIVE FREEDOM:
+- REPLICATE STRUCTURE: Carefully look at how elements (images, text, buttons) are positioned in the reference image and replicate that structural layout. DO NOT randomly scatter products.
+- CHANGE CONTEXT & VIBE: You have full freedom to modify the color palette, typography style, and background decorations to perfectly match the theme/brand requested by the user, while keeping the structural skeleton of the reference.`}
 `;
 
     const claudeContent: any[] = [];
     
-    if (remixHtmlCode) {
+    // Base64 Extract for Rate Limits
+    const preservedImages: string[] = [];
+    let cleanedRemixHtmlCode = remixHtmlCode;
+    
+    if (cleanedRemixHtmlCode) {
+      // Find all huge base64 strings in data:image payload to prevent token explosion
+      const base64Regex = /data:image\/[^"']+/g;
+      
+      cleanedRemixHtmlCode = cleanedRemixHtmlCode.replace(base64Regex, (match: string) => {
+        const id = preservedImages.length;
+        preservedImages.push(match);
+        return `REMIX_PRESERVED_IMG_${id}`;
+      });
+      
       claudeContent.push({ 
         type: "text", 
-        text: `Format required: ${format}.\n\nOriginal Task (ТЗ): ${prompt}\n\nIMPORTANT: THIS IS A REMIX REQUEST! The user wants to modify an existing creative.\nBelow is the previous HTML code. RE-USE this structure completely. Keep the layout, core vibe, and animations identical, but make the changes requested by the user. Return the fully updated HTML code:\n\n\`\`\`html\n${remixHtmlCode}\n\`\`\`` 
+        text: `Format required: ${format}.\n\nOriginal Task (ТЗ): ${prompt}\n\nIMPORTANT: THIS IS A REMIX REQUEST! The user wants to modify an existing creative.\nBelow is the previous HTML code. RE-USE this structure completely. Keep the layout, core vibe, and animations identical, but make the changes requested by the user. Return the fully updated HTML code:\n\n\`\`\`html\n${cleanedRemixHtmlCode}\n\`\`\`` 
       });
+
+      if (remixScreenshotBase64) {
+         claudeContent.push({
+           type: "text",
+           text: "Here is the visual rendering (screenshot) of the current HTML. Use your Vision capabilities to 'see' where elements are positioned, so you can accurately process the User's changes!"
+         });
+         
+         let mimeType = "image/png";
+         let data = remixScreenshotBase64;
+         if (data.startsWith("data:")) {
+            mimeType = data.split(";")[0].split(":")[1];
+            data = data.split(",")[1];
+         }
+         claudeContent.push({
+           type: "image",
+           source: { type: "base64", media_type: mimeType, data: data }
+         });
+      }
     } else {
       claudeContent.push({ type: "text", text: `Format required: ${format}.\n\nTask (ТЗ): ${prompt}` });
     }
@@ -125,24 +165,43 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
     if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY is missing");
 
-    const claudeResponse = await fetch(`https://api.anthropic.com/v1/messages`, {
-       method: "POST",
-       headers: { 
-         "Content-Type": "application/json",
-         "x-api-key": anthropicApiKey,
-         "anthropic-version": "2023-06-01"
-       },
-       body: JSON.stringify({
-          model: "claude-opus-4-7",
-          system: systemPrompt,
-          max_tokens: 8192,
-          messages: [{ role: "user", content: claudeContent }]
-       })
-    });
+    let claudeResponse: Response | null = null;
+    let retries = 0;
+    let errPayload = "";
 
-    if (!claudeResponse.ok) {
-        const errPayload = await claudeResponse.text();
-        throw new Error(`Claude API error: ${errPayload}`);
+    while (retries < 3) {
+      claudeResponse = await fetch(`https://api.anthropic.com/v1/messages`, {
+         method: "POST",
+         headers: { 
+           "Content-Type": "application/json",
+           "x-api-key": anthropicApiKey,
+           "anthropic-version": "2023-06-01"
+         },
+         body: JSON.stringify({
+            model: "claude-opus-4-7",
+            system: systemPrompt,
+            max_tokens: 4000,
+            messages: [{ role: "user", content: claudeContent }]
+         })
+      });
+
+      if (claudeResponse.status === 429) {
+          retries++;
+          console.warn(`[Claude Rate Limit] Hit TPM limit (429). Retrying ${retries}/3 in 15 seconds...`);
+          await new Promise(r => setTimeout(r, 15000));
+          continue;
+      }
+      
+      if (!claudeResponse.ok) {
+          errPayload = await claudeResponse.text();
+          throw new Error(`Claude API error: ${errPayload}`);
+      }
+      
+      break;
+    }
+
+    if (!claudeResponse || !claudeResponse.ok) {
+        throw new Error(`Claude API error (max retries exceeded): ${errPayload}`);
     }
 
     const result = await claudeResponse.json();
@@ -165,11 +224,18 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
       code = match[1];
     }
 
-    // Replace placeholders with real Base64 data
+    // Replace placeholders with real Base64 data (From original generation)
     if (productImagesBase64 && Array.isArray(productImagesBase64)) {
       productImagesBase64.forEach((imgBase64: string, index: number) => {
-        // Handle all occurrences of PRODUCT_IMG_X
         const searchPattern = new RegExp(`PRODUCT_IMG_${index}`, 'g');
+        code = code.replace(searchPattern, imgBase64);
+      });
+    }
+
+    // Re-inject preserved base64 images from Remix context
+    if (preservedImages && preservedImages.length > 0) {
+      preservedImages.forEach((imgBase64: string, index: number) => {
+        const searchPattern = new RegExp(`REMIX_PRESERVED_IMG_${index}`, 'g');
         code = code.replace(searchPattern, imgBase64);
       });
     }

@@ -1,0 +1,714 @@
+
+> creative-coder-app@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.2 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.16.30.101:3000
+- Environments: .env.local
+✓ Ready in 369ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+ GET / 200 in 1700ms (next.js: 192ms, proxy.ts: 1215ms, application-code: 294ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ GET /editor 200 in 76ms (next.js: 46ms, proxy.ts: 13ms, application-code: 17ms)
+[browser] Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior
+ POST /editor 200 in 1297ms (next.js: 4ms, proxy.ts: 14ms, application-code: 1279ms)
+  └─ ƒ getUserBalance() in 1252ms src/actions/getUserBalance.ts
+ POST /editor 200 in 242ms (next.js: 4ms, proxy.ts: 12ms, application-code: 227ms)
+  └─ ƒ getUserBalance() in 216ms src/actions/getUserBalance.ts
+ POST /editor 200 in 902ms (next.js: 3ms, proxy.ts: 17ms, application-code: 882ms)
+  └─ ƒ getUserCreatives() in 835ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 456ms (next.js: 6ms, proxy.ts: 10ms, application-code: 439ms)
+  └─ ƒ getUserCreatives() in 415ms src/actions/getUserCreatives.ts
+Claude API Error: Error: Claude API error: {"type":"error","error":{"type":"invalid_request_error","message":"`temperature` is deprecated for this model."},"request_id":"req_011Ca9CgKLEhip7heD59wm5X"}
+    at POST (src/app/api/generate/route.ts:138:15)
+  136 |     if (!claudeResponse.ok) {
+  137 |         const errPayload = await claudeResponse.text();
+> 138 |         throw new Error(`Claude API error: ${errPayload}`);
+      |               ^
+  139 |     }
+  140 |
+  141 |     const result = await claudeResponse.json();
+ POST /api/generate 500 in 1062ms (next.js: 118ms, proxy.ts: 15ms, application-code: 929ms)
+ GET /editor 200 in 124ms (next.js: 10ms, proxy.ts: 27ms, application-code: 87ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 632ms (next.js: 2ms, proxy.ts: 11ms, application-code: 618ms)
+  └─ ƒ getUserBalance() in 607ms src/actions/getUserBalance.ts
+ POST /editor 200 in 824ms (next.js: 4ms, proxy.ts: 7ms, application-code: 813ms)
+  └─ ƒ getUserCreatives() in 791ms src/actions/getUserCreatives.ts
+[API Cost] Claude Usage: 1232 in, 3266 out = $0.0527 (~25.29 KZT)
+ POST /api/generate 200 in 34.1s (next.js: 11ms, proxy.ts: 13ms, application-code: 34.1s)
+ POST /editor 200 in 925ms (next.js: 4ms, proxy.ts: 19ms, application-code: 902ms)
+  └─ ƒ getUserCreatives() in 888ms src/actions/getUserCreatives.ts
+[API Cost] Claude Usage: 1240 in, 3639 out = $0.0583 (~27.99 KZT)
+ POST /api/generate 200 in 38.6s (next.js: 6ms, proxy.ts: 19ms, application-code: 38.6s)
+ POST /editor 200 in 921ms (next.js: 10ms, proxy.ts: 21ms, application-code: 890ms)
+  └─ ƒ getUserCreatives() in 855ms src/actions/getUserCreatives.ts
+[API Cost] Claude Usage: 1240 in, 3183 out = $0.0515 (~24.70 KZT)
+ POST /api/generate 200 in 33.1s (next.js: 21ms, proxy.ts: 35ms, application-code: 33.0s)
+ POST /editor 200 in 923ms (next.js: 9ms, proxy.ts: 13ms, application-code: 901ms)
+  └─ ƒ getUserCreatives() in 874ms src/actions/getUserCreatives.ts
+[API Cost] Claude Usage: 1232 in, 4571 out = $0.0723 (~34.69 KZT)
+ POST /api/generate 200 in 46s (next.js: 5ms, proxy.ts: 12ms, application-code: 46s)
+ POST /editor 200 in 1551ms (next.js: 8ms, proxy.ts: 489ms, application-code: 1054ms)
+  └─ ƒ getUserCreatives() in 1026ms src/actions/getUserCreatives.ts
+✓ Compiled in 580ms
+[browser] Recording failed Error: Server Render Error
+    at <unknown> (src/app/editor/page.tsx:507:54)
+  505 |         if (!statusRes.ok) break;
+  506 |         const statusData = await statusRes.json();
+> 507 |         if (statusData.status === 'error') throw new Error("Server Render Error");
+      |                                                      ^
+  508 |         currentStatus = statusData.status;
+  509 |       }
+  510 |
+ GET /editor 200 in 799ms (next.js: 40ms, proxy.ts: 633ms, application-code: 127ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1369ms (next.js: 13ms, proxy.ts: 26ms, application-code: 1331ms)
+  └─ ƒ getUserBalance() in 1322ms src/actions/getUserBalance.ts
+ POST /editor 200 in 859ms (next.js: 3ms, proxy.ts: 15ms, application-code: 841ms)
+  └─ ƒ getUserCreatives() in 821ms src/actions/getUserCreatives.ts
+✓ Compiled in 471ms
+[browser] Recording failed Error: Server Render Error
+@
+ GET /editor 200 in 750ms (next.js: 37ms, proxy.ts: 637ms, application-code: 76ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 2.4s (next.js: 2ms, proxy.ts: 15ms, application-code: 2.4s)
+  └─ ƒ getUserBalance() in 2365ms src/actions/getUserBalance.ts
+ POST /editor 200 in 906ms (next.js: 6ms, proxy.ts: 12ms, application-code: 888ms)
+  └─ ƒ getUserCreatives() in 856ms src/actions/getUserCreatives.ts
+[browser] Recording failed Error: Server Render Error
+    at <unknown> (src/app/editor/page.tsx:507:54)
+  505 |         if (!statusRes.ok) break;
+  506 |         const statusData = await statusRes.json();
+> 507 |         if (statusData.status === 'error') throw new Error("Server Render Error");
+      |                                                      ^
+  508 |         currentStatus = statusData.status;
+  509 |       }
+  510 |
+ GET /editor 200 in 1003ms (next.js: 19ms, proxy.ts: 921ms, application-code: 62ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1763ms (next.js: 3ms, proxy.ts: 6ms, application-code: 1754ms)
+  └─ ƒ getUserBalance() in 1745ms src/actions/getUserBalance.ts
+ POST /editor 200 in 866ms (next.js: 4ms, proxy.ts: 10ms, application-code: 852ms)
+  └─ ƒ getUserCreatives() in 822ms src/actions/getUserCreatives.ts
+[browser] Recording failed Error: Server Render Error
+    at <unknown> (src/app/editor/page.tsx:507:54)
+  505 |         if (!statusRes.ok) break;
+  506 |         const statusData = await statusRes.json();
+> 507 |         if (statusData.status === 'error') throw new Error("Server Render Error");
+      |                                                      ^
+  508 |         currentStatus = statusData.status;
+  509 |       }
+  510 |
+ GET /editor 200 in 131ms (next.js: 19ms, proxy.ts: 45ms, application-code: 67ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 728ms (next.js: 4ms, proxy.ts: 6ms, application-code: 717ms)
+  └─ ƒ getUserBalance() in 711ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1068ms (next.js: 2ms, proxy.ts: 6ms, application-code: 1060ms)
+  └─ ƒ getUserCreatives() in 1034ms src/actions/getUserCreatives.ts
+ POST /api/generate 200 in 3.4s (next.js: 20ms, proxy.ts: 13ms, application-code: 3.3s)
+ GET /editor 200 in 72ms (next.js: 3ms, proxy.ts: 10ms, application-code: 59ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 241ms (next.js: 1630µs, proxy.ts: 8ms, application-code: 232ms)
+  └─ ƒ getUserBalance() in 224ms src/actions/getUserBalance.ts
+ POST /editor 200 in 915ms (next.js: 1670µs, proxy.ts: 5ms, application-code: 909ms)
+  └─ ƒ getUserCreatives() in 882ms src/actions/getUserCreatives.ts
+[API Cost] Claude Usage: 1323 in, 4660 out = $0.0739 (~35.46 KZT)
+[browser] Recording failed TypeError: Load failed
+ GET /editor 200 in 577ms (next.js: 20ms, proxy.ts: 507ms, application-code: 50ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1359ms (next.js: 2ms, proxy.ts: 10ms, application-code: 1347ms)
+  └─ ƒ getUserBalance() in 1336ms src/actions/getUserBalance.ts
+ POST /editor 200 in 909ms (next.js: 3ms, proxy.ts: 9ms, application-code: 897ms)
+  └─ ƒ getUserCreatives() in 875ms src/actions/getUserCreatives.ts
+[browser] Recording failed TypeError: Load failed
+ GET /editor 200 in 587ms (next.js: 28ms, proxy.ts: 500ms, application-code: 59ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1414ms (next.js: 5ms, proxy.ts: 6ms, application-code: 1403ms)
+  └─ ƒ getUserBalance() in 1394ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1238ms (next.js: 3ms, proxy.ts: 9ms, application-code: 1226ms)
+  └─ ƒ getUserCreatives() in 1206ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 585ms (next.js: 18ms, proxy.ts: 511ms, application-code: 56ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 2.4s (next.js: 2ms, proxy.ts: 6ms, application-code: 2.4s)
+  └─ ƒ getUserBalance() in 2369ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1015ms (next.js: 3ms, proxy.ts: 8ms, application-code: 1004ms)
+  └─ ƒ getUserCreatives() in 982ms src/actions/getUserCreatives.ts
+✓ Compiled in 328ms
+ POST /editor 200 in 3.0s (next.js: 12ms, proxy.ts: 535ms, application-code: 2.4s)
+  └─ ƒ getUserBalance() in 2381ms src/actions/getUserBalance.ts
+ POST /editor 200 in 866ms (next.js: 2ms, proxy.ts: 18ms, application-code: 847ms)
+  └─ ƒ getUserCreatives() in 825ms src/actions/getUserCreatives.ts
+[browser] Recording failed TypeError: Load failed
+✓ Compiled in 133ms
+✓ Compiled in 303ms
+ GET /editor 200 in 866ms (next.js: 59ms, proxy.ts: 647ms, application-code: 161ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 678ms (next.js: 5ms, proxy.ts: 15ms, application-code: 658ms)
+  └─ ƒ getUserBalance() in 647ms src/actions/getUserBalance.ts
+ POST /editor 200 in 879ms (next.js: 3ms, proxy.ts: 8ms, application-code: 868ms)
+  └─ ƒ getUserCreatives() in 853ms src/actions/getUserCreatives.ts
+[browser] Recording failed TypeError: Load failed
+ GET /editor 200 in 703ms (next.js: 27ms, proxy.ts: 603ms, application-code: 74ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1260ms (next.js: 2ms, proxy.ts: 10ms, application-code: 1248ms)
+  └─ ƒ getUserBalance() in 1244ms src/actions/getUserBalance.ts
+ POST /editor 200 in 962ms (next.js: 4ms, proxy.ts: 5ms, application-code: 953ms)
+  └─ ƒ getUserCreatives() in 898ms src/actions/getUserCreatives.ts
+✓ Compiled in 219ms
+✓ Compiled in 165ms
+ GET /editor 200 in 1214ms (next.js: 158ms, proxy.ts: 901ms, application-code: 156ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1352ms (next.js: 3ms, proxy.ts: 14ms, application-code: 1336ms)
+  └─ ƒ getUserBalance() in 1325ms src/actions/getUserBalance.ts
+ POST /editor 200 in 953ms (next.js: 8ms, proxy.ts: 10ms, application-code: 935ms)
+  └─ ƒ getUserCreatives() in 870ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 902ms (next.js: 46ms, proxy.ts: 670ms, application-code: 186ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1959ms (next.js: 4ms, proxy.ts: 20ms, application-code: 1936ms)
+  └─ ƒ getUserBalance() in 1923ms src/actions/getUserBalance.ts
+ POST /editor 200 in 946ms (next.js: 10ms, proxy.ts: 18ms, application-code: 918ms)
+  └─ ƒ getUserCreatives() in 891ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 814ms (next.js: 58ms, proxy.ts: 658ms, application-code: 98ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1920ms (next.js: 1786µs, proxy.ts: 10ms, application-code: 1908ms)
+  └─ ƒ getUserBalance() in 1899ms src/actions/getUserBalance.ts
+ POST /editor 200 in 980ms (next.js: 3ms, proxy.ts: 11ms, application-code: 966ms)
+  └─ ƒ getUserCreatives() in 891ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 143ms (next.js: 34ms, proxy.ts: 55ms, application-code: 54ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 661ms (next.js: 2ms, proxy.ts: 7ms, application-code: 652ms)
+  └─ ƒ getUserBalance() in 643ms src/actions/getUserBalance.ts
+ POST /editor 200 in 903ms (next.js: 3ms, proxy.ts: 6ms, application-code: 894ms)
+  └─ ƒ getUserCreatives() in 867ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 901ms (next.js: 30ms, proxy.ts: 604ms, application-code: 267ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 800ms (next.js: 4ms, proxy.ts: 6ms, application-code: 790ms)
+  └─ ƒ getUserBalance() in 782ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1013ms (next.js: 4ms, proxy.ts: 6ms, application-code: 1003ms)
+  └─ ƒ getUserCreatives() in 935ms src/actions/getUserCreatives.ts
+[browser] Recording failed TypeError: Load failed
+ GET /editor 200 in 553ms (next.js: 25ms, proxy.ts: 458ms, application-code: 70ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 3.2s (next.js: 2ms, proxy.ts: 12ms, application-code: 3.2s)
+  └─ ƒ getUserBalance() in 3210ms src/actions/getUserBalance.ts
+ POST /editor 200 in 924ms (next.js: 13ms, proxy.ts: 19ms, application-code: 891ms)
+  └─ ƒ getUserCreatives() in 869ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 1240ms (next.js: 48ms, proxy.ts: 1071ms, application-code: 121ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1375ms (next.js: 20ms, proxy.ts: 29ms, application-code: 1327ms)
+  └─ ƒ getUserBalance() in 1302ms src/actions/getUserBalance.ts
+ POST /editor 200 in 970ms (next.js: 6ms, proxy.ts: 16ms, application-code: 947ms)
+  └─ ƒ getUserCreatives() in 873ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 217ms (next.js: 35ms, proxy.ts: 78ms, application-code: 103ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 784ms (next.js: 4ms, proxy.ts: 18ms, application-code: 761ms)
+  └─ ƒ getUserBalance() in 748ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1047ms (next.js: 3ms, proxy.ts: 11ms, application-code: 1033ms)
+  └─ ƒ getUserCreatives() in 1007ms src/actions/getUserCreatives.ts
+[browser] Recording failed Error: Видео не было сгенерировано (сбой потока).
+    at <unknown> (src/app/editor/page.tsx:551:37)
+  549 |       }
+  550 |
+> 551 |       if (!finalVideoUrl) throw new Error("Видео не было сгенерировано (сбой потока).");
+      |                                     ^
+  552 |
+  553 |       // Fetch blob to bypass automatic browser open and force download
+  554 |       const videoRes = await fetch(finalVideoUrl);
+ GET /editor 200 in 1459ms (next.js: -99013µs, proxy.ts: 1402ms, application-code: 155ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1330ms (next.js: 8ms, proxy.ts: 25ms, application-code: 1296ms)
+  └─ ƒ getUserBalance() in 1277ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1423ms (next.js: 6ms, proxy.ts: 25ms, application-code: 1392ms)
+  └─ ƒ getUserCreatives() in 940ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 1288ms (next.js: 34ms, proxy.ts: 1021ms, application-code: 233ms)
+ GET / 200 in 948ms (next.js: 123ms, proxy.ts: 667ms, application-code: 158ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ GET /editor 200 in 67ms (next.js: 13ms, proxy.ts: 21ms, application-code: 33ms)
+[browser] Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior
+ POST /editor 200 in 1337ms (next.js: 2ms, proxy.ts: 10ms, application-code: 1325ms)
+  └─ ƒ getUserBalance() in 1313ms src/actions/getUserBalance.ts
+ POST /editor 200 in 236ms (next.js: 3ms, proxy.ts: 8ms, application-code: 224ms)
+  └─ ƒ getUserBalance() in 210ms src/actions/getUserBalance.ts
+ POST /editor 200 in 939ms (next.js: 3ms, proxy.ts: 6ms, application-code: 930ms)
+  └─ ƒ getUserCreatives() in 859ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 509ms (next.js: 3ms, proxy.ts: 7ms, application-code: 498ms)
+  └─ ƒ getUserCreatives() in 473ms src/actions/getUserCreatives.ts
+[API Cost] Claude Usage: 1331 in, 2642 out = $0.0436 (~20.94 KZT)
+ POST /api/generate 200 in 28.3s (next.js: 17ms, proxy.ts: 32ms, application-code: 28.2s)
+ POST /editor 200 in 867ms (next.js: 6ms, proxy.ts: 12ms, application-code: 849ms)
+  └─ ƒ getUserCreatives() in 830ms src/actions/getUserCreatives.ts
+✓ Compiled in 589ms
+ GET /editor 200 in 1079ms (next.js: 99ms, proxy.ts: 823ms, application-code: 157ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 785ms (next.js: 1822µs, proxy.ts: 9ms, application-code: 774ms)
+  └─ ƒ getUserBalance() in 768ms src/actions/getUserBalance.ts
+ POST /editor 200 in 930ms (next.js: 4ms, proxy.ts: 11ms, application-code: 916ms)
+  └─ ƒ getUserCreatives() in 900ms src/actions/getUserCreatives.ts
+[browser] Screenshot capture failed Error: Screenshot Failed
+    at <unknown> (src/app/editor/page.tsx:456:21)
+  454 |
+  455 |         if (!response.ok) {
+> 456 |           throw new Error("Screenshot Failed");
+      |                     ^
+  457 |         }
+  458 |
+  459 |         const blob = await response.blob();
+ GET /editor 200 in 148ms (next.js: 31ms, proxy.ts: 47ms, application-code: 70ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 882ms (next.js: 1857µs, proxy.ts: 7ms, application-code: 873ms)
+  └─ ƒ getUserBalance() in 861ms src/actions/getUserBalance.ts
+ POST /editor 200 in 934ms (next.js: 5ms, proxy.ts: 12ms, application-code: 916ms)
+  └─ ƒ getUserCreatives() in 893ms src/actions/getUserCreatives.ts
+[browser] Screenshot capture failed Error: Screenshot Failed
+    at <unknown> (src/app/editor/page.tsx:456:21)
+  454 |
+  455 |         if (!response.ok) {
+> 456 |           throw new Error("Screenshot Failed");
+      |                     ^
+  457 |         }
+  458 |
+  459 |         const blob = await response.blob();
+ GET /editor 200 in 537ms (next.js: 26ms, proxy.ts: 438ms, application-code: 73ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 776ms (next.js: 3ms, proxy.ts: 6ms, application-code: 767ms)
+  └─ ƒ getUserBalance() in 760ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1075ms (next.js: 2ms, proxy.ts: 6ms, application-code: 1067ms)
+  └─ ƒ getUserCreatives() in 1001ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 917ms (next.js: 66ms, proxy.ts: 707ms, application-code: 145ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1453ms (next.js: 77ms, proxy.ts: 25ms, application-code: 1351ms)
+  └─ ƒ getUserBalance() in 1332ms src/actions/getUserBalance.ts
+ POST /editor 200 in 947ms (next.js: 17ms, proxy.ts: 10ms, application-code: 920ms)
+  └─ ƒ getUserCreatives() in 879ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 160ms (next.js: 29ms, proxy.ts: 51ms, application-code: 80ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 746ms (next.js: 7ms, proxy.ts: 10ms, application-code: 729ms)
+  └─ ƒ getUserBalance() in 716ms src/actions/getUserBalance.ts
+ POST /editor 200 in 908ms (next.js: 26ms, proxy.ts: 8ms, application-code: 874ms)
+  └─ ƒ getUserCreatives() in 853ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 706ms (next.js: 24ms, proxy.ts: 617ms, application-code: 65ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1780ms (next.js: 1559µs, proxy.ts: 5ms, application-code: 1773ms)
+  └─ ƒ getUserBalance() in 1766ms src/actions/getUserBalance.ts
+ POST /editor 200 in 914ms (next.js: 2ms, proxy.ts: 14ms, application-code: 898ms)
+  └─ ƒ getUserCreatives() in 870ms src/actions/getUserCreatives.ts
+✓ Compiled in 544ms
+✓ Compiled in 371ms
+ GET /editor 200 in 1113ms (next.js: 185ms, proxy.ts: 850ms, application-code: 78ms)
+[browser] Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="editor/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/editor" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="editor/pag...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function Home} serverProvidedParams={{...}}>
+                    <Home params={Promise} searchParams={Promise}>
+                      <main className="flex h-scr...">
+                        <AnimatePresence>
+                        <aside className="fixed md:s...">
+                          <div className="p-6 border...">
+                            <div>
+                            <div className="flex flex-...">
+                              <span>
+                              <div>
++                             <div className="flex items-center justify-end gap-3 mt-2">
+-                             <button
+-                               className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600..."
+-                             >
+                          ...
+                        ...
+                ...
+              ...
+
+    at div (unknown)
+    at Home (src/app/editor/page.tsx:748:15)
+  746 |                 </Link>
+  747 |               </div>
+> 748 |               <div className="flex items-center justify-end gap-3 mt-2">
+      |               ^
+  749 |                 <button 
+  750 |                   onClick={() => { setCode(""); setActiveCreativeId(null); setPrompt("");...
+  751 |                   className="text-[10px] uppercase font-bold text-neutral-400 hover:text-...
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 1384ms (next.js: 131ms, proxy.ts: 18ms, application-code: 1235ms)
+  └─ ƒ getUserBalance() in 1214ms src/actions/getUserBalance.ts
+ POST /editor 200 in 238ms (next.js: 3ms, proxy.ts: 19ms, application-code: 216ms)
+  └─ ƒ getUserBalance() in 209ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1001ms (next.js: 5ms, proxy.ts: 12ms, application-code: 984ms)
+  └─ ƒ getUserCreatives() in 942ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 253ms (next.js: 1438µs, proxy.ts: 5ms, application-code: 246ms)
+  └─ ƒ getUserCreatives() in 217ms src/actions/getUserCreatives.ts
+✓ Compiled in 269ms
+ GET /editor 200 in 129ms (next.js: 32ms, proxy.ts: 43ms, application-code: 54ms)
+[browser] Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="editor/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/editor" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="editor/pag...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function Home} serverProvidedParams={{...}}>
+                    <Home params={Promise} searchParams={Promise}>
+                      <main className="flex h-scr...">
+                        <AnimatePresence>
+                        <aside className="fixed md:s...">
+                          <div className="p-6 border...">
+                            <div>
+                            <div className="flex flex-...">
+                              <span>
+                              <div>
++                             <div className="flex items-center justify-end gap-3 mt-2">
+-                             <button
+-                               className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600..."
+-                             >
+                          ...
+                        ...
+                ...
+              ...
+
+    at div (unknown)
+    at Home (src/app/editor/page.tsx:748:15)
+  746 |                 </Link>
+  747 |               </div>
+> 748 |               <div className="flex items-center justify-end gap-3 mt-2">
+      |               ^
+  749 |                 <button 
+  750 |                   onClick={() => { setCode(""); setActiveCreativeId(null); setPrompt("");...
+  751 |                   className="text-[10px] uppercase font-bold text-neutral-400 hover:text-...
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 833ms (next.js: 1491µs, proxy.ts: 27ms, application-code: 805ms)
+  └─ ƒ getUserBalance() in 778ms src/actions/getUserBalance.ts
+ POST /editor 200 in 277ms (next.js: 5ms, proxy.ts: 18ms, application-code: 254ms)
+  └─ ƒ getUserBalance() in 245ms src/actions/getUserBalance.ts
+ POST /editor 200 in 987ms (next.js: 4ms, proxy.ts: 13ms, application-code: 971ms)
+  └─ ƒ getUserCreatives() in 894ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 528ms (next.js: 5ms, proxy.ts: 12ms, application-code: 512ms)
+  └─ ƒ getUserCreatives() in 486ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 697ms (next.js: 29ms, proxy.ts: 609ms, application-code: 60ms)
+[browser] Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="editor/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/editor" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="editor/pag...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function Home} serverProvidedParams={{...}}>
+                    <Home params={Promise} searchParams={Promise}>
+                      <main className="flex h-scr...">
+                        <AnimatePresence>
+                        <aside className="fixed md:s...">
+                          <div className="p-6 border...">
+                            <div>
+                            <div className="flex flex-...">
+                              <span>
+                              <div>
++                             <div className="flex items-center justify-end gap-3 mt-2">
+-                             <button
+-                               className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600..."
+-                             >
+                          ...
+                        ...
+                ...
+              ...
+
+    at div (unknown)
+    at Home (src/app/editor/page.tsx:748:15)
+  746 |                 </Link>
+  747 |               </div>
+> 748 |               <div className="flex items-center justify-end gap-3 mt-2">
+      |               ^
+  749 |                 <button 
+  750 |                   onClick={() => { setCode(""); setActiveCreativeId(null); setPrompt("");...
+  751 |                   className="text-[10px] uppercase font-bold text-neutral-400 hover:text-...
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 814ms (next.js: 5ms, proxy.ts: 12ms, application-code: 798ms)
+  └─ ƒ getUserBalance() in 786ms src/actions/getUserBalance.ts
+ POST /editor 200 in 269ms (next.js: 5ms, proxy.ts: 19ms, application-code: 244ms)
+  └─ ƒ getUserBalance() in 235ms src/actions/getUserBalance.ts
+ POST /editor 200 in 1092ms (next.js: 6ms, proxy.ts: 10ms, application-code: 1076ms)
+  └─ ƒ getUserCreatives() in 1017ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 525ms (next.js: 5ms, proxy.ts: 12ms, application-code: 507ms)
+  └─ ƒ getUserCreatives() in 486ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 93ms (next.js: 9ms, proxy.ts: 35ms, application-code: 49ms)
+[browser] Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="editor/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/editor" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="editor/pag...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function Home} serverProvidedParams={{...}}>
+                    <Home params={Promise} searchParams={Promise}>
+                      <main className="flex h-scr...">
+                        <AnimatePresence>
+                        <aside className="fixed md:s...">
+                          <div className="p-6 border...">
+                            <div>
+                            <div className="flex flex-...">
+                              <span>
+                              <div>
++                             <div className="flex items-center justify-end gap-3 mt-2">
+-                             <button
+-                               className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600..."
+-                             >
+                          ...
+                        ...
+                ...
+              ...
+
+    at div (unknown)
+    at Home (src/app/editor/page.tsx:748:15)
+  746 |                 </Link>
+  747 |               </div>
+> 748 |               <div className="flex items-center justify-end gap-3 mt-2">
+      |               ^
+  749 |                 <button 
+  750 |                   onClick={() => { setCode(""); setActiveCreativeId(null); setPrompt("");...
+  751 |                   className="text-[10px] uppercase font-bold text-neutral-400 hover:text-...
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 708ms (next.js: 7ms, proxy.ts: 31ms, application-code: 670ms)
+  └─ ƒ getUserBalance() in 663ms src/actions/getUserBalance.ts
+ POST /editor 200 in 305ms (next.js: 12ms, proxy.ts: 10ms, application-code: 284ms)
+  └─ ƒ getUserBalance() in 275ms src/actions/getUserBalance.ts
+ POST /editor 200 in 953ms (next.js: 6ms, proxy.ts: 14ms, application-code: 932ms)
+  └─ ƒ getUserCreatives() in 881ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 459ms (next.js: 4ms, proxy.ts: 9ms, application-code: 447ms)
+  └─ ƒ getUserCreatives() in 420ms src/actions/getUserCreatives.ts
+✓ Compiled in 229ms
+ GET /editor 200 in 124ms (next.js: 42ms, proxy.ts: 24ms, application-code: 58ms)
+[browser] Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="editor/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/editor" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="editor/pag...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function Home} serverProvidedParams={{...}}>
+                    <Home params={Promise} searchParams={Promise}>
+                      <main className="flex h-scr...">
+                        <AnimatePresence>
+                        <aside className="fixed md:s...">
+                          <div className="p-6 border...">
+                            <div>
+                            <div className="flex flex-...">
+                              <span>
+                              <div>
++                             <div className="flex items-center justify-end gap-3 mt-2">
+-                             <button
+-                               className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600..."
+-                             >
+                          ...
+                        ...
+                ...
+              ...
+
+    at div (unknown)
+    at Home (src/app/editor/page.tsx:748:15)
+  746 |                 </Link>
+  747 |               </div>
+> 748 |               <div className="flex items-center justify-end gap-3 mt-2">
+      |               ^
+  749 |                 <button 
+  750 |                   onClick={() => { setCode(""); setActiveCreativeId(null); setPrompt("");...
+  751 |                   className="text-[10px] uppercase font-bold text-neutral-400 hover:text-...
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 716ms (next.js: 7ms, proxy.ts: 26ms, application-code: 682ms)
+  └─ ƒ getUserBalance() in 673ms src/actions/getUserBalance.ts
+ POST /editor 200 in 252ms (next.js: 6ms, proxy.ts: 14ms, application-code: 232ms)
+  └─ ƒ getUserBalance() in 224ms src/actions/getUserBalance.ts
+ POST /editor 200 in 937ms (next.js: 5ms, proxy.ts: 16ms, application-code: 916ms)
+  └─ ƒ getUserCreatives() in 868ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 283ms (next.js: 4ms, proxy.ts: 12ms, application-code: 267ms)
+  └─ ƒ getUserCreatives() in 233ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 114ms (next.js: 14ms, proxy.ts: 24ms, application-code: 75ms)
+[browser] Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="editor/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/editor" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="editor/pag...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function Home} serverProvidedParams={{...}}>
+                    <Home params={Promise} searchParams={Promise}>
+                      <main className="flex h-scr...">
+                        <AnimatePresence>
+                        <aside className="fixed md:s...">
+                          <div className="p-6 border...">
+                            <div>
+                            <div className="flex flex-...">
+                              <span>
+                              <div>
++                             <div className="flex items-center justify-end gap-3 mt-2">
+-                             <button
+-                               className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600..."
+-                             >
+                          ...
+                        ...
+                ...
+              ...
+
+    at div (unknown)
+    at Home (src/app/editor/page.tsx:748:15)
+  746 |                 </Link>
+  747 |               </div>
+> 748 |               <div className="flex items-center justify-end gap-3 mt-2">
+      |               ^
+  749 |                 <button 
+  750 |                   onClick={() => { setCode(""); setActiveCreativeId(null); setPrompt("");...
+  751 |                   className="text-[10px] uppercase font-bold text-neutral-400 hover:text-...
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 727ms (next.js: 3ms, proxy.ts: 10ms, application-code: 715ms)
+  └─ ƒ getUserBalance() in 697ms src/actions/getUserBalance.ts
+ POST /editor 200 in 238ms (next.js: 5ms, proxy.ts: 20ms, application-code: 213ms)
+  └─ ƒ getUserBalance() in 207ms src/actions/getUserBalance.ts
+ POST /editor 200 in 903ms (next.js: 3ms, proxy.ts: 9ms, application-code: 890ms)
+  └─ ƒ getUserCreatives() in 846ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 451ms (next.js: 4ms, proxy.ts: 10ms, application-code: 437ms)
+  └─ ƒ getUserCreatives() in 418ms src/actions/getUserCreatives.ts
+ GET /editor 200 in 88ms (next.js: 5ms, proxy.ts: 19ms, application-code: 63ms)
+[browser] Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="editor/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/editor" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="editor/pag...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function Home} serverProvidedParams={{...}}>
+                    <Home params={Promise} searchParams={Promise}>
+                      <main className="flex h-scr...">
+                        <AnimatePresence>
+                        <aside className="fixed md:s...">
+                          <div className="p-6 border...">
+                            <div>
+                            <div className="flex flex-...">
+                              <span>
+                              <div>
++                             <div className="flex items-center justify-end gap-3 mt-2">
+-                             <button
+-                               className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600..."
+-                             >
+                          ...
+                        ...
+                ...
+              ...
+
+    at div (unknown)
+    at Home (src/app/editor/page.tsx:748:15)
+  746 |                 </Link>
+  747 |               </div>
+> 748 |               <div className="flex items-center justify-end gap-3 mt-2">
+      |               ^
+  749 |                 <button 
+  750 |                   onClick={() => { setCode(""); setActiveCreativeId(null); setPrompt("");...
+  751 |                   className="text-[10px] uppercase font-bold text-neutral-400 hover:text-...
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://immense-leech-25.clerk.accounts.dev/npm/@clerk/clerk-js@6.7.3/dist/clerk.browser.js:12:3221)
+ POST /editor 200 in 227ms (next.js: 3ms, proxy.ts: 6ms, application-code: 219ms)
+  └─ ƒ getUserBalance() in 206ms src/actions/getUserBalance.ts
+ POST /editor 200 in 235ms (next.js: 11ms, proxy.ts: 9ms, application-code: 215ms)
+  └─ ƒ getUserBalance() in 208ms src/actions/getUserBalance.ts
+ POST /editor 200 in 696ms (next.js: 3ms, proxy.ts: 12ms, application-code: 681ms)
+  └─ ƒ getUserCreatives() in 637ms src/actions/getUserCreatives.ts
+ POST /editor 200 in 3.1s (next.js: 4ms, proxy.ts: 11ms, application-code: 3.0s)
+  └─ ƒ getUserCreatives() in 2991ms src/actions/getUserCreatives.ts

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2 } from "lucide-react";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -62,8 +62,8 @@ export default function Home() {
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);
-  
   const [pendingProductFile, setPendingProductFile] = useState<{ file: File; dataUrl: string } | null>(null);
+  const [strictClone, setStrictClone] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0); 
@@ -150,20 +150,19 @@ export default function Home() {
       const itemsToCheck = historyItems.filter((item: any) => item.htmlCode?.includes('gsap') && !downloadedItems.includes(item.id));
       for (const item of itemsToCheck) {
         if (!isPolling) break;
+        // Do not query the server if the item is actively rendering locally
+        const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
+        if (currentJobs[item.id]) continue;
+        
         try {
           const res = await fetch(`/api/check-render?id=${item.id}`);
           if (res.ok) {
             const data = await res.json();
             if (data.ready) {
               setBackgroundStatuses(prev => ({...prev, [item.id]: 'done'}));
-            } else {
-              setBackgroundStatuses(prev => ({...prev, [item.id]: 'queued'}));
             }
           }
         } catch(e) {}
-      }
-      if (isPolling) {
-        setTimeout(fetchStatuses, itemsToCheck.length > 0 ? 2000 : 10000);
       }
     };
     fetchStatuses();
@@ -219,13 +218,14 @@ export default function Home() {
       if (activeCreativeId && currentJobs[activeCreativeId] && checkIsTabActive()) {
          const job = currentJobs[activeCreativeId];
          const elapsedSec = Math.floor((Date.now() - job.startTime) / 1000);
-         const estimatedTotalSecs = job.totalFrames === 450 ? 120 : 80;
-         const framesDone = Math.floor((elapsedSec / (estimatedTotalSecs - 20)) * job.totalFrames); // Timecut takes bulk of time
+         // Cloud Run takes about 3 to 4 minutes to render 450 frames
+         const estimatedTotalSecs = job.totalFrames === 450 ? 240 : 180;
+         const framesDone = Math.floor((elapsedSec / (estimatedTotalSecs - 30)) * job.totalFrames); 
          
-         if (elapsedSec < 3) {
+         if (elapsedSec < 5) {
             setRenderPhase('☁️ Инициализация сервера Cloud Run...');
          } else if (framesDone < job.totalFrames) {
-            setRenderPhase(`🎞️ Покадровая сборка: ${framesDone} / ${job.totalFrames} кадров`);
+            setRenderPhase(`🎞️ Покадровая сборка: ${Math.min(framesDone, job.totalFrames)} / ${job.totalFrames} кадров`);
          } else if (elapsedSec < estimatedTotalSecs - 5) {
             setRenderPhase(`⚙️ Кодирование H.264 и выгрузка в облако...`);
          } else {
@@ -369,39 +369,6 @@ export default function Home() {
     localStorage.setItem("creative_animated", isAnimated.toString());
   }, [isAnimated]);
 
-  // Background Pre-Rendering
-  useEffect(() => {
-    if (!code || !isAnimated || !activeCreativeId) return;
-    
-    setBackgroundJobId(null);
-    
-    let isMounted = true;
-    const runPreRender = async () => {
-      setIsBackgroundRendering(true);
-      try {
-        const response = await fetch("/api/render", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ html: code, format, creativeId: activeCreativeId })
-        });
-        if (response.ok && isMounted) {
-          const data = await response.json();
-          setBackgroundJobId(data.jobId);
-        }
-      } catch (err) {
-        console.error("Background render failed", err);
-      } finally {
-        if (isMounted) setIsBackgroundRendering(false);
-      }
-    };
-    
-    runPreRender();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [code, isAnimated, format, activeCreativeId]);
-
   // Handle Progress Timer (Percentage 0 to 95) with Dynamic Texts
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -533,6 +500,31 @@ export default function Home() {
 
     // Use explicit remix base if selected
     const htmlCodeToRemix = remixSourceCode || undefined;
+    
+    let remixScreenshotBase64: string | undefined = undefined;
+    if (htmlCodeToRemix) {
+       setLoadingText("Снимаем холст для визуального ИИ...");
+       try {
+         const response = await fetch("https://creative-cloud-renderer-694906438875.europe-west4.run.app/screenshot", {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({ html: htmlCodeToRemix, format: format })
+         });
+         
+         if (response.ok) {
+           const blob = await response.blob();
+           remixScreenshotBase64 = await new Promise<string>((resolve) => {
+             const reader = new FileReader();
+             reader.onloadend = () => resolve(reader.result as string);
+             reader.readAsDataURL(blob);
+           });
+         } else {
+           console.warn("Server screenshot returned non-ok status:", response.status);
+         }
+       } catch (err) {
+         console.warn("Server screenshot capture failed:", err);
+       }
+    }
 
     try {
       const results = [];
@@ -559,7 +551,9 @@ export default function Home() {
               isAnimated,
               referenceImagesBase64: refBase64,
               productImagesBase64: prodBase64,
-              remixHtmlCode: htmlCodeToRemix
+              remixHtmlCode: htmlCodeToRemix,
+              remixScreenshotBase64,
+              strictClone
             }),
             signal: controller.signal
           });
@@ -700,6 +694,31 @@ export default function Home() {
   const handleReplay = () => {
     setIframeKey(prev => prev + 1);
   };
+  const removeDownloadedState = (id: string) => {
+     setDownloadedItems(prev => prev.filter(x => x !== id));
+     const currentStr = localStorage.getItem('downloadedCreatives');
+     if (currentStr) {
+        const arr = JSON.parse(currentStr);
+        localStorage.setItem('downloadedCreatives', JSON.stringify(arr.filter((x: string) => x !== id)));
+     }
+  };
+
+  const cancelRender = (id: string) => {
+    const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
+    if (currentJobs[id]) {
+      delete currentJobs[id];
+      localStorage.setItem('backgroundRenderJobs', JSON.stringify(currentJobs));
+      setRenderJobs(currentJobs);
+    }
+    setBackgroundStatuses(prev => {
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
+    if (isRecording && activeCreativeId === id) {
+       setIsRecording(false);
+    }
+  };
 
   const startVideoRecording = async (preExistingJobId?: string) => {
     setShowVideoInstruction(false);
@@ -722,6 +741,7 @@ export default function Home() {
       currentJobs[targetId] = { startTime: Date.now(), totalFrames, format };
       setRenderJobs(currentJobs);
       localStorage.setItem('backgroundRenderJobs', JSON.stringify(currentJobs));
+      setBackgroundStatuses(prev => ({...prev, [targetId]: 'rendering'}));
 
       fetch(CLOUD_URL, {
         method: "POST",
@@ -801,26 +821,66 @@ export default function Home() {
                                      {item.format || '9:16'}
                                   </span>
                                   {isDownloaded ? (
-                                    <span className="bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-green-200 flex items-center gap-0.5">
-                                      <Check className="w-3 h-3" /> Скачано
-                                    </span>
+                                    <div className="flex items-center gap-1 min-w-max">
+                                      <span 
+                                        className="bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-green-200 flex items-center gap-0.5 cursor-pointer hover:bg-green-200 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); window.location.href = `/api/download?creativeId=${item.id}`; }}
+                                      >
+                                        <Download className="w-3 h-3" /> Скачано
+                                      </span>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); removeDownloadedState(item.id); }} 
+                                        className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-500 border border-neutral-200 rounded drop-shadow-sm transition-colors shrink-0"
+                                        title="Сбросить статус скачанного"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
                                   ) : backgroundStatuses[item.id] === 'done' ? (
                                     <span 
-                                      onClick={(e) => { e.stopPropagation(); startVideoRecording(item.id); }}
+                                      onClick={(e) => { 
+                                         e.stopPropagation(); 
+                                         window.location.href = `/api/download?creativeId=${item.id}`;
+                                         setDownloadedItems(prev => [...prev, item.id]);
+                                         const currentStr = localStorage.getItem('downloadedCreatives');
+                                         const arr = currentStr ? JSON.parse(currentStr) : [];
+                                         if (!arr.includes(item.id)) {
+                                            arr.push(item.id);
+                                            localStorage.setItem('downloadedCreatives', JSON.stringify(arr));
+                                         }
+                                      }}
                                       className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-blue-200 flex items-center gap-0.5 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm"
                                     >
                                       <span>✅ Скачать видео</span>
                                     </span>
                                   ) : renderJobs[item.id] ? (
-                                    <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
-                                      <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
-                                      Сборка: {Math.min(renderJobs[item.id].totalFrames, Math.floor(((Date.now() - renderJobs[item.id].startTime) / 1000 / (renderJobs[item.id].totalFrames === 450 ? 100 : 60)) * renderJobs[item.id].totalFrames))} / {renderJobs[item.id].totalFrames}
-                                    </span>
-                                  ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id].startsWith('processing'))) ? (
-                                    <span className="bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200 flex items-center gap-1 min-w-max">
-                                      <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
-                                      В очереди
-                                    </span>
+                                    <div className="flex items-center gap-1 min-w-max">
+                                      <span className="bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-amber-200 flex items-center gap-1">
+                                        <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
+                                        Сборка: {Math.min(renderJobs[item.id].totalFrames, Math.floor(((Date.now() - renderJobs[item.id].startTime) / 1000 / (renderJobs[item.id].totalFrames === 450 ? 100 : 60)) * renderJobs[item.id].totalFrames))} / {renderJobs[item.id].totalFrames}
+                                      </span>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); cancelRender(item.id); }} 
+                                        className="w-5 h-5 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 rounded drop-shadow-sm transition-colors shrink-0"
+                                        title="Отменить очередь"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id] === 'rendering' || backgroundStatuses[item.id].startsWith('processing'))) ? (
+                                    <div className="flex items-center gap-1 min-w-max">
+                                      <span className="bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-amber-200 flex items-center gap-1 min-w-max">
+                                        <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
+                                        В очереди
+                                      </span>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); cancelRender(item.id); }} 
+                                        className="w-5 h-5 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 rounded drop-shadow-sm transition-colors shrink-0"
+                                        title="Отменить очередь"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
                                   ) : backgroundStatuses[item.id] === 'error' ? (
                                     <span className="bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-red-200 flex items-center gap-0.5">
                                       Тайм-аут
@@ -1093,9 +1153,11 @@ export default function Home() {
              <p className="text-[10px] text-neutral-400 leading-tight">Система сгенерирует {generationsCount} {generationsCount === 1 ? 'вариант' : 'варианта'} одновременно. Первый откроется сразу, остальные сохранятся в Банк Креативов.</p>
           </div>
 
-          {/* Reference Image Upload */}
-          {!remixSourceCode && (
-            <div className="space-y-3">
+          {/* Reference and Product Image Uploads */}
+          {!remixSourceCode ? (
+            <>
+              {/* Reference Image Upload */}
+              <div className="space-y-3">
               <h2 className="text-sm font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-neutral-400" />
@@ -1126,12 +1188,22 @@ export default function Home() {
                   </label>
                 )}
               </div>
+              {referenceImages.length > 0 && (
+                <label className="flex items-center gap-2 pt-2 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    checked={strictClone} 
+                    onChange={(e) => setStrictClone(e.target.checked)} 
+                    className="w-4 h-4 rounded text-hermes-500 border-neutral-300 focus:ring-hermes-500" 
+                  />
+                  <span className="text-xs font-semibold text-neutral-600 group-hover:text-neutral-900 transition-colors">
+                    Точное клонирование (повторить структуру и цвета 1:1)
+                  </span>
+                </label>
+              )}
             </div>
-          )}
-
-          {/* Product Image Upload (Temporarily hidden per user request until fully refined) */}
-          {false && (
-            <div className="space-y-3">
+          {/* Product Image Upload */}
+          <div className="space-y-3">
               <h2 className="text-sm font-semibold flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <PackageSearch className="w-4 h-4 text-hermes-500" />
@@ -1189,6 +1261,30 @@ export default function Home() {
               </div>
             )}
           </div>
+          </>
+          ) : (
+            <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-xl relative overflow-hidden shadow-inner flex flex-col gap-3">
+              <div className="absolute -top-4 -right-4 p-2"><Wand2 className="text-amber-200 w-24 h-24 opacity-30"/></div>
+              
+              <h2 className="text-sm font-bold flex items-center gap-2 text-amber-800 relative z-10 tracking-tight">
+                <Sparkles className="w-4 h-4" />
+                Режим доработки (Ремикс)
+              </h2>
+              
+              <p className="text-xs text-amber-700/90 leading-relaxed font-medium relative z-10">
+                Креатив загружен в память ИИ. Все загруженные ранее исходники, фото и стили сохранены внутри самого дизайна.
+                <br/><br/>
+                Просто напишите в ТЗ ниже, что именно нужно изменить (текст, цвета, отступы), и ИИ пересоберёт код.
+              </p>
+              
+              <div className="flex gap-2 items-center relative z-10 py-1.5 px-3 bg-amber-100/70 w-fit rounded-lg border border-amber-200/50 mt-1">
+                <div className="flex -space-x-1.5">
+                  <div className="w-5 h-5 border border-amber-50 rounded bg-amber-200 flex items-center justify-center shadow-sm"><ImageIcon className="w-3 h-3 text-amber-700"/></div>
+                  <div className="w-5 h-5 border border-amber-50 rounded bg-amber-300 flex items-center justify-center shadow-sm"><PackageSearch className="w-3 h-3 text-amber-800"/></div>
+                </div>
+                <span className="text-[9px] text-amber-800 font-bold tracking-wide uppercase">Файлы уже внутри</span>
+              </div>
+            </div>
           )}
 
           {/* Prompt + Clear Button */}
@@ -1239,7 +1335,7 @@ export default function Home() {
               <p className="text-xs text-neutral-500 font-bold text-center">Вы просматриваете креатив из ваших сохранений</p>
               
               <button
-                onClick={() => { setRemixSourceCode(activeCreativeCode); setActiveCreativeId(null); }}
+                onClick={() => { setRemixSourceCode(activeCreativeCode); setCode(activeCreativeCode); setActiveCreativeId(null); }}
                 className="w-full py-4 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 shadow-xl shadow-amber-500/30 text-white cursor-pointer active:scale-95 transition-all flex flex-col items-center justify-center gap-0.5"
               >
                  <span className="flex items-center gap-2 text-base">
