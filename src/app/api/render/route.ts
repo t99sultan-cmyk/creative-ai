@@ -21,17 +21,35 @@ const MAX_HTML_LEN = 10_000_000; // 10 MB
 
 /**
  * POST request to Cloud Run with retry + exponential backoff.
- * Returns true if Cloud Run acked the job (any 2xx/202), false on total failure.
+ *
+ * Returns { ok: true } if Cloud Run acked the job, otherwise an error
+ * payload classified as:
+ *   - rateLimited: 429 from GCP or persistent throttling → tell user to wait
+ *   - unavailable: timeouts / 5xx → tell user to try again shortly
+ *   - clientError: 4xx (not 429) → bad input, don't retry
  *
  * We don't wait for render completion here — just for the "accepted" handshake.
- * Render progress is tracked via polling /api/check-render + GCS bucket.
  */
-async function postWithRetry(body: any, maxRetries = 3): Promise<{ ok: boolean; error?: string; status?: number }> {
+async function postWithRetry(
+  body: any,
+  maxRetries = 2,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  status?: number;
+  rateLimited?: boolean;
+}> {
   let lastErr: any = null;
+  let saw429 = false;
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      // 12s handshake window (down from 20s). Cloud Run usually acks a
+      // new task in <2s; if it's taking 12s+, something is wrong and
+      // extra waiting won't help — better to fail fast and let the user
+      // decide, than sit for 60s on multiple retries.
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20_000); // 20s handshake window
+      const timeout = setTimeout(() => controller.abort(), 12_000);
 
       const res = await fetch(CLOUD_RUN_URL, {
         method: 'POST',
@@ -43,15 +61,15 @@ async function postWithRetry(body: any, maxRetries = 3): Promise<{ ok: boolean; 
 
       if (res.ok) return { ok: true, status: res.status };
 
-      // 429 is a rate-limit — retryable, not a client bug. Honor
-      // Retry-After when Cloud Run sends it, otherwise fall back to the
-      // exponential backoff below (but with a bigger minimum wait).
+      // 429 = GCP rate-limited us. One bounded retry only — if the very
+      // next attempt is also throttled, hammering more makes it worse.
       if (res.status === 429) {
+        saw429 = true;
         const retryAfterHeader = res.headers.get('retry-after');
         const retryAfterSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
         const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
-          ? Math.min(30_000, retryAfterSec * 1000)
-          : Math.min(15_000, 3_000 * Math.pow(2, attempt));
+          ? Math.min(5_000, retryAfterSec * 1000)
+          : 3_000;
         console.warn(`[Cloud Run 429] rate-limited, backing off ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`);
         lastErr = new Error(`Cloud Run 429 rate-limited`);
         if (attempt < maxRetries - 1) {
@@ -71,14 +89,19 @@ async function postWithRetry(body: any, maxRetries = 3): Promise<{ ok: boolean; 
       lastErr = e;
     }
 
-    // Exponential backoff: 1s, 2s, 4s
+    // Backoff between attempts: 1s, then 2s. Max total wait with 2
+    // retries on timeouts: 12s + 1s + 12s = 25s (was 60s+).
     if (attempt < maxRetries - 1) {
-      const delay = Math.min(5000, 1000 * Math.pow(2, attempt));
+      const delay = 1000 * (attempt + 1);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
 
-  return { ok: false, error: lastErr?.message || 'Cloud Run unreachable' };
+  return {
+    ok: false,
+    error: lastErr?.message || 'Cloud Run unreachable',
+    rateLimited: saw429,
+  };
 }
 
 export async function POST(req: Request) {
@@ -165,10 +188,17 @@ export async function POST(req: Request) {
 
       console.error(`[API /render] Cloud Run failed after retries: ${result.error}`);
 
+      // Pick a message that tells the user what to actually do. Clicking
+      // "try again" on a 429 just makes the throttle worse.
+      const userMessage = result.rateLimited
+        ? 'GCP ограничил частоту запросов к серверу рендера. Подожди 10–15 минут — квота сама сбросится. Повторные нажатия сейчас только продлевают блокировку.'
+        : 'Сервер рендера не отвечает. Попробуй ещё раз через пару минут, или проверь статус Cloud Run в GCP Console.';
+
       return NextResponse.json(
         {
           status: 'failed',
-          error: 'Сервер рендера недоступен. Попробуй ещё раз через пару минут.',
+          error: userMessage,
+          rateLimited: !!result.rateLimited,
           detail: result.error,
         },
         { status: 502 },
