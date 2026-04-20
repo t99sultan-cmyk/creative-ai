@@ -36,52 +36,71 @@ export async function GET(req: Request) {
       where: eq(creatives.id, creativeId),
     });
 
-    if (row?.videoUrl) {
-      const v = row.videoUrl;
+    // Creative doesn't exist at all (client has a stale id in localStorage).
+    if (!row) {
+      return NextResponse.json({
+        ready: false,
+        notStarted: true,
+        error: 'Креатив не найден',
+      });
+    }
 
-      // Webhook-delivered success: videoUrl is a real URL (http...)
-      if (v.startsWith('http://') || v.startsWith('https://')) {
-        return NextResponse.json({ ready: true, url: v, source: 'db' });
-      }
+    // Creative exists but videoUrl is empty — render was never started for
+    // it, or was manually cleared. The client is in a "zombie poll" state
+    // where localStorage says "rendering" but the DB has nothing to show.
+    // Tell the client to drop the job from its queue.
+    if (!row.videoUrl) {
+      return NextResponse.json({
+        ready: false,
+        notStarted: true,
+        error: 'Рендер не был запущен для этого креатива',
+      });
+    }
 
-      // Explicit failure flag from /api/render
-      if (v.startsWith('failed:')) {
+    const v = row.videoUrl;
+
+    // Webhook-delivered success: videoUrl is a real URL (http...)
+    if (v.startsWith('http://') || v.startsWith('https://')) {
+      return NextResponse.json({ ready: true, url: v, source: 'db' });
+    }
+
+    // Explicit failure flag from /api/render
+    if (v.startsWith('failed:')) {
+      return NextResponse.json({
+        ready: false,
+        failed: true,
+        error: v.slice('failed:'.length).split(':').slice(1).join(':') || 'Render failed',
+      });
+    }
+
+    // Still rendering: check timeout, then decide whether to ping GCS at all.
+    if (v.startsWith('rendering:')) {
+      const ts = parseInt(v.slice('rendering:'.length), 10);
+      const elapsed = Number.isFinite(ts) ? Date.now() - ts : 0;
+
+      if (elapsed > STUCK_RENDER_THRESHOLD_MS) {
+        // Mark as failed so the UI stops polling forever
+        await db
+          .update(creatives)
+          .set({ videoUrl: `failed:${ts}:stuck-render-timeout` })
+          .where(eq(creatives.id, creativeId))
+          .catch(() => undefined);
         return NextResponse.json({
           ready: false,
           failed: true,
-          error: v.slice('failed:'.length).split(':').slice(1).join(':') || 'Render failed',
+          error: 'Рендер завис (>10 мин). Попробуй запустить снова.',
         });
       }
 
-      // Still rendering: check timeout, then decide whether to ping GCS at all.
-      if (v.startsWith('rendering:')) {
-        const ts = parseInt(v.slice('rendering:'.length), 10);
-        const elapsed = Number.isFinite(ts) ? Date.now() - ts : 0;
-
-        if (elapsed > STUCK_RENDER_THRESHOLD_MS) {
-          // Mark as failed so the UI stops polling forever
-          await db
-            .update(creatives)
-            .set({ videoUrl: `failed:${ts}:stuck-render-timeout` })
-            .where(eq(creatives.id, creativeId))
-            .catch(() => undefined);
-          return NextResponse.json({
-            ready: false,
-            failed: true,
-            error: 'Рендер завис (>10 мин). Попробуй запустить снова.',
-          });
-        }
-
-        // Too early to bother GCS. This is the single biggest check-render
-        // speedup — we answer in ~10ms (DB only) for the first ~45 seconds
-        // instead of adding a 1-3s GCS HEAD round-trip to every poll.
-        if (elapsed < MIN_RENDER_TIME_MS) {
-          return NextResponse.json({
-            ready: false,
-            source: 'db-early',
-            elapsedMs: elapsed,
-          });
-        }
+      // Too early to bother GCS. This is the single biggest check-render
+      // speedup — we answer in ~10ms (DB only) for the first ~45 seconds
+      // instead of adding a 1-3s GCS HEAD round-trip to every poll.
+      if (elapsed < MIN_RENDER_TIME_MS) {
+        return NextResponse.json({
+          ready: false,
+          source: 'db-early',
+          elapsedMs: elapsed,
+        });
       }
     }
 

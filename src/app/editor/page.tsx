@@ -267,6 +267,30 @@ export default function Home() {
         );
 
         for (const { id, data } of results) {
+          // Server says this creative was never actually rendering (empty
+          // videoUrl in DB or creative not found). Drop the zombie job from
+          // localStorage so we stop polling it forever.
+          if (data?.notStarted) {
+            delete jobsToUpdate[id];
+            updated = true;
+            setBackgroundStatuses(prev => ({ ...prev, [id]: 'error' }));
+            if (id === activeCreativeId && isRecording) {
+              setIsRecording(false);
+              setError(data.error || 'Рендер не был запущен для этого креатива.');
+            }
+            continue;
+          }
+          // Explicit failure from server (failed:... prefix in DB).
+          if (data?.failed) {
+            delete jobsToUpdate[id];
+            updated = true;
+            setBackgroundStatuses(prev => ({ ...prev, [id]: 'error' }));
+            if (id === activeCreativeId && isRecording) {
+              setIsRecording(false);
+              setError(data.error || 'Ошибка рендера.');
+            }
+            continue;
+          }
           if (!data?.ready || !data.url) continue;
           const fileUrl = data.url;
           delete jobsToUpdate[id];
