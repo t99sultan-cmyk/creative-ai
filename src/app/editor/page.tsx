@@ -1100,10 +1100,12 @@ export default function Home() {
             <div className="flex flex-col items-end">
               <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Баланс</span>
               <div className="flex items-center gap-2">
-                <button 
+                {/* Balance badge — clicks open the promo input inline (quick path).
+                    For full flow (history, account info) use the Личный кабинет link below. */}
+                <button
                   onClick={() => setShowPromoInput(!showPromoInput)}
                   className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 hover:bg-hermes-100 hover:border-hermes-300 transition-colors"
-                  title="Активировать промокод"
+                  title="Нажмите чтобы ввести промокод"
                 >
                   <span className="font-extrabold text-sm">{impulses === null ? "..." : impulses}</span>
                   <span className="text-sm">⚡</span>
@@ -1112,28 +1114,45 @@ export default function Home() {
                   {impulses !== null && impulses >= 10 ? 'Докупить (Kaspi)' : 'Купить (Kaspi)'}
                 </Link>
               </div>
-              <button 
-                onClick={() => setShowHistory(true)}
-                className="text-[10px] uppercase font-bold text-neutral-500 mt-2 hover:text-hermes-600 underline"
-              >
-                Мои креативы ({historyItems.length})
-              </button>
+              <div className="flex items-center gap-3 mt-2">
+                <Link
+                  href="/account"
+                  className="text-[10px] uppercase font-bold text-hermes-600 hover:text-hermes-700 underline flex items-center gap-1"
+                  title="Промокоды, история пополнений, ваш баланс"
+                >
+                  🎁 Промокод / Кабинет
+                </Link>
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="text-[10px] uppercase font-bold text-neutral-500 hover:text-hermes-600 underline"
+                >
+                  Мои креативы ({historyItems.length})
+                </button>
+              </div>
             </div>
         </div>
 
         {showPromoInput && (
           <div className="px-6 py-4 bg-hermes-50/50 border-b border-hermes-100">
-            <h3 className="text-xs font-bold text-hermes-800 uppercase tracking-wider mb-2">Активация промокода</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold text-hermes-800 uppercase tracking-wider">Активация промокода</h3>
+              <Link
+                href="/account"
+                className="text-[10px] font-bold text-hermes-600 hover:text-hermes-700 underline"
+              >
+                Открыть кабинет →
+              </Link>
+            </div>
             <div className="flex gap-2">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                placeholder="PROMO-XYZ"
+                placeholder="PROMO-XXX-YYYY-ZZZZ"
                 className="flex-1 bg-white border border-hermes-200 rounded-lg px-3 py-2 text-sm uppercase outline-none focus:border-hermes-500 font-mono"
                 disabled={isRedeeming}
               />
-              <button 
+              <button
                 onClick={handleRedeem}
                 disabled={isRedeeming || !promoCode.trim()}
                 className="bg-hermes-600 hover:bg-hermes-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center min-w-[100px]"

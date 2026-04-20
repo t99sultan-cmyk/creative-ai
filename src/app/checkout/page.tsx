@@ -95,7 +95,13 @@ function CheckoutContent() {
              <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 flex gap-3 text-sm">
                <Receipt className="w-5 h-5 text-neutral-400 shrink-0" />
                <p className="text-neutral-500 leading-snug">
-                 Как только вы получите промокод от менеджера, перейдите в <Link href="/editor" className="font-bold text-hermes-600 underline">свой редактор</Link> и введите его для пополнения баланса. Эта механика работает до внедрения 100% авто-платежей на сайте.
+                 Как только вы получите промокод от менеджера, перейдите в
+                 {" "}
+                 <Link href="/account" className="font-bold text-hermes-600 underline">
+                   Личный кабинет
+                 </Link>{" "}
+                 и введите код в поле <b>«Активировать промокод»</b> — импульсы мгновенно
+                 добавятся на баланс. Эта механика работает до внедрения 100% авто-платежей на сайте.
                </p>
              </div>
 
