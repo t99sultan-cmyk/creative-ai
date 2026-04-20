@@ -20,87 +20,99 @@ const CLOUD_RUN_URL =
 const MAX_HTML_LEN = 10_000_000; // 10 MB
 
 /**
- * POST request to Cloud Run with retry + exponential backoff.
+ * POST request to Cloud Run with a single long-tolerant attempt.
  *
- * Returns { ok: true } if Cloud Run acked the job, otherwise an error
- * payload classified as:
- *   - rateLimited: 429 from GCP or persistent throttling → tell user to wait
- *   - unavailable: timeouts / 5xx → tell user to try again shortly
- *   - clientError: 4xx (not 429) → bad input, don't retry
+ * We don't wait for render completion here — just for the "accepted"
+ * handshake. Three important subtleties:
  *
- * We don't wait for render completion here — just for the "accepted" handshake.
+ * 1. Cold start + 5 MB HTML upload can legitimately take 30-40 s. We
+ *    allow 45 s instead of the old 12 s before aborting. If we abort
+ *    early, Cloud Run may STILL be processing the payload on the other
+ *    side — we just don't have an ACK to prove it.
+ *
+ * 2. On timeout we return `unknown: true` rather than a hard failure.
+ *    The DB row stays in the `rendering:<ts>` state and the client's
+ *    poller will pick up the finished video via /api/check-render →
+ *    GCS HEAD or webhook. A 10-min safety cutoff there catches truly
+ *    dead renders.
+ *
+ * 3. Retrying the ACK with a 5 MB body is expensive and can double-book
+ *    Cloud Run. We DO retry on 429 (one time) because that one bounces
+ *    fast without spending quota. We DON'T retry on timeouts — the
+ *    first one is already processing.
+ *
+ * Returns classification:
+ *   - ok:true                → Cloud Run acked, render proceeding
+ *   - ok:false, unknown:true → timeout before ACK, render MAY still complete
+ *   - ok:false, rateLimited  → 429, still throttled on retry
+ *   - ok:false, clientError  → 4xx (bad html etc), won't work on retry
  */
 async function postWithRetry(
   body: any,
-  maxRetries = 2,
 ): Promise<{
   ok: boolean;
   error?: string;
   status?: number;
   rateLimited?: boolean;
+  unknown?: boolean;
 }> {
-  let lastErr: any = null;
-  let saw429 = false;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  const attemptOnce = async (timeoutMs: number): Promise<{
+    kind: 'ok' | 'timeout' | 'http';
+    status?: number;
+    text?: string;
+  }> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // 12s handshake window (down from 20s). Cloud Run usually acks a
-      // new task in <2s; if it's taking 12s+, something is wrong and
-      // extra waiting won't help — better to fail fast and let the user
-      // decide, than sit for 60s on multiple retries.
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12_000);
-
       const res = await fetch(CLOUD_RUN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
-      clearTimeout(timeout);
-
-      if (res.ok) return { ok: true, status: res.status };
-
-      // 429 = GCP rate-limited us. One bounded retry only — if the very
-      // next attempt is also throttled, hammering more makes it worse.
-      if (res.status === 429) {
-        saw429 = true;
-        const retryAfterHeader = res.headers.get('retry-after');
-        const retryAfterSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
-        const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
-          ? Math.min(5_000, retryAfterSec * 1000)
-          : 3_000;
-        console.warn(`[Cloud Run 429] rate-limited, backing off ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`);
-        lastErr = new Error(`Cloud Run 429 rate-limited`);
-        if (attempt < maxRetries - 1) {
-          await new Promise((r) => setTimeout(r, waitMs));
-        }
-        continue;
-      }
-
-      // Other 4xx → don't retry (real client error — bad html, bad format, etc).
-      if (res.status >= 400 && res.status < 500) {
-        const text = await res.text().catch(() => '');
-        return { ok: false, error: `Cloud Run 4xx: ${res.status} ${text}`.slice(0, 500), status: res.status };
-      }
-
-      lastErr = new Error(`Cloud Run ${res.status}`);
-    } catch (e: any) {
-      lastErr = e;
+      clearTimeout(timer);
+      if (res.ok) return { kind: 'ok', status: res.status };
+      const text = await res.text().catch(() => '');
+      return { kind: 'http', status: res.status, text };
+    } catch {
+      clearTimeout(timer);
+      return { kind: 'timeout' };
     }
+  };
 
-    // Backoff between attempts: 1s, then 2s. Max total wait with 2
-    // retries on timeouts: 12s + 1s + 12s = 25s (was 60s+).
-    if (attempt < maxRetries - 1) {
-      const delay = 1000 * (attempt + 1);
-      await new Promise((r) => setTimeout(r, delay));
+  // First attempt: long window (45 s) to cover cold start + 5 MB upload.
+  const first = await attemptOnce(45_000);
+
+  if (first.kind === 'ok') return { ok: true, status: first.status };
+
+  if (first.kind === 'timeout') {
+    // Cloud Run didn't ACK, but it likely GOT the payload and is grinding.
+    // Return `unknown:true` so the handler keeps the DB row in `rendering`
+    // state instead of marking as failed. The poller will catch success.
+    console.warn('[Cloud Run] ACK timeout after 45s — proceeding as "likely rendering"');
+    return { ok: false, unknown: true, error: 'Cloud Run ACK timeout (render may still complete)' };
+  }
+
+  // HTTP response — classify by status.
+  if (first.status === 429) {
+    // One bounded retry only — if still throttled, hammering makes it worse.
+    await new Promise((r) => setTimeout(r, 3_000));
+    const second = await attemptOnce(20_000);
+    if (second.kind === 'ok') return { ok: true, status: second.status };
+    if (second.kind === 'timeout') {
+      return { ok: false, unknown: true, error: 'Cloud Run ACK timeout after 429 retry' };
+    }
+    if (second.status === 429) {
+      return { ok: false, rateLimited: true, error: 'Cloud Run 429 rate-limited (twice)' };
     }
   }
 
+  // Real 4xx/5xx → surface to handler to decide.
+  const statusText = (first as any).text?.slice?.(0, 500) ?? '';
   return {
     ok: false,
-    error: lastErr?.message || 'Cloud Run unreachable',
-    rateLimited: saw429,
+    error: `Cloud Run ${first.status}: ${statusText}`,
+    status: first.status,
   };
 }
 
@@ -178,21 +190,38 @@ export async function POST(req: Request) {
       webhookSecret,
     });
 
+    // ACK-timeout case: Cloud Run didn't confirm in 45s, but the payload
+    // was uploaded and likely accepted. DO NOT mark as failed — keep the
+    // DB row as `rendering:<ts>` and let the client's /api/check-render
+    // poller detect success when the MP4 lands in GCS (or webhook fires).
+    // The 10-min stuck-render watchdog in check-render will clean up if
+    // it truly never completes.
+    if (!result.ok && result.unknown) {
+      console.warn(
+        `[API /render] No ACK for ${creativeId} — render status unknown, ` +
+        `continuing as if queued. Poller will detect completion.`,
+      );
+      return NextResponse.json({
+        status: 'queued-no-ack',
+        creativeId,
+        startedAt,
+        note: 'Cloud Run did not ACK in time, but the render is likely proceeding. Poll /api/check-render for result.',
+      });
+    }
+
     if (!result.ok) {
-      // Mark as failed so the UI stops polling forever
+      // Hard failure (4xx/5xx or double 429). Mark failed so UI stops polling.
       await db
         .update(creatives)
         .set({ videoUrl: `failed:${startedAt}:${(result.error || 'unknown').slice(0, 200)}` })
         .where(eq(creatives.id, creativeId))
         .catch(() => undefined);
 
-      console.error(`[API /render] Cloud Run failed after retries: ${result.error}`);
+      console.error(`[API /render] Cloud Run failed: ${result.error}`);
 
-      // Pick a message that tells the user what to actually do. Clicking
-      // "try again" on a 429 just makes the throttle worse.
       const userMessage = result.rateLimited
         ? 'GCP ограничил частоту запросов к серверу рендера. Подожди 10–15 минут — квота сама сбросится. Повторные нажатия сейчас только продлевают блокировку.'
-        : 'Сервер рендера не отвечает. Попробуй ещё раз через пару минут, или проверь статус Cloud Run в GCP Console.';
+        : 'Сервер рендера вернул ошибку. Проверь статус Cloud Run в GCP Console.';
 
       return NextResponse.json(
         {
