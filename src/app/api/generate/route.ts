@@ -178,7 +178,25 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - If 1:1: Make it a perfect square.
 
 7. ANIMATIONS (${isAnimated ? 'ON' : 'OFF'}):
-   - ${isAnimated ? 'You MUST animate the typography and elements beautifully using CSS keyframes or GSAP. Ensure all animations have `yoyo: true, repeat: -1` so the video loops seamlessly.' : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
+   ${isAnimated ? `- You MUST animate typography and elements beautifully using CSS keyframes or GSAP.
+   - 🔴 CRITICAL TIMING — THE FINAL VIDEO IS ${format === '9:16' ? '15 SECONDS' : '10 SECONDS'} LONG.
+     Your animations MUST be timed for a cinematic, premium ad — NOT a busy UI with spinning loaders.
+     Default individual animation durations (single "ease" pass): 1.5s – 3s. Slow is premium.
+     If you use \`repeat: -1\` + \`yoyo: true\`, pick a duration long enough that you see AT MOST
+     2-4 full cycles over the whole video. A 0.5s loop = 30 cycles in 15s = looks like a glitch.
+   - 🔴 NO FAST-SPINNING ELEMENTS. Never use a loading spinner, fast-rotating circle, or any
+     "busy UI" animation. The viewer should see a beautiful SLOW reveal, not a progress bar
+     frantically loading. If you draw a decorative rotating ring, its rotation duration must be
+     8-15 SECONDS per full turn (not 1s).
+   - Use GSAP timelines to stagger element entrances across the first 2-4 seconds, then
+     hold/breathe for the remainder. Example:
+     \`const tl = gsap.timeline({ repeat: -1, yoyo: true });\`
+     \`tl.from(".title", { opacity: 0, y: 30, duration: 1.2, ease: "power2.out" });\`
+     \`tl.from(".subtitle", { opacity: 0, duration: 1, ease: "power2.out" }, "-=0.5");\`
+     \`tl.from(".cta", { scale: 0.8, opacity: 0, duration: 0.8 }, "-=0.3");\`
+     \`tl.to({}, { duration: 8 }); // hold the final look\`
+   - If you use CSS \`@keyframes\` with \`animation-iteration-count: infinite\`, set
+     \`animation-duration\` to **at least 3s**, ideally 5-10s.` : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
 
 8. HIGHLIGHTS & PRODUCT INTEGRATION:
    - Highlight 3-5 power words in a vibrant color (like text-yellow-400 or a gradient).
