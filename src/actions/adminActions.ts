@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { users, promoCodes, creatives } from "@/db/schema";
-import { and, desc, eq, gte, ilike, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { isAdmin } from "@/lib/admin-guard";
 import { recordAdminAction, getRecentAuditLog, getAuditLogForUser } from "@/lib/audit-log";
@@ -90,6 +90,10 @@ export async function getAdminDashboardData(query: DashboardQuery = {}) {
 
     if (pageUserIds.length > 0) {
       // SQL-side aggregates: ONE query, scoped to THIS PAGE's user IDs.
+      // NOTE: Neon's parameterization turns a naive `sql\`... = ANY(${arr})\``
+      // into `ANY($1, $2, $3)` which is invalid. Drizzle's `inArray(col, arr)`
+      // properly generates `col IN (?, ?, ?)` (or the equivalent) with a
+      // single-parameter-per-value binding that Postgres accepts.
       const [creativeAgg, usedPromosScoped] = await Promise.all([
         db
           .select({
@@ -100,7 +104,7 @@ export async function getAdminDashboardData(query: DashboardQuery = {}) {
             dislikes: sql<number>`count(*) filter (where ${creatives.feedbackScore} = -1)::int`,
           })
           .from(creatives)
-          .where(sql`${creatives.userId} = ANY(${pageUserIds})`)
+          .where(inArray(creatives.userId, pageUserIds))
           .groupBy(creatives.userId),
         db
           .select()
@@ -108,7 +112,7 @@ export async function getAdminDashboardData(query: DashboardQuery = {}) {
           .where(
             and(
               eq(promoCodes.isUsed, true),
-              sql`${promoCodes.usedBy} = ANY(${pageUserIds})`,
+              inArray(promoCodes.usedBy, pageUserIds),
             ),
           )
           .orderBy(desc(promoCodes.usedAt)),

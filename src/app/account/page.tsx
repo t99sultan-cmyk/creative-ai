@@ -110,7 +110,10 @@ export default function AccountPage() {
             >
               Главная
             </Link>
-            <UserButton afterSignOutUrl="/" />
+            {/* Note: `afterSignOutUrl` was removed from UserButton props in
+                recent @clerk/nextjs versions. Sign-out redirect is now
+                configured at the Clerk app level or via CLERK_SIGN_OUT_URL. */}
+            <UserButton />
           </div>
         </div>
       </header>
