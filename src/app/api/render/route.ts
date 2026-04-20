@@ -106,9 +106,32 @@ export async function POST(req: Request) {
       .where(eq(creatives.id, creativeId))
       .catch((e) => console.error('Could not update rendering status in DB', e));
 
+    // Tell Cloud Run where to POST the completion webhook. We derive the
+    // public URL from the incoming request (handles dev vs prod vs preview
+    // envs automatically) and pair it with the shared secret so the Cloud
+    // Run service can do a constant-time auth check on callback.
+    //
+    // If CLOUD_RUN_WEBHOOK_SECRET isn't set, we still send the URL but the
+    // secret will be empty → Cloud Run should refuse to call back, and we
+    // silently fall back to GCS polling. This is the whole "opt-in" design.
+    const webhookSecret = process.env.CLOUD_RUN_WEBHOOK_SECRET || '';
+    const webhookBaseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (req.headers.get('x-forwarded-proto') && req.headers.get('host')
+        ? `${req.headers.get('x-forwarded-proto')}://${req.headers.get('host')}`
+        : new URL(req.url).origin);
+    const webhookUrl = `${webhookBaseUrl.replace(/\/$/, '')}/api/render/webhook`;
+
     console.log(`[API /render] Posting creativeId=${creativeId} to Cloud Run (with retry)…`);
 
-    const result = await postWithRetry({ html, format, creativeId });
+    const result = await postWithRetry({
+      html,
+      format,
+      creativeId,
+      // Extras — Cloud Run can ignore these if it doesn't support callbacks yet.
+      webhookUrl,
+      webhookSecret,
+    });
 
     if (!result.ok) {
       // Mark as failed so the UI stops polling forever

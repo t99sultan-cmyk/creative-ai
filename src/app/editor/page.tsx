@@ -176,36 +176,48 @@ export default function Home() {
     if (!activeKeys.length) return;
 
     let isPolling = true;
+    // Skip-counter: we don't fetch every tick. Strategy:
+    //   - first 30s:  check every 2s  (skip 1 tick between fetches)
+    //   - 30s–120s:  check every 3s  (skip 2)
+    //   - 120s+:     check every 5s  (skip 4)
+    // Saves 70–80% of /api/check-render calls while still feeling instant
+    // to the user thanks to the server-side early-exit (< 45s → ~10ms).
+    let tickCounter = 0;
+
     const interval = setInterval(async () => {
       if (!isPolling) return;
+      tickCounter++;
 
-      // Page Visibility: if the tab is hidden, we still run the timer (so
-      // we can detect 10-min timeouts without client re-entry), but we
-      // skip BOTH the network polling AND the progress-bar animation.
-      // No point animating UI nobody's looking at, and no point spamming
-      // /api/check-render if the user isn't there to see the result.
+      // Page Visibility: keep the timer so we can still detect 10-min
+      // timeouts, but skip BOTH the progress-bar animation AND the network
+      // polling when the user isn't looking. No point animating unseen UI
+      // and no point spamming /api/check-render.
       const isTabVisible = typeof document !== 'undefined' && !document.hidden;
 
       const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
       const jobsToUpdate = { ...currentJobs };
       let updated = false;
 
-      // Ensure progress bar updates visually for active canvas creative
+      // --- Progress bar animation for the active canvas creative ---
       if (activeCreativeId && currentJobs[activeCreativeId] && isTabVisible) {
          const job = currentJobs[activeCreativeId];
          const elapsedSec = Math.floor((Date.now() - job.startTime) / 1000);
          // Cloud Run takes about 3 to 4 minutes to render 450 frames
          const estimatedTotalSecs = job.totalFrames === 450 ? 240 : 180;
-         const framesDone = Math.floor((elapsedSec / (estimatedTotalSecs - 30)) * job.totalFrames); 
-         
+         const framesDone = Math.floor((elapsedSec / (estimatedTotalSecs - 30)) * job.totalFrames);
+
          if (elapsedSec < 5) {
             setRenderPhase('☁️ Инициализация сервера Cloud Run...');
          } else if (framesDone < job.totalFrames) {
             setRenderPhase(`🎞️ Покадровая сборка: ${Math.min(framesDone, job.totalFrames)} / ${job.totalFrames} кадров`);
          } else if (elapsedSec < estimatedTotalSecs - 5) {
             setRenderPhase(`⚙️ Кодирование H.264 и выгрузка в облако...`);
-         } else {
+         } else if (elapsedSec < 5 * 60) {
+            // First 5 min past the estimated window: it's "finishing up"
             setRenderPhase(`🔄 Финализация файла... ожидание сервера`);
+         } else {
+            // Past 5 min — be honest, don't pretend we're "almost done"
+            setRenderPhase(`⏳ Сервер дольше обычного. Не уходите — видео на подходе...`);
          }
 
          // Visual progress bar that fills up over full estimated time
@@ -213,72 +225,91 @@ export default function Home() {
          setIsRecording(true);
       }
 
+      // --- Decide whether to actually fetch this tick (backoff) ---
+      // Use the OLDEST active job's elapsed time as the "phase" signal.
+      let minElapsed = Infinity;
+      for (const id of activeKeys) {
+        if (currentJobs[id]) {
+          minElapsed = Math.min(minElapsed, Date.now() - currentJobs[id].startTime);
+        }
+      }
+      const skipEvery = minElapsed < 30_000 ? 2 : minElapsed < 120_000 ? 3 : 5;
+      const shouldFetchThisTick = tickCounter % skipEvery === 0;
+
+      // --- Timeout check (runs every tick, independent of fetch backoff) ---
       for (const id of activeKeys) {
         if (!currentJobs[id]) continue;
-
         const jobElapsed = Date.now() - currentJobs[id].startTime;
         if (jobElapsed > 10 * 60 * 1000) {
-            // 10 minutes timeout - silently mark as failed locally so we don't infinitely poll
-            delete jobsToUpdate[id];
-            updated = true;
-            setBackgroundStatuses(prev => ({...prev, [id]: 'error'}));
-            if (id === activeCreativeId && isRecording) {
-                setIsRecording(false);
-                setError("Слишком долгое ожидание. Процесс прерван по тайм-ауту (сервер отдыхает).");
-            }
-            continue;
+          delete jobsToUpdate[id];
+          updated = true;
+          setBackgroundStatuses(prev => ({ ...prev, [id]: 'error' }));
+          if (id === activeCreativeId && isRecording) {
+            setIsRecording(false);
+            setError("Слишком долгое ожидание. Процесс прерван по тайм-ауту (сервер отдыхает).");
+          }
         }
+      }
 
-        // When tab is hidden, skip the network fetch. Timeout logic above
-        // still fires so a dead render is caught even if the user is away.
-        // Polling resumes automatically when the tab becomes visible again.
-        if (!isTabVisible) continue;
-
-        try {
-          const pollRes = await fetch(`/api/check-render?id=${id}`);
-          if (pollRes.ok) {
-            const data = await pollRes.json();
-            if (data.ready && data.url) {
-              const fileUrl = data.url;
-            // Processing done
-            delete jobsToUpdate[id];
-            updated = true;
-            setBackgroundStatuses(prev => ({...prev, [id]: 'done'}));
-            
-            // Auto download ONLY if user is actively watching THIS specific creative load
-            if (id === activeCreativeId && isRecording) {
-               setRenderProgress(100);
-               setRenderPhase(`✅ Видео готово! Скачиваем на устройство...`);
-               setTimeout(async () => {
-                 try {
-                   const videoRes = await fetch(fileUrl);
-                   if (videoRes.ok) {
-                      const videoBlob = await videoRes.blob();
-                      const blobUrl = URL.createObjectURL(videoBlob);
-                      const link = document.createElement("a");
-                      link.href = blobUrl; link.download = `creative_${currentJobs[id].format}.mp4`;
-                      document.body.appendChild(link); link.click(); document.body.removeChild(link);
-                      URL.revokeObjectURL(blobUrl);
-                   } else {
-                      window.location.href = `/api/download?url=${encodeURIComponent(fileUrl)}`;
-                   }
-                 } catch(err) {
-                   window.location.href = `/api/download?url=${encodeURIComponent(fileUrl)}`;
-                 }
-                 markItemAsDownloaded(id);
-                 setIsRecording(false);
-               }, 1000);
+      // --- Parallel poll of all active creatives ---
+      if (isTabVisible && shouldFetchThisTick) {
+        const stillActive = activeKeys.filter(id => jobsToUpdate[id]);
+        const results = await Promise.all(
+          stillActive.map(async (id) => {
+            try {
+              const res = await fetch(`/api/check-render?id=${id}`);
+              if (!res.ok) return { id, data: null };
+              return { id, data: await res.json() };
+            } catch {
+              return { id, data: null };
             }
-             }
-           }
-         } catch (e) {}
-       }
+          }),
+        );
 
+        for (const { id, data } of results) {
+          if (!data?.ready || !data.url) continue;
+          const fileUrl = data.url;
+          delete jobsToUpdate[id];
+          updated = true;
+          setBackgroundStatuses(prev => ({ ...prev, [id]: 'done' }));
+
+          // Auto-download only the one the user is actively watching.
+          if (id === activeCreativeId && isRecording) {
+            setRenderProgress(100);
+            setRenderPhase(`✅ Видео готово! Скачиваем на устройство...`);
+            const jobFormat = currentJobs[id]?.format ?? '9:16';
+            setTimeout(async () => {
+              try {
+                const videoRes = await fetch(fileUrl);
+                if (videoRes.ok) {
+                  const videoBlob = await videoRes.blob();
+                  const blobUrl = URL.createObjectURL(videoBlob);
+                  const link = document.createElement("a");
+                  link.href = blobUrl;
+                  link.download = `creative_${jobFormat}.mp4`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(blobUrl);
+                } else {
+                  window.location.href = `/api/download?url=${encodeURIComponent(fileUrl)}`;
+                }
+              } catch {
+                window.location.href = `/api/download?url=${encodeURIComponent(fileUrl)}`;
+              }
+              markItemAsDownloaded(id);
+              setIsRecording(false);
+            }, 1000);
+          }
+        }
+      }
+
+      // Only commit state + localStorage on real changes. The previous
+      // version called setRenderJobs() every tick, which re-triggered this
+      // whole useEffect and silently recreated the interval every second.
       if (updated) {
-         setRenderJobs(jobsToUpdate);
-         localStorage.setItem('backgroundRenderJobs', JSON.stringify(jobsToUpdate));
-      } else {
-         setRenderJobs(jobsToUpdate); // trigger local frame visual updates
+        setRenderJobs(jobsToUpdate);
+        localStorage.setItem('backgroundRenderJobs', JSON.stringify(jobsToUpdate));
       }
     }, 1000);
     return () => { isPolling = false; clearInterval(interval); };
