@@ -43,7 +43,24 @@ async function postWithRetry(body: any, maxRetries = 3): Promise<{ ok: boolean; 
 
       if (res.ok) return { ok: true, status: res.status };
 
-      // 5xx → retry. 4xx → don't retry (client error).
+      // 429 is a rate-limit — retryable, not a client bug. Honor
+      // Retry-After when Cloud Run sends it, otherwise fall back to the
+      // exponential backoff below (but with a bigger minimum wait).
+      if (res.status === 429) {
+        const retryAfterHeader = res.headers.get('retry-after');
+        const retryAfterSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+        const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? Math.min(30_000, retryAfterSec * 1000)
+          : Math.min(15_000, 3_000 * Math.pow(2, attempt));
+        console.warn(`[Cloud Run 429] rate-limited, backing off ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+        lastErr = new Error(`Cloud Run 429 rate-limited`);
+        if (attempt < maxRetries - 1) {
+          await new Promise((r) => setTimeout(r, waitMs));
+        }
+        continue;
+      }
+
+      // Other 4xx → don't retry (real client error — bad html, bad format, etc).
       if (res.status >= 400 && res.status < 500) {
         const text = await res.text().catch(() => '');
         return { ok: false, error: `Cloud Run 4xx: ${res.status} ${text}`.slice(0, 500), status: res.status };

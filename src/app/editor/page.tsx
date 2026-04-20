@@ -8,7 +8,7 @@ import { toPng } from "html-to-image";
 import { useUser } from "@clerk/nextjs";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
-import { getUserCreatives } from "@/actions/getUserCreatives";
+import { getUserCreatives, getCreativeHtml } from "@/actions/getUserCreatives";
 import { deleteUserCreative } from "@/actions/deleteUserCreative";
 import { cancelGeneration } from "@/actions/generationActions";
 import { buildLoadingTexts, optimizeImageToWebP } from "@/lib/editor-utils";
@@ -83,9 +83,35 @@ export default function Home() {
   const [renderJobs, setRenderJobs] = useState<Record<string, { startTime: number, totalFrames: number, format: string }>>({});
   const activeCreativeCode = activeCreativeId ? historyItems.find(i => i.id === activeCreativeId)?.htmlCode || code : code;
 
+  // Lazy-load htmlCode for history items ONLY when the modal opens.
+  // getUserCreatives returns metadata only (no htmlCode) so the editor's
+  // initial page load is fast; here we fetch the heavy HTML in one batch
+  // on demand, and merge it into historyItems state.
+  useEffect(() => {
+    if (!showHistory) return;
+    const needsHtml = historyItems
+      .filter((i: any) => !i.htmlCode)
+      .map((i: any) => i.id);
+    if (needsHtml.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const res = await getCreativeHtml(needsHtml);
+      if (cancelled || !res.success || !res.htmlMap) return;
+      const map = res.htmlMap;
+      setHistoryItems((prev: any[]) =>
+        prev.map((item) => (map[item.id] ? { ...item, htmlCode: map[item.id] } : item)),
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showHistory, historyItems.length]);
+
   useEffect(() => {
     if (!showHistory || historyItems.length === 0) return;
-    
+
     // Cross-device Sync: Map DB 'rendering:' strings into local background jobs
     try {
       const currentLocaltorage = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
@@ -115,13 +141,19 @@ export default function Home() {
 
     let isPolling = true;
     const fetchStatuses = async () => {
-      const itemsToCheck = historyItems.filter((item: any) => item.htmlCode?.includes('gsap') && !downloadedItems.includes(item.id));
+      // Use `cost` (in metadata, always available) instead of inspecting
+      // htmlCode for 'gsap'. Animated creatives cost 4 impulses, static
+      // cost 3 — so cost > 3 reliably identifies video renders that
+      // need status polling, without requiring htmlCode to be loaded yet.
+      const itemsToCheck = historyItems.filter(
+        (item: any) => (item.cost ?? 3) > 3 && !downloadedItems.includes(item.id),
+      );
       for (const item of itemsToCheck) {
         if (!isPolling) break;
         // Do not query the server if the item is actively rendering locally
         const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
         if (currentJobs[item.id]) continue;
-        
+
         try {
           const res = await fetch(`/api/check-render?id=${item.id}`);
           if (res.ok) {
@@ -993,7 +1025,33 @@ export default function Home() {
                                )}
 
                                {/* Hover overlay */}
-                               <div onClick={() => { setCode(item.htmlCode); setActiveCreativeId(item.id); setPrompt(item.prompt || ""); setFormat(item.format || '9:16'); setIsAnimated(item.htmlCode?.includes('gsap') || item.cost > 3); setShowHistory(false); setMobileTab('canvas'); }} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all duration-300 z-20">
+                               <div
+                                 onClick={async () => {
+                                   // Ensure htmlCode is loaded before switching canvas.
+                                   // It's usually fetched by the lazy-loader when the
+                                   // modal opened, but if the user clicked too fast
+                                   // we fall back to an on-demand fetch here.
+                                   let html: string | undefined = item.htmlCode;
+                                   if (!html) {
+                                     const res = await getCreativeHtml([item.id]);
+                                     html = res.success ? res.htmlMap?.[item.id] : undefined;
+                                     if (html) {
+                                       setHistoryItems((prev: any[]) =>
+                                         prev.map((h) => (h.id === item.id ? { ...h, htmlCode: html } : h)),
+                                       );
+                                     }
+                                   }
+                                   if (!html) return; // Silently skip if fetch failed
+                                   setCode(html);
+                                   setActiveCreativeId(item.id);
+                                   setPrompt(item.prompt || "");
+                                   setFormat(item.format || '9:16');
+                                   setIsAnimated((item.cost ?? 3) > 3);
+                                   setShowHistory(false);
+                                   setMobileTab('canvas');
+                                 }}
+                                 className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all duration-300 z-20"
+                               >
                                   <div className="bg-white text-neutral-900 font-black px-5 py-3 rounded-2xl flex items-center gap-2 shadow-2xl transform scale-90 group-hover:scale-100 transition-all duration-300">
                                      <Sparkles className="w-4 h-4" /> Посмотреть
                                   </div>
