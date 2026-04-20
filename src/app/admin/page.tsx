@@ -1,9 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getAdminDashboardData, createPromoCode, updateUserImpulses, getUserHistory, deletePromoCode, toggleUserBan } from "@/actions/adminActions";
+import { useEffect, useState, useMemo } from "react";
+import {
+  getAdminDashboardData,
+  createPromoCode,
+  updateUserImpulses,
+  getUserHistory,
+  deletePromoCode,
+  toggleUserBan,
+  getAdminStats,
+  getAdminAuditLog,
+  type UserStatusFilter,
+} from "@/actions/adminActions";
 import { useRouter } from "next/navigation";
-import { CopyIcon, CheckCircleIcon, Edit2Icon, HistoryIcon, XIcon, CheckIcon, TrashIcon, BanIcon, CheckCircle2Icon } from "lucide-react";
+import {
+  CopyIcon,
+  CheckCircleIcon,
+  Edit2Icon,
+  HistoryIcon,
+  XIcon,
+  CheckIcon,
+  TrashIcon,
+  BanIcon,
+  CheckCircle2Icon,
+  SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  UsersIcon,
+  ZapIcon,
+  DollarSignIcon,
+  TrendingUpIcon,
+  ShieldAlertIcon,
+  ActivityIcon,
+} from "lucide-react";
+
+function formatKzt(n: number): string {
+  if (!Number.isFinite(n)) return "0 ₸";
+  return `${Math.round(n).toLocaleString("ru-RU")} ₸`;
+}
 
 function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => void, onViewHistory: (userId: string) => void }) {
   const [editing, setEditing] = useState(false);
@@ -11,8 +45,30 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    const parsed = parseInt(newBalance, 10);
+    if (!Number.isFinite(parsed)) {
+      alert("Введите целое число.");
+      return;
+    }
+
+    // Confirmation — balance changes touch money, one-click edits are too risky.
+    // Only ask if the value actually changed.
+    const current = u.impulses ?? 0;
+    if (parsed !== current) {
+      const delta = parsed - current;
+      const sign = delta > 0 ? "+" : "";
+      const ok = confirm(
+        `Изменить баланс пользователя ${u.email}?\n\n` +
+        `Было: ${current} импульсов\n` +
+        `Станет: ${parsed} импульсов\n` +
+        `Разница: ${sign}${delta}\n\n` +
+        `Это действие необратимо. Оно будет записано в audit log.`
+      );
+      if (!ok) return;
+    }
+
     setSaving(true);
-    const res = await updateUserImpulses(u.id, parseInt(newBalance));
+    const res = await updateUserImpulses(u.id, parsed);
     if (res.success) {
       setEditing(false);
       onRefresh(); // Refresh parent data
@@ -23,6 +79,17 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
   };
 
   const handleToggleBan = async () => {
+    // Ban/unban is also destructive — require confirm.
+    const action = u.isBanned ? "разбанить" : "забанить";
+    const ok = confirm(
+      `Точно ${action} пользователя ${u.email}?\n\n` +
+      (u.isBanned
+        ? `После разбана он снова сможет заходить и генерировать.`
+        : `После бана он не сможет заходить в приложение.`) +
+      `\n\nДействие будет записано в audit log.`
+    );
+    if (!ok) return;
+
     setSaving(true);
     const res = await toggleUserBan(u.id, !u.isBanned);
     if (res.success) {
@@ -42,12 +109,14 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
       <td className="p-4">
         {editing ? (
           <div className="flex items-center gap-2">
-            <input 
-              type="number" 
-              value={newBalance} 
+            <input
+              type="number"
+              value={newBalance}
               onChange={e => setNewBalance(e.target.value)}
               className="w-20 px-2 py-1 border rounded text-xs"
               min="0"
+              max="100000"
+              step="1"
             />
             <button onClick={handleSave} disabled={saving} className="text-green-600 hover:text-green-700">
               <CheckIcon className="w-4 h-4" />
@@ -101,18 +170,18 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
          )}
       </td>
       <td className="p-4 text-neutral-400 text-xs border-l border-neutral-100 text-center">
-         {new Date(u.createdAt).toLocaleDateString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit' })}
+         {u.createdAt ? new Date(u.createdAt).toLocaleDateString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
       </td>
       <td className="p-4 text-right">
         <div className="flex flex-col gap-2 items-end">
-          <button 
+          <button
             onClick={() => onViewHistory(u.id)}
             className="text-xs w-full justify-center bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 flex items-center transition-colors"
           >
             <HistoryIcon className="w-3.5 h-3.5 mr-1" /> История
           </button>
-          
-          <button 
+
+          <button
             onClick={handleToggleBan}
             disabled={saving}
             className={`text-xs w-full justify-center px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors ${u.isBanned ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
@@ -125,11 +194,80 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
   );
 }
 
+function StatCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  accent = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  icon?: any;
+  accent?: "neutral" | "orange" | "green" | "indigo" | "rose";
+}) {
+  const accentMap: Record<string, string> = {
+    neutral: "bg-neutral-50 text-neutral-700",
+    orange: "bg-orange-50 text-orange-600",
+    green: "bg-green-50 text-green-700",
+    indigo: "bg-indigo-50 text-indigo-600",
+    rose: "bg-rose-50 text-rose-600",
+  };
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-4 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase text-neutral-400 tracking-wider">{label}</span>
+        {Icon && (
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${accentMap[accent]}`}>
+            <Icon className="w-3.5 h-3.5" />
+          </div>
+        )}
+      </div>
+      <div className="text-2xl font-black text-neutral-900 font-mono">{value}</div>
+      {sub && <div className="text-[11px] text-neutral-500 leading-snug">{sub}</div>}
+    </div>
+  );
+}
+
+function Sparkline({
+  series,
+  accessor,
+  color,
+}: {
+  series: { date: string; users: number; gens: number; apiCostKzt: number }[];
+  accessor: (d: any) => number;
+  color: string;
+}) {
+  const max = Math.max(1, ...series.map(accessor));
+  return (
+    <div className="flex items-end gap-0.5 h-14">
+      {series.map((d) => {
+        const val = accessor(d);
+        const h = Math.max(2, (val / max) * 100);
+        return (
+          <div
+            key={d.date}
+            className={`flex-1 ${color} rounded-t opacity-80 hover:opacity-100 transition-opacity`}
+            style={{ height: `${h}%` }}
+            title={`${d.date}: ${val.toLocaleString("ru-RU")}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const router = useRouter();
+
+  // Main data
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
   const [error, setError] = useState("");
+
+  // Promo generation
   const [generating, setGenerating] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -137,22 +275,65 @@ export default function AdminPage() {
   const [historyModalUser, setHistoryModalUser] = useState<string | null>(null);
   const [userHistory, setUserHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyTotalCount, setHistoryTotalCount] = useState(0);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+
+  // Audit log modal
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditRows, setAuditRows] = useState<any[]>([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
 
   // Sorting
   const [sortByGenerations, setSortByGenerations] = useState(false);
 
-  const init = async () => {
-    const res = await getAdminDashboardData();
+  // Search / filter / pagination
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+
+  // Debounce search → query
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    const res = await getAdminDashboardData({
+      search: searchQuery,
+      status: statusFilter,
+      page: currentPage,
+      pageSize,
+    });
     if (!res.success) {
       setError(res.error || "Доступ запрещен");
     } else {
       setData(res);
+      setError("");
     }
     setLoading(false);
   };
 
+  const fetchStats = async () => {
+    const res = await getAdminStats();
+    if (res.success) setStats(res);
+  };
+
+  // Refetch on filter / pagination change
   useEffect(() => {
-    init();
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, statusFilter, currentPage]);
+
+  // Stats only once on mount (can also add a refresh button)
+  useEffect(() => {
+    fetchStats();
   }, []);
 
   const handleGeneratePromo = async (impulses: number) => {
@@ -161,7 +342,7 @@ export default function AdminPage() {
     if (res.success && res.code) {
       setData((prev: any) => ({
         ...prev,
-        activePromos: [{ code: res.code, impulses, isUsed: false, createdAt: new Date() }, ...prev.activePromos]
+        activePromos: [{ code: res.code, impulses, isUsed: false, createdAt: new Date() }, ...(prev?.activePromos ?? [])]
       }));
     } else {
       alert("Ошибка: " + res.error);
@@ -171,7 +352,7 @@ export default function AdminPage() {
 
   const handleDeletePromo = async (code: string) => {
     if (!confirm("Удалить этот промокод навсегда?")) return;
-    
+
     // Optimistic UI update
     setData((prev: any) => ({
       ...prev,
@@ -181,7 +362,7 @@ export default function AdminPage() {
     const res = await deletePromoCode(code);
     if (!res.success) {
       alert("Ошибка удаления: " + res.error);
-      init(); // Revert back if failed
+      fetchData(); // Revert back if failed
     }
   };
 
@@ -191,19 +372,64 @@ export default function AdminPage() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  const HISTORY_PAGE_SIZE = 50;
+
   const handleViewHistory = async (userId: string) => {
     setHistoryModalUser(userId);
     setLoadingHistory(true);
-    const res = await getUserHistory(userId);
+    // Reset paginated state when opening a new user's history.
+    setUserHistory([]);
+    setHistoryTotalCount(0);
+    setHistoryHasMore(false);
+    const res = await getUserHistory(userId, HISTORY_PAGE_SIZE, 0);
     if (res.success) {
        setUserHistory((res.history as any[]) || []);
+       setHistoryTotalCount(res.totalCount ?? 0);
+       setHistoryHasMore(res.hasMore ?? false);
     } else {
        alert("Ошибка загрузки истории");
     }
     setLoadingHistory(false);
   };
 
-  if (loading) return <div className="h-screen w-full flex items-center justify-center">Загрузка Админки...</div>;
+  const handleLoadMoreHistory = async () => {
+    if (!historyModalUser || historyLoadingMore || !historyHasMore) return;
+    setHistoryLoadingMore(true);
+    const res = await getUserHistory(historyModalUser, HISTORY_PAGE_SIZE, userHistory.length);
+    if (res.success) {
+      setUserHistory(prev => [...prev, ...((res.history as any[]) || [])]);
+      setHistoryTotalCount(res.totalCount ?? historyTotalCount);
+      setHistoryHasMore(res.hasMore ?? false);
+    } else {
+      alert("Ошибка загрузки следующей страницы");
+    }
+    setHistoryLoadingMore(false);
+  };
+
+  const openAuditLog = async () => {
+    setAuditOpen(true);
+    setLoadingAudit(true);
+    const res = await getAdminAuditLog(100);
+    if (res.success) {
+      setAuditRows(res.rows || []);
+    } else {
+      alert("Ошибка загрузки аудита");
+    }
+    setLoadingAudit(false);
+  };
+
+  const sortedUsers = useMemo(() => {
+    if (!data?.users) return [];
+    const arr = [...data.users];
+    if (sortByGenerations) {
+      arr.sort((a: any, b: any) => b.totalGenerations - a.totalGenerations);
+    } else {
+      arr.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return arr;
+  }, [data?.users, sortByGenerations]);
+
+  if (loading && !data) return <div className="h-screen w-full flex items-center justify-center">Загрузка Админки...</div>;
 
   if (error) {
     return (
@@ -214,6 +440,11 @@ export default function AdminPage() {
       </div>
     );
   }
+
+  const totalPages = data?.pagination?.totalPages ?? 1;
+  const totalCount = data?.pagination?.totalCount ?? 0;
+  const pageStart = data?.users?.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const pageEnd = data?.users?.length ? pageStart + data.users.length - 1 : 0;
 
   return (
     <div className="min-h-screen bg-neutral-50 p-6 font-sans relative">
@@ -226,32 +457,148 @@ export default function AdminPage() {
             </h1>
             <p className="text-neutral-500">Управление пользователями, промокодами и историей</p>
           </div>
-          <div className="flex gap-4">
-            <div className="bg-neutral-100 px-4 py-2 rounded-xl text-center">
-              <div className="text-xs font-bold text-neutral-400 uppercase">Всего Юзеров</div>
-              <div className="text-xl font-black">{data?.stats?.totalUsers || 0}</div>
-            </div>
-            <div className="bg-neutral-100 px-4 py-2 rounded-xl text-center">
-              <div className="text-xs font-bold text-neutral-400 uppercase">Генераций</div>
-              <div className="text-xl font-black">{data?.stats?.totalGenerations || 0}</div>
-            </div>
-            <button 
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={openAuditLog}
+              className="px-4 py-2 rounded-xl border border-neutral-200 font-medium hover:bg-neutral-100 transition-colors flex items-center gap-2 text-sm"
+              title="Журнал действий админов"
+            >
+              <ShieldAlertIcon className="w-4 h-4" /> Audit log
+            </button>
+            <button
+              onClick={() => { fetchStats(); fetchData(); }}
+              className="px-4 py-2 rounded-xl border border-neutral-200 font-medium hover:bg-neutral-100 transition-colors text-sm"
+            >
+              ↻ Обновить
+            </button>
+            <button
               onClick={() => router.push('/')}
-              className="px-4 py-2 rounded-xl border border-neutral-200 font-medium hover:bg-neutral-100 transition-colors"
+              className="px-4 py-2 rounded-xl border border-neutral-200 font-medium hover:bg-neutral-100 transition-colors text-sm"
             >
               На сайт
             </button>
           </div>
         </header>
 
+        {/* FINANCIAL DASHBOARD */}
+        {stats && (
+          <section className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <StatCard
+                label="Юзеров всего"
+                value={stats.users.total}
+                sub={`+${stats.users.week} за неделю, +${stats.users.today} сегодня`}
+                icon={UsersIcon}
+                accent="indigo"
+              />
+              <StatCard
+                label="Активных 7д"
+                value={stats.users.active7d}
+                sub={`${stats.users.active30d} за 30д, банов: ${stats.users.banned}`}
+                icon={ActivityIcon}
+                accent="green"
+              />
+              <StatCard
+                label="Генераций сегодня"
+                value={stats.generations.today}
+                sub={`${stats.generations.week} за неделю, ${stats.generations.total} всего`}
+                icon={ZapIcon}
+                accent="orange"
+              />
+              <StatCard
+                label="API-расход (30д)"
+                value={formatKzt(stats.apiCostsKzt.month)}
+                sub={`${stats.apiCostsKzt.perGenAvg.toFixed(1)} ₸ / ген · ${formatKzt(stats.apiCostsKzt.total)} всего`}
+                icon={DollarSignIcon}
+                accent="rose"
+              />
+              <StatCard
+                label="Доход (оценка, 30д)"
+                value={formatKzt(stats.revenueKztEstimate.month)}
+                sub={`Платящих: ${stats.users.paying} · Всего: ${formatKzt(stats.revenueKztEstimate.total)}`}
+                icon={TrendingUpIcon}
+                accent="green"
+              />
+              <StatCard
+                label="ARPU"
+                value={formatKzt(stats.revenueKztEstimate.arpu)}
+                sub={`~${stats.revenueKztEstimate.avgKztPerImpulse} ₸ за 1 ⚡ (средняя)`}
+                icon={TrendingUpIcon}
+                accent="indigo"
+              />
+            </div>
+
+            {/* Revenue disclaimer */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-900">
+              <strong>⚠️ Доход — оценка:</strong> {stats.revenueKztEstimate.disclaimer}
+            </div>
+
+            {/* 14-day sparklines + Top users */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-bold text-neutral-700">Новых юзеров (14д)</h3>
+                  <span className="text-xs text-neutral-400">макс: {Math.max(0, ...stats.dailySeries.map((d: any) => d.users))}</span>
+                </div>
+                <Sparkline series={stats.dailySeries} accessor={(d: any) => d.users} color="bg-indigo-400" />
+              </div>
+              <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-bold text-neutral-700">Генераций в день (14д)</h3>
+                  <span className="text-xs text-neutral-400">макс: {Math.max(0, ...stats.dailySeries.map((d: any) => d.gens))}</span>
+                </div>
+                <Sparkline series={stats.dailySeries} accessor={(d: any) => d.gens} color="bg-orange-400" />
+              </div>
+              <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-bold text-neutral-700">API-расход в день (14д)</h3>
+                  <span className="text-xs text-neutral-400">макс: {formatKzt(Math.max(0, ...stats.dailySeries.map((d: any) => d.apiCostKzt)))}</span>
+                </div>
+                <Sparkline series={stats.dailySeries} accessor={(d: any) => d.apiCostKzt} color="bg-rose-400" />
+              </div>
+            </div>
+
+            {/* Top users */}
+            {stats.topUsers?.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-4">
+                <h3 className="text-sm font-bold text-neutral-700 mb-3">🏆 Топ-10 по генерациям</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-xs text-neutral-400 uppercase border-b border-neutral-100">
+                        <th className="text-left pb-2 font-bold">#</th>
+                        <th className="text-left pb-2 font-bold">Email</th>
+                        <th className="text-right pb-2 font-bold">Ген.</th>
+                        <th className="text-right pb-2 font-bold">API-расход</th>
+                        <th className="text-right pb-2 font-bold">Баланс</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.topUsers.map((u: any, i: number) => (
+                        <tr key={u.id} className="border-b border-neutral-50 last:border-0">
+                          <td className="py-2 text-neutral-400 font-mono">{i + 1}</td>
+                          <td className="py-2 font-medium text-neutral-800 break-all">{u.email}</td>
+                          <td className="py-2 text-right font-bold">{u.gens}</td>
+                          <td className="py-2 text-right font-mono text-rose-500">{formatKzt(u.apiCostKzt)}</td>
+                          <td className="py-2 text-right font-bold text-orange-600">{u.impulses} ⚡</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* LEFT: PROMO CODES */}
           <div className="lg:col-span-3 space-y-6">
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-neutral-200">
               <h2 className="text-xl font-bold mb-4">🏭 Локали & Пакеты</h2>
-              
+
               <div className="space-y-3">
-                <button 
+                <button
                   disabled={generating}
                   onClick={() => handleGeneratePromo(45)}
                   className="w-full flex justify-between items-center bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold px-4 py-3 rounded-xl transition-colors disabled:opacity-50"
@@ -259,7 +606,7 @@ export default function AdminPage() {
                   <span>"Креатор"</span>
                   <span>45 ⚡</span>
                 </button>
-                <button 
+                <button
                   disabled={generating}
                   onClick={() => handleGeneratePromo(126)}
                   className="w-full flex justify-between items-center bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-4 py-3 rounded-xl transition-colors disabled:opacity-50"
@@ -267,7 +614,7 @@ export default function AdminPage() {
                   <span>"Бизнес"</span>
                   <span>126 ⚡</span>
                 </button>
-                <button 
+                <button
                   disabled={generating}
                   onClick={() => handleGeneratePromo(453)}
                   className="w-full flex justify-between items-center bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-4 py-3 rounded-xl transition-colors disabled:opacity-50"
@@ -287,13 +634,13 @@ export default function AdminPage() {
                     <div className="flex justify-between items-center mb-1">
                       <span className="font-mono font-bold text-[10px] bg-white px-2 py-1 rounded shadow-sm break-all">{promo.code}</span>
                       <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <button 
+                        <button
                           onClick={() => copyToClipboard(promo.code)}
                           className="text-neutral-400 hover:text-orange-500 transition-colors p-1"
                         >
                           {copiedCode === promo.code ? <CheckCircleIcon className="w-4 h-4 text-green-500" /> : <CopyIcon className="w-4 h-4" />}
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDeletePromo(promo.code)}
                           className="text-neutral-400 hover:text-red-500 transition-colors p-1"
                           title="Удалить код"
@@ -312,23 +659,64 @@ export default function AdminPage() {
           {/* RIGHT: USER DB */}
           <div className="lg:col-span-9">
             <div className="bg-white rounded-3xl shadow-sm border border-neutral-200 overflow-hidden h-full">
-              <div className="p-6 border-b border-neutral-100 flex justify-between items-center">
-                <h2 className="text-xl font-bold">👥 База Пользователей CRM</h2>
-                <button onClick={init} className="text-sm text-indigo-600 hover:underline">Обновить</button>
+              <div className="p-6 border-b border-neutral-100 flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <h2 className="text-xl font-bold">
+                    👥 База Пользователей CRM
+                    <span className="ml-2 text-sm font-mono text-neutral-400 font-normal">({totalCount})</span>
+                  </h2>
+                </div>
+
+                {/* Search + filters */}
+                <div className="flex flex-col md:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="search"
+                      placeholder="Поиск по email…"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-neutral-200 bg-neutral-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-300 text-sm"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1 p-1 bg-neutral-100 rounded-xl">
+                    {([
+                      { key: "all", label: "Все" },
+                      { key: "active", label: "Активные" },
+                      { key: "banned", label: "Баны" },
+                      { key: "low_balance", label: "<10 ⚡" },
+                    ] as { key: UserStatusFilter; label: string }[]).map((f) => (
+                      <button
+                        key={f.key}
+                        onClick={() => { setStatusFilter(f.key); setCurrentPage(1); }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                          statusFilter === f.key
+                            ? "bg-white shadow text-neutral-900"
+                            : "text-neutral-500 hover:text-neutral-800"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              {/* Table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-neutral-50 border-b border-neutral-100 text-xs text-neutral-400 uppercase">
                       <th className="p-4 font-bold">Email</th>
                       <th className="p-4 font-bold">Импульсы</th>
-                      <th 
-                        className="p-4 font-bold border-l border-neutral-100 cursor-pointer hover:bg-neutral-100 select-none flex items-center gap-1"
+                      <th
+                        className="p-4 font-bold border-l border-neutral-100 cursor-pointer hover:bg-neutral-100 select-none"
                         onClick={() => setSortByGenerations(!sortByGenerations)}
                         title="Нажмите для сортировки по наибольшему числу генераций"
                       >
-                        Сделал Креативов
-                        {sortByGenerations ? ' ⬇️' : ''}
+                        <span className="flex items-center gap-1">
+                          Сделал Креативов {sortByGenerations ? '⬇️' : ''}
+                        </span>
                       </th>
                       <th className="p-4 font-bold border-l border-neutral-100">Расход API ₸</th>
                       <th className="p-4 font-bold border-l border-neutral-100">Оценки (👍/👎)</th>
@@ -338,17 +726,53 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
-                    {(data?.users || [])
-                      .sort((a: any, b: any) => {
-                         if (sortByGenerations) return b.totalGenerations - a.totalGenerations;
-                         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Default sort by date desc
-                      })
-                      .map((u: any) => (
-                      <UserRow key={u.id} u={u} onRefresh={init} onViewHistory={handleViewHistory} />
+                    {sortedUsers.length === 0 && !loading && (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-neutral-400">
+                          {searchQuery || statusFilter !== "all"
+                            ? "Ничего не найдено. Поменяй фильтры."
+                            : "Нет пользователей."}
+                        </td>
+                      </tr>
+                    )}
+                    {sortedUsers.map((u: any) => (
+                      <UserRow key={u.id} u={u} onRefresh={fetchData} onViewHistory={handleViewHistory} />
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="p-4 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-neutral-50">
+                  <span className="text-xs text-neutral-500">
+                    {pageStart > 0
+                      ? `Показано ${pageStart}–${pageEnd} из ${totalCount}`
+                      : `0 из ${totalCount}`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1 || loading}
+                      className="p-2 rounded-lg border border-neutral-200 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Предыдущая страница"
+                    >
+                      <ChevronLeftIcon className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-mono text-neutral-600 min-w-[60px] text-center">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages || loading}
+                      className="p-2 rounded-lg border border-neutral-200 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Следующая страница"
+                    >
+                      <ChevronRightIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -362,26 +786,34 @@ export default function AdminPage() {
             <div className="p-6 border-b border-neutral-100 flex justify-between items-center bg-neutral-50">
               <div>
                 <h2 className="text-xl font-bold">История Креативов</h2>
-                <p className="text-sm text-neutral-500">ID пользователя: {historyModalUser}</p>
+                <p className="text-sm text-neutral-500">
+                  ID пользователя: {historyModalUser}
+                  {historyTotalCount > 0 && (
+                    <span className="ml-2 bg-neutral-200 text-neutral-700 px-2 py-0.5 rounded-full font-mono text-xs">
+                      {userHistory.length} / {historyTotalCount}
+                    </span>
+                  )}
+                </p>
               </div>
-              <button 
+              <button
                 onClick={() => setHistoryModalUser(null)}
                 className="bg-neutral-200 hover:bg-neutral-300 p-2 rounded-full transition-colors"
+                aria-label="Закрыть"
               >
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {loadingHistory ? (
                 <div className="flex items-center justify-center h-full text-neutral-500">Загрузка данных...</div>
               ) : userHistory.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-neutral-500 text-lg">Пользователь еще ничего не генерировал.</div>
               ) : (
-                <div className="grid grid-cols-1 gap-6">
-                  {userHistory.map((item, i) => (
+                <div className="grid grid-cols-1 gap-6 pb-4">
+                  {userHistory.map((item) => (
                     <div key={item.id} className="border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row bg-white">
-                      
+
                       {/* Left: Metadata & Prompt */}
                       <div className="p-5 flex-1 space-y-4 border-b md:border-b-0 md:border-r border-neutral-100">
                          <div className="flex flex-wrap gap-2 text-xs font-bold font-mono">
@@ -394,14 +826,14 @@ export default function AdminPage() {
                             )}
                             <span className="bg-neutral-100 px-2 py-1 rounded">{new Date(item.createdAt).toLocaleString("ru-RU")}</span>
                          </div>
-                         
+
                          <div>
                             <h4 className="text-xs uppercase font-bold text-neutral-400 mb-1">Задание (Промпт)</h4>
                             <p className="text-sm text-neutral-700 bg-neutral-50 p-3 rounded-xl border border-neutral-100 whitespace-pre-wrap leading-relaxed">
                               {item.prompt}
                             </p>
                          </div>
-                         {item.feedbackScore !== null && (
+                         {item.feedbackScore !== null && item.feedbackScore !== undefined && (
                             <div className="text-xs font-bold">
                                Оценка ИИ: {item.feedbackScore === 1 ? '👍 Понравилось' : '👎 Не понравилось'}
                             </div>
@@ -411,14 +843,89 @@ export default function AdminPage() {
                       {/* Right: Rendered HTML iframe preview */}
                       <div className="w-full md:w-[350px] bg-neutral-100 flex-shrink-0 flex items-center justify-center p-4">
                         <div className={`shadow-xl bg-white rounded-xl overflow-hidden relative ${item.format === '9:16' ? 'aspect-[9/16] w-[200px]' : 'aspect-square w-[250px]'}`}>
-                            <iframe 
-                              srcDoc={item.htmlCode} 
+                            <iframe
+                              srcDoc={item.htmlCode}
+                              sandbox="allow-scripts"
+                              referrerPolicy="no-referrer"
+                              loading="lazy"
+                              title={`Creative preview ${item.id}`}
                               className="absolute inset-0 w-full h-full border-0 pointer-events-none transform origin-top-left"
                               style={{ width: '400px', height: item.format === '9:16' ? '711px' : '400px', transform: 'scale(0.5)' }}
                             />
                         </div>
                       </div>
 
+                    </div>
+                  ))}
+
+                  {/* Pagination: load next page on demand. Each iframe in the
+                      list is expensive, so we never load everything at once. */}
+                  {historyHasMore && (
+                    <div className="flex justify-center pt-2">
+                      <button
+                        onClick={handleLoadMoreHistory}
+                        disabled={historyLoadingMore}
+                        className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-bold text-sm hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {historyLoadingMore
+                          ? "Загрузка…"
+                          : `Показать ещё (${historyTotalCount - userHistory.length})`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AUDIT LOG MODAL */}
+      {auditOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-neutral-100 flex justify-between items-center bg-neutral-50">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <ShieldAlertIcon className="w-5 h-5 text-orange-500" />
+                  Audit log — последние 100 действий
+                </h2>
+                <p className="text-sm text-neutral-500">Все мутации баланса, банов и промокодов.</p>
+              </div>
+              <button
+                onClick={() => setAuditOpen(false)}
+                className="bg-neutral-200 hover:bg-neutral-300 p-2 rounded-full transition-colors"
+                aria-label="Закрыть"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingAudit ? (
+                <div className="text-center text-neutral-500 py-8">Загрузка…</div>
+              ) : auditRows.length === 0 ? (
+                <div className="text-center text-neutral-500 py-8">Записей нет. Когда начнёшь менять балансы или банить юзеров — они появятся здесь.</div>
+              ) : (
+                <div className="space-y-2 font-mono text-xs">
+                  {auditRows.map((r: any) => (
+                    <div key={r.id} className="border border-neutral-100 rounded-lg p-3 flex flex-col gap-1 bg-neutral-50">
+                      <div className="flex justify-between items-start">
+                        <span className="font-bold text-neutral-800">
+                          <span className="text-orange-600">{r.action}</span>
+                          {r.targetType && <span className="text-neutral-500"> · {r.targetType} </span>}
+                          {r.targetId && <span className="text-indigo-600 break-all">{r.targetId}</span>}
+                        </span>
+                        <span className="text-neutral-400 shrink-0 ml-2">
+                          {r.createdAt ? new Date(r.createdAt).toLocaleString("ru-RU") : ''}
+                        </span>
+                      </div>
+                      <div className="text-neutral-600">
+                        <span className="text-neutral-400">admin:</span> {r.adminEmail}
+                      </div>
+                      {r.meta && Object.keys(r.meta).length > 0 && (
+                        <pre className="text-[10px] bg-white rounded p-2 mt-1 border border-neutral-200 overflow-x-auto">{JSON.stringify(r.meta, null, 2)}</pre>
+                      )}
                     </div>
                   ))}
                 </div>

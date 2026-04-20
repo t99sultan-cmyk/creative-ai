@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, MonitorPlay, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2 } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2 } from "lucide-react";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -10,45 +10,13 @@ import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
 import { getUserCreatives } from "@/actions/getUserCreatives";
 import { deleteUserCreative } from "@/actions/deleteUserCreative";
+import { cancelGeneration } from "@/actions/generationActions";
+import { buildLoadingTexts, optimizeImageToWebP } from "@/lib/editor-utils";
+import { VideoRecordingModal } from "@/components/editor/VideoRecordingModal";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
 type Format = "1:1" | "9:16";
-
-const buildLoadingTexts = (isAnimated: boolean, hasRefs: boolean, hasProducts: boolean) => {
-  return [
-    hasRefs || hasProducts ? "Анализируем ваше ТЗ и загруженные медиа..." : "Изучаем запрос и генерируем идею...",
-    "Проектируем премиальную сетку дизайна...",
-    hasProducts ? "Интегрируем объект в промо-композицию..." : "Подбираем сочные цвета и типографику...",
-    "Нейросеть собирает финальный макет...",
-    isAnimated ? "Добавляем крутые анимации (почти готово!)..." : "Полируем статичный кадр (почти готово!)..."
-  ];
-};
-
-const optimizeImageToWebP = (blob: Blob, maxWidth = 800): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new globalThis.Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let width = img.width;
-      let height = img.height;
-      if (width > maxWidth) {
-        height = Math.round((height * maxWidth) / width);
-        width = maxWidth;
-      }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject("Canvas context error");
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/webp", 0.85)); // webp supports transparency and tiny size!
-      URL.revokeObjectURL(url);
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-};
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
@@ -210,12 +178,20 @@ export default function Home() {
     let isPolling = true;
     const interval = setInterval(async () => {
       if (!isPolling) return;
+
+      // Page Visibility: if the tab is hidden, we still run the timer (so
+      // we can detect 10-min timeouts without client re-entry), but we
+      // skip BOTH the network polling AND the progress-bar animation.
+      // No point animating UI nobody's looking at, and no point spamming
+      // /api/check-render if the user isn't there to see the result.
+      const isTabVisible = typeof document !== 'undefined' && !document.hidden;
+
       const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
       const jobsToUpdate = { ...currentJobs };
       let updated = false;
 
       // Ensure progress bar updates visually for active canvas creative
-      if (activeCreativeId && currentJobs[activeCreativeId] && checkIsTabActive()) {
+      if (activeCreativeId && currentJobs[activeCreativeId] && isTabVisible) {
          const job = currentJobs[activeCreativeId];
          const elapsedSec = Math.floor((Date.now() - job.startTime) / 1000);
          // Cloud Run takes about 3 to 4 minutes to render 450 frames
@@ -239,7 +215,7 @@ export default function Home() {
 
       for (const id of activeKeys) {
         if (!currentJobs[id]) continue;
-        
+
         const jobElapsed = Date.now() - currentJobs[id].startTime;
         if (jobElapsed > 10 * 60 * 1000) {
             // 10 minutes timeout - silently mark as failed locally so we don't infinitely poll
@@ -252,6 +228,11 @@ export default function Home() {
             }
             continue;
         }
+
+        // When tab is hidden, skip the network fetch. Timeout logic above
+        // still fires so a dead render is caught even if the user is away.
+        // Polling resumes automatically when the tab becomes visible again.
+        if (!isTabVisible) continue;
 
         try {
           const pollRes = await fetch(`/api/check-render?id=${id}`);
@@ -303,7 +284,8 @@ export default function Home() {
     return () => { isPolling = false; clearInterval(interval); };
   }, [renderJobs, activeCreativeId, isRecording]);
 
-  const checkIsTabActive = () => true;
+  // (Page Visibility is now read inline from `document.hidden` inside the
+  // polling interval above — no stale closure, no stub.)
 
   useEffect(() => {
     async function fetchData() {
@@ -704,6 +686,15 @@ export default function Home() {
   };
 
   const cancelRender = (id: string) => {
+    // 1. Серверная отметка — помечает videoUrl как `failed:<ts>:cancelled-by-user`
+    //    в БД, чтобы /api/check-render вернул failed и другие устройства
+    //    (например, телефон) увидели, что ждать нечего. Fire-and-forget:
+    //    даже если сервер недоступен — локальная чистка ниже пройдёт.
+    void cancelGeneration(id).catch((e) =>
+      console.error('[cancelRender] server-side cancel failed:', e)
+    );
+
+    // 2. Локальная чистка (как раньше): прибить job из localStorage + state.
     const currentJobs = JSON.parse(localStorage.getItem('backgroundRenderJobs') || '{}');
     if (currentJobs[id]) {
       delete currentJobs[id];
@@ -718,6 +709,16 @@ export default function Home() {
     if (isRecording && activeCreativeId === id) {
        setIsRecording(false);
     }
+
+    // 3. Локально помечаем как failed, чтобы после F5 запись не всплыла
+    //    обратно как "rendering:..." до завершения серверной отмены.
+    setHistoryItems(prev =>
+      prev.map(item =>
+        item.id === id
+          ? { ...item, videoUrl: `failed:${Date.now()}:cancelled-by-user` }
+          : item
+      )
+    );
   };
 
   const startVideoRecording = async (preExistingJobId?: string) => {
@@ -905,16 +906,18 @@ export default function Home() {
                                className="w-full bg-neutral-50/50 flex items-center justify-center p-4 cursor-pointer relative"
                             >
                                <div className={`shadow-lg bg-white rounded-xl overflow-hidden relative ${isVertical ? 'aspect-[9/16] w-[200px]' : 'aspect-square w-[200px]'}`}>
-                                  <iframe 
-                                     srcDoc={item.htmlCode} 
+                                  <iframe
+                                     srcDoc={item.htmlCode}
                                      loading="lazy"
+                                     title={`Creative ${item.id}`}
+                                     referrerPolicy="no-referrer"
                                      className="absolute inset-0 border-0 pointer-events-none origin-top-left"
-                                     style={{ 
-                                        width: isVertical ? '400px' : '500px', 
-                                        height: isVertical ? '711px' : '500px', 
+                                     style={{
+                                        width: isVertical ? '400px' : '500px',
+                                        height: isVertical ? '711px' : '500px',
                                         transform: isVertical ? 'scale(0.5)' : 'scale(0.4)',
                                      }}
-                                     sandbox="allow-scripts allow-same-origin"
+                                     sandbox="allow-scripts"
                                   />
                                   <div className="absolute inset-0 bg-transparent z-10" />
                                </div>
@@ -951,36 +954,12 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Video Recording Modal */}
-      {showVideoInstruction && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
-            <button onClick={() => setShowVideoInstruction(false)} className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-800">
-              <X className="w-5 h-5" />
-            </button>
-            <div className="w-12 h-12 bg-hermes-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
-              <MonitorPlay className="w-6 h-6 text-hermes-600" />
-            </div>
-            <h3 className="text-xl font-bold text-neutral-900 mb-2">Плавная запись видео (MP4)</h3>
-            <p className="text-sm text-neutral-600 mb-6 leading-relaxed">
-              Чтобы видео было <b>идеально качественным</b> и ваш компьютер не зависал, мы запишем его напрямую с вашей видеокарты. <br/><br/>
-              <b>Что сейчас будет:</b><br/>
-              1. Нажмите "Начать" ниже.<br/>
-              2. В системном окне перейдите в раздел <b>"Вкладка Chrome/Browser"</b>.<br/>
-              3. Выберите эту самую вкладку Creative AI и нажмите кнопку <b>"Поделиться"</b>.<br/>
-              <br/>
-              <i>Внимание: на телефонах эта функция недоступна из-за ограничений iOS/Android. Для скачивания на мобильных потребуется интеграция платного API в будущем.</i>
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowVideoInstruction(false)} className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors">
-                Отмена
-              </button>
-              <button onClick={() => startVideoRecording()} className="flex-1 py-3 px-4 bg-hermes-600 hover:bg-hermes-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-hermes-600/30">
-                Понятно, Начать
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <VideoRecordingModal
+        open={showVideoInstruction}
+        onClose={() => setShowVideoInstruction(false)}
+        onStart={() => startVideoRecording()}
+      />
+
 
       {/* Sidebar Controls */}
       <aside className={clsx(
@@ -1452,8 +1431,9 @@ export default function Home() {
               key={iframeKey}
               ref={iframeRef}
               srcDoc={code}
+              referrerPolicy="no-referrer"
               className="absolute bg-[#fcfcfc] overflow-hidden"
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts"
               title="Generated Creative"
               style={{
                 width: format === '9:16' ? '400px' : '500px',

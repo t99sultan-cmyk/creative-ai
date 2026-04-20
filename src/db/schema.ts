@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer, boolean, real } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, boolean, real, jsonb, serial } from "drizzle-orm/pg-core";
 
 export const users = pgTable("user", {
   id: text("id").primaryKey(), // Clerk User ID
@@ -23,6 +23,21 @@ export const creatives = pgTable("creative", {
   feedbackScore: integer("feedback_score"), // 1 for Like, -1 for Dislike, null for unrated
   feedbackText: text("feedback_text"), // Text comment from user telling the AI what went wrong/right
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+/**
+ * Audit log for all admin mutations.
+ * Never deleted. Lets us trace "who set balance to X for whom, when".
+ */
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id: serial("id").primaryKey(),
+  adminId: text("admin_id").notNull(), // Clerk user id of acting admin
+  adminEmail: text("admin_email").notNull(),
+  action: text("action").notNull(), // e.g. "update_balance", "toggle_ban", "create_promo", "delete_promo"
+  targetType: text("target_type"), // "user" | "promo" | null
+  targetId: text("target_id"), // user id or promo code
+  meta: jsonb("meta"), // action-specific payload (oldBalance, newBalance, etc.)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const promoCodes = pgTable("promo_code", {

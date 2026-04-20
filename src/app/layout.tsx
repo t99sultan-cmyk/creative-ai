@@ -5,23 +5,73 @@ import './globals.css';
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'], variable: '--font-inter' });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://aicreative.kz';
+
 export const metadata: Metadata = {
-  title: 'Creative AI Ads',
-  description: 'AI Генератор рекламных креативов для бизнеса',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'AICreative — ИИ-генератор рекламных креативов для Instagram, TikTok и Kaspi',
+    template: '%s | AICreative',
+  },
+  description: 'ИИ создаёт продающие видео и статичные креативы для таргета за 60 секунд. Без дизайнера, без съёмок. +47% CTR в среднем. 7 импульсов бесплатно.',
+  keywords: [
+    'генератор креативов',
+    'AI реклама',
+    'креативы Instagram',
+    'креативы TikTok',
+    'креативы Kaspi',
+    'таргет Казахстан',
+    'Reels генератор',
+    'ИИ дизайн',
+  ],
+  authors: [{ name: 'AICreative' }],
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    title: 'Creative AI',
+    title: 'AICreative',
     statusBarStyle: 'black-translucent',
+  },
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'ru_KZ',
+    url: SITE_URL,
+    siteName: 'AICreative',
+    title: 'AICreative — ИИ-генератор продающих креативов',
+    description: 'За 60 секунд ИИ собирает видео/статику с CTR до 47%. Без дизайнера и съёмок. 7 импульсов бесплатно.',
+    images: [
+      {
+        url: '/hero_visual_light.png',
+        width: 1200,
+        height: 630,
+        alt: 'AICreative — интерфейс генератора',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AICreative — ИИ-генератор креативов',
+    description: 'ИИ собирает конверсионные креативы за 60 секунд. 7 импульсов бесплатно.',
+    images: ['/hero_visual_light.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  themeColor: '#fdfcfb',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({

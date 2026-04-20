@@ -1,81 +1,368 @@
 "use server";
 
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { users, promoCodes, creatives } from "@/db/schema";
-import { desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lt, or, sql } from "drizzle-orm";
 import crypto from "crypto";
+import { isAdmin } from "@/lib/admin-guard";
+import { recordAdminAction, getRecentAuditLog, getAuditLogForUser } from "@/lib/audit-log";
+import { estimateRevenueKztFromImpulses, avgKztPerImpulse } from "@/lib/pricing";
 
-// Security Check helper
-const isAdmin = async () => {
-  const user = await currentUser();
-  if (!user) return false;
-  
-  const email = user.emailAddresses[0]?.emailAddress;
-  const adminEmailsVar = process.env.ADMIN_EMAILS || "timur@... (fallback none)"; 
-  // We expect a comma separated list like: "admin@aicreative.kz,timur@ya.ru"
-  
-  const adminEmails = adminEmailsVar.split(",").map(e => e.trim().toLowerCase());
-  return adminEmails.includes(email.toLowerCase());
+// ---- Validation limits ----
+const MIN_BALANCE = 0;
+const MAX_BALANCE = 100_000; // 100k impulses — way above any reasonable topup
+const MIN_PROMO_IMPULSES = 1;
+const MAX_PROMO_IMPULSES = 10_000;
+
+// ---- Pagination limits ----
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
+export type UserStatusFilter = "all" | "active" | "banned" | "low_balance";
+
+export type DashboardQuery = {
+  search?: string; // email substring
+  status?: UserStatusFilter;
+  page?: number; // 1-based
+  pageSize?: number;
 };
 
-export async function getAdminDashboardData() {
+export async function getAdminDashboardData(query: DashboardQuery = {}) {
   if (!(await isAdmin())) {
     return { success: false, error: "Access Denied" };
   }
 
   try {
-    // Get all users
-    const allUsers = await db.select().from(users).orderBy(desc(users.createdAt)).limit(100);
-    
-    // Get all creatives for stats
-    const allCreatives = await db.select().from(creatives);
-    
-    // Get all used promos for stats
-    const usedPromos = await db.select().from(promoCodes).where(eq(promoCodes.isUsed, true));
+    // ---- Normalize pagination / filters ----
+    const page = Math.max(1, Math.floor(query.page ?? 1));
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(query.pageSize ?? DEFAULT_PAGE_SIZE)));
+    const offset = (page - 1) * pageSize;
+    const status: UserStatusFilter = query.status ?? "all";
+    const search = (query.search ?? "").trim();
 
-    // Enrich users with stats
-    const enrichedUsers = allUsers.map(u => {
-      const uCreatives = allCreatives.filter(c => c.userId === u.id);
-      const likes = uCreatives.filter(c => c.feedbackScore === 1).length;
-      const dislikes = uCreatives.filter(c => c.feedbackScore === -1).length;
-      const totalApiCostKzt = uCreatives.reduce((sum, c) => sum + (c.apiCostKzt || 0), 0);
-      const uPromos = usedPromos.filter(p => p.usedBy === u.id).sort((a,b) => (b.usedAt?.getTime() || 0) - (a.usedAt?.getTime() || 0));
+    // ---- Build WHERE clauses for the users table ----
+    const where: any[] = [];
+    if (search.length > 0) {
+      where.push(ilike(users.email, `%${search}%`));
+    }
+    if (status === "banned") {
+      where.push(eq(users.isBanned, true));
+    } else if (status === "active") {
+      where.push(or(eq(users.isBanned, false), sql`${users.isBanned} IS NULL`));
+    } else if (status === "low_balance") {
+      where.push(lt(users.impulses, 10));
+    }
+    const combinedWhere = where.length > 0 ? and(...where) : undefined;
 
+    // ---- Query paginated users + total count in parallel ----
+    // Aggregate stats (generations, likes, API cost) are computed in SQL
+    // and scoped ONLY to the paginated user IDs, so we never pull the whole
+    // creatives table into JS. This replaces the old O(pageSize × totalCreatives)
+    // in-memory `.filter()` loop that would have frozen the admin dashboard
+    // once the creatives table grew past a few thousand rows.
+    const [pagedUsers, totalRows, activePromos, totalCreativesCount] = await Promise.all([
+      db.select()
+        .from(users)
+        .where(combinedWhere as any)
+        .orderBy(desc(users.createdAt))
+        .limit(pageSize)
+        .offset(offset),
+      db.select({ c: sql<number>`count(*)::int` })
+        .from(users)
+        .where(combinedWhere as any),
+      db.select().from(promoCodes).where(eq(promoCodes.isUsed, false)).orderBy(desc(promoCodes.createdAt)),
+      db.select({ c: sql<number>`count(*)::int` }).from(creatives),
+    ]);
+
+    const totalCount = totalRows[0]?.c ?? 0;
+    const totalGenerationsAll = totalCreativesCount[0]?.c ?? 0;
+
+    // If this page of users is empty, skip aggregate queries entirely.
+    const pageUserIds = pagedUsers.map(u => u.id);
+
+    let creativeStatsByUser = new Map<string, {
+      totalGenerations: number;
+      totalApiCostKzt: number;
+      likes: number;
+      dislikes: number;
+    }>();
+    let promosByUser = new Map<string, any[]>();
+
+    if (pageUserIds.length > 0) {
+      // SQL-side aggregates: ONE query, scoped to THIS PAGE's user IDs.
+      const [creativeAgg, usedPromosScoped] = await Promise.all([
+        db
+          .select({
+            userId: creatives.userId,
+            totalGenerations: sql<number>`count(*)::int`,
+            totalApiCostKzt: sql<number>`coalesce(sum(${creatives.apiCostKzt}), 0)::float`,
+            likes: sql<number>`count(*) filter (where ${creatives.feedbackScore} = 1)::int`,
+            dislikes: sql<number>`count(*) filter (where ${creatives.feedbackScore} = -1)::int`,
+          })
+          .from(creatives)
+          .where(sql`${creatives.userId} = ANY(${pageUserIds})`)
+          .groupBy(creatives.userId),
+        db
+          .select()
+          .from(promoCodes)
+          .where(
+            and(
+              eq(promoCodes.isUsed, true),
+              sql`${promoCodes.usedBy} = ANY(${pageUserIds})`,
+            ),
+          )
+          .orderBy(desc(promoCodes.usedAt)),
+      ]);
+
+      for (const row of creativeAgg) {
+        if (!row.userId) continue;
+        creativeStatsByUser.set(row.userId, {
+          totalGenerations: row.totalGenerations ?? 0,
+          totalApiCostKzt: row.totalApiCostKzt ?? 0,
+          likes: row.likes ?? 0,
+          dislikes: row.dislikes ?? 0,
+        });
+      }
+      for (const p of usedPromosScoped) {
+        if (!p.usedBy) continue;
+        const arr = promosByUser.get(p.usedBy) ?? [];
+        arr.push(p);
+        promosByUser.set(p.usedBy, arr);
+      }
+    }
+
+    const enrichedUsers = pagedUsers.map(u => {
+      const stats = creativeStatsByUser.get(u.id) ?? {
+        totalGenerations: 0,
+        totalApiCostKzt: 0,
+        likes: 0,
+        dislikes: 0,
+      };
       return {
         ...u,
-        totalGenerations: uCreatives.length,
-        totalApiCostKzt,
-        likes,
-        dislikes,
-        promosUsed: uPromos
+        totalGenerations: stats.totalGenerations,
+        totalApiCostKzt: stats.totalApiCostKzt,
+        likes: stats.likes,
+        dislikes: stats.dislikes,
+        promosUsed: promosByUser.get(u.id) ?? [],
       };
     });
-    
-    // Get all active (unused) promo codes
-    const activePromos = await db.select()
-                           .from(promoCodes)
-                           .where(eq(promoCodes.isUsed, false))
-                           .orderBy(desc(promoCodes.createdAt));
-                           
-    // Basic stats
-    return { 
-      success: true, 
-      users: enrichedUsers, 
-      activePromos, 
+
+    return {
+      success: true,
+      users: enrichedUsers,
+      activePromos,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
+      query: { search, status },
       stats: {
-        totalUsers: allUsers.length,
-        totalGenerations: allCreatives.length
-      } 
+        totalUsers: totalCount,
+        totalGenerations: totalGenerationsAll,
+      },
     };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
 }
 
+/**
+ * Financial + activity dashboard.
+ * Reliable metrics (users, generations, API costs) come from the DB.
+ * Revenue is *estimated* from used promos × pricing tiers, since there's
+ * no orders table yet. Once Kaspi/card checkout is integrated, replace
+ * the estimate with real order amounts.
+ *
+ * All heavy aggregation is pushed to SQL so the dashboard stays fast
+ * even when the tables grow to hundreds of thousands of rows. The only
+ * rows fully pulled into JS are used-promo records (for revenue estimate
+ * — tiny set) and the top-10 users (hard-capped by LIMIT).
+ */
+export async function getAdminStats() {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+
+  try {
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    const todayStart = new Date(now - DAY);
+    const weekStart = new Date(now - 7 * DAY);
+    const monthStart = new Date(now - 30 * DAY);
+
+    // ---- All aggregate queries fire in parallel ----
+    const [
+      userCounts,
+      bannedRow,
+      genCounts,
+      activeCounts,
+      apiCostAll,
+      apiCostToday,
+      apiCostWeek,
+      apiCostMonth,
+      userSparkline,
+      genSparkline,
+      topUsersRows,
+      usedPromosAll,
+    ] = await Promise.all([
+      // Users: total + today + week + month (via FILTER)
+      db.select({
+        total: sql<number>`count(*)::int`,
+        today: sql<number>`count(*) filter (where ${users.createdAt} >= ${todayStart})::int`,
+        week: sql<number>`count(*) filter (where ${users.createdAt} >= ${weekStart})::int`,
+        month: sql<number>`count(*) filter (where ${users.createdAt} >= ${monthStart})::int`,
+      }).from(users),
+      db.select({ c: sql<number>`count(*)::int` })
+        .from(users)
+        .where(eq(users.isBanned, true)),
+      // Generations: total + today + week + month
+      db.select({
+        total: sql<number>`count(*)::int`,
+        today: sql<number>`count(*) filter (where ${creatives.createdAt} >= ${todayStart})::int`,
+        week: sql<number>`count(*) filter (where ${creatives.createdAt} >= ${weekStart})::int`,
+        month: sql<number>`count(*) filter (where ${creatives.createdAt} >= ${monthStart})::int`,
+      }).from(creatives),
+      // Active users: distinct userId in last 7d / 30d
+      db.select({
+        active7d: sql<number>`count(distinct ${creatives.userId}) filter (where ${creatives.createdAt} >= ${weekStart})::int`,
+        active30d: sql<number>`count(distinct ${creatives.userId}) filter (where ${creatives.createdAt} >= ${monthStart})::int`,
+      }).from(creatives),
+      // API cost sums
+      db.select({ s: sql<number>`coalesce(sum(${creatives.apiCostKzt}), 0)::float` }).from(creatives),
+      db.select({ s: sql<number>`coalesce(sum(${creatives.apiCostKzt}), 0)::float` })
+        .from(creatives)
+        .where(gte(creatives.createdAt, todayStart)),
+      db.select({ s: sql<number>`coalesce(sum(${creatives.apiCostKzt}), 0)::float` })
+        .from(creatives)
+        .where(gte(creatives.createdAt, weekStart)),
+      db.select({ s: sql<number>`coalesce(sum(${creatives.apiCostKzt}), 0)::float` })
+        .from(creatives)
+        .where(gte(creatives.createdAt, monthStart)),
+      // 14-day sparkline: one row per day
+      db.select({
+        day: sql<string>`to_char(date_trunc('day', ${users.createdAt}), 'YYYY-MM-DD')`,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(users)
+        .where(gte(users.createdAt, new Date(now - 14 * DAY)))
+        .groupBy(sql`date_trunc('day', ${users.createdAt})`),
+      db.select({
+        day: sql<string>`to_char(date_trunc('day', ${creatives.createdAt}), 'YYYY-MM-DD')`,
+        count: sql<number>`count(*)::int`,
+        apiCostKzt: sql<number>`coalesce(sum(${creatives.apiCostKzt}), 0)::float`,
+      })
+        .from(creatives)
+        .where(gte(creatives.createdAt, new Date(now - 14 * DAY)))
+        .groupBy(sql`date_trunc('day', ${creatives.createdAt})`),
+      // Top-10 users by generation count. Join with users to get email.
+      db.select({
+        id: users.id,
+        email: users.email,
+        impulses: users.impulses,
+        gens: sql<number>`count(${creatives.id})::int`,
+        apiCostKzt: sql<number>`coalesce(sum(${creatives.apiCostKzt}), 0)::float`,
+      })
+        .from(users)
+        .leftJoin(creatives, eq(creatives.userId, users.id))
+        .groupBy(users.id, users.email, users.impulses)
+        .orderBy(sql`count(${creatives.id}) desc`)
+        .limit(10),
+      // Used promos — small table, full load is fine (only when isUsed=true)
+      db.select().from(promoCodes).where(eq(promoCodes.isUsed, true)),
+    ]);
+
+    const usersRow = userCounts[0] ?? { total: 0, today: 0, week: 0, month: 0 };
+    const gensRow = genCounts[0] ?? { total: 0, today: 0, week: 0, month: 0 };
+    const activeRow = activeCounts[0] ?? { active7d: 0, active30d: 0 };
+    const usersBanned = bannedRow[0]?.c ?? 0;
+    const apiCostTotal = apiCostAll[0]?.s ?? 0;
+
+    // ---- Revenue estimate from used promos (tiny set, done in JS) ----
+    const inRange = (d: Date | null, from: Date) => d !== null && d.getTime() >= from.getTime();
+    const revenueTotal = usedPromosAll.reduce((s, p) => s + estimateRevenueKztFromImpulses(p.impulses), 0);
+    const revenueWeek = usedPromosAll
+      .filter(p => inRange(p.usedAt, weekStart))
+      .reduce((s, p) => s + estimateRevenueKztFromImpulses(p.impulses), 0);
+    const revenueMonth = usedPromosAll
+      .filter(p => inRange(p.usedAt, monthStart))
+      .reduce((s, p) => s + estimateRevenueKztFromImpulses(p.impulses), 0);
+    const payingUserIds = new Set(usedPromosAll.map(p => p.usedBy).filter(Boolean));
+    const arpu = payingUserIds.size > 0 ? revenueTotal / payingUserIds.size : 0;
+
+    // ---- 14-day sparkline: fill in zero-days so the chart is continuous ----
+    const userByDay = new Map(userSparkline.map(r => [r.day, r.count]));
+    const genByDay = new Map(genSparkline.map(r => [r.day, { count: r.count, apiCostKzt: r.apiCostKzt }]));
+    const dailySeries: { date: string; users: number; gens: number; apiCostKzt: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const dayStart = new Date(now - i * DAY);
+      dayStart.setHours(0, 0, 0, 0);
+      const key = dayStart.toISOString().slice(0, 10);
+      const gen = genByDay.get(key);
+      dailySeries.push({
+        date: key,
+        users: userByDay.get(key) ?? 0,
+        gens: gen?.count ?? 0,
+        apiCostKzt: gen?.apiCostKzt ?? 0,
+      });
+    }
+
+    return {
+      success: true as const,
+      generatedAt: new Date().toISOString(),
+      users: {
+        total: usersRow.total,
+        today: usersRow.today,
+        week: usersRow.week,
+        month: usersRow.month,
+        banned: usersBanned,
+        active7d: activeRow.active7d,
+        active30d: activeRow.active30d,
+        paying: payingUserIds.size,
+      },
+      generations: {
+        total: gensRow.total,
+        today: gensRow.today,
+        week: gensRow.week,
+        month: gensRow.month,
+        perUserAvg: usersRow.total > 0 ? gensRow.total / usersRow.total : 0,
+      },
+      apiCostsKzt: {
+        total: apiCostTotal,
+        today: apiCostToday[0]?.s ?? 0,
+        week: apiCostWeek[0]?.s ?? 0,
+        month: apiCostMonth[0]?.s ?? 0,
+        perGenAvg: gensRow.total > 0 ? apiCostTotal / gensRow.total : 0,
+      },
+      revenueKztEstimate: {
+        total: revenueTotal,
+        week: revenueWeek,
+        month: revenueMonth,
+        arpu,
+        avgKztPerImpulse: avgKztPerImpulse(),
+        disclaimer: "Оценка: построена по использованным промокодам × ценам тарифов. Подключите orders-таблицу для точного дохода.",
+      },
+      dailySeries,
+      topUsers: topUsersRows,
+    };
+  } catch (e: any) {
+    return { success: false as const, error: e.message };
+  }
+}
+
 export async function createPromoCode(impulses: number) {
   if (!(await isAdmin())) {
     return { success: false, error: "Access Denied" };
+  }
+
+  // Validation
+  if (!Number.isInteger(impulses)) {
+    return { success: false, error: "Количество импульсов должно быть целым числом." };
+  }
+  if (impulses < MIN_PROMO_IMPULSES || impulses > MAX_PROMO_IMPULSES) {
+    return { success: false, error: `Импульсов должно быть от ${MIN_PROMO_IMPULSES} до ${MAX_PROMO_IMPULSES}.` };
   }
 
   try {
@@ -90,6 +377,13 @@ export async function createPromoCode(impulses: number) {
       isUsed: false
     });
 
+    await recordAdminAction({
+      action: "create_promo",
+      targetType: "promo",
+      targetId: code,
+      meta: { impulses },
+    });
+
     return { success: true, code };
   } catch (e: any) {
     console.error("Error creating promo:", e);
@@ -102,8 +396,19 @@ export async function deletePromoCode(code: string) {
     return { success: false, error: "Access Denied" };
   }
 
+  if (typeof code !== "string" || code.trim().length === 0) {
+    return { success: false, error: "Неверный код." };
+  }
+
   try {
     await db.delete(promoCodes).where(eq(promoCodes.code, code));
+
+    await recordAdminAction({
+      action: "delete_promo",
+      targetType: "promo",
+      targetId: code,
+    });
+
     return { success: true };
   } catch (e: any) {
     console.error("Error deleting promo:", e);
@@ -116,20 +421,47 @@ export async function updateUserImpulses(userId: string, newBalance: number) {
     return { success: false, error: "Access Denied" };
   }
 
+  // ---- Validation ----
+  if (typeof userId !== "string" || userId.trim().length === 0) {
+    return { success: false, error: "Неверный userId." };
+  }
+  if (typeof newBalance !== "number" || !Number.isFinite(newBalance)) {
+    return { success: false, error: "Баланс должен быть числом." };
+  }
+  if (!Number.isInteger(newBalance)) {
+    return { success: false, error: "Баланс должен быть целым числом." };
+  }
+  if (newBalance < MIN_BALANCE) {
+    return { success: false, error: `Баланс не может быть отрицательным (мин. ${MIN_BALANCE}).` };
+  }
+  if (newBalance > MAX_BALANCE) {
+    return { success: false, error: `Баланс слишком большой (макс. ${MAX_BALANCE}). Если нужно больше — свяжись с разработчиком.` };
+  }
+
   try {
-    await db.update(users)
-      .set({ impulses: newBalance })
-      .where(eq(users.id, userId));
-      
-    // Create lazily if they somehow don't exist yet but appear in some UI
+    // Fetch old balance for audit log
     const existingUser = await db.query.users.findFirst({ where: eq(users.id, userId) });
-    if (!existingUser) {
-        await db.insert(users).values({
-            id: userId,
-            email: "unknown/lazy-created@aicreative.kz",
-            impulses: newBalance
-        });
+    const oldBalance = existingUser?.impulses ?? null;
+
+    if (existingUser) {
+      await db.update(users)
+        .set({ impulses: newBalance })
+        .where(eq(users.id, userId));
+    } else {
+      // Create lazily if they somehow don't exist yet but appear in some UI
+      await db.insert(users).values({
+        id: userId,
+        email: "unknown/lazy-created@aicreative.kz",
+        impulses: newBalance
+      });
     }
+
+    await recordAdminAction({
+      action: "update_balance",
+      targetType: "user",
+      targetId: userId,
+      meta: { oldBalance, newBalance, delta: oldBalance !== null ? newBalance - oldBalance : null },
+    });
 
     return { success: true };
   } catch (e: any) {
@@ -143,10 +475,25 @@ export async function toggleUserBan(userId: string, isBanned: boolean) {
     return { success: false, error: "Access Denied" };
   }
 
+  if (typeof userId !== "string" || userId.trim().length === 0) {
+    return { success: false, error: "Неверный userId." };
+  }
+  if (typeof isBanned !== "boolean") {
+    return { success: false, error: "isBanned должен быть boolean." };
+  }
+
   try {
     await db.update(users)
       .set({ isBanned })
       .where(eq(users.id, userId));
+
+    await recordAdminAction({
+      action: "toggle_ban",
+      targetType: "user",
+      targetId: userId,
+      meta: { isBanned },
+    });
+
     return { success: true };
   } catch (e: any) {
     console.error("Error toggling user ban:", e);
@@ -154,20 +501,84 @@ export async function toggleUserBan(userId: string, isBanned: boolean) {
   }
 }
 
-export async function getUserHistory(userId: string) {
+/**
+ * Paginated history for a single user. The modal in /admin previews each
+ * creative inside an <iframe>, and every iframe re-parses an entire HTML
+ * document — so loading a power user's 1000+ generations at once would
+ * freeze the browser. We cap at HISTORY_PAGE_SIZE per fetch and the UI
+ * shows a "Показать ещё" button when hasMore is true.
+ */
+const HISTORY_PAGE_SIZE_DEFAULT = 50;
+const HISTORY_PAGE_SIZE_MAX = 200;
+
+export async function getUserHistory(
+  userId: string,
+  limit: number = HISTORY_PAGE_SIZE_DEFAULT,
+  offset: number = 0,
+) {
   if (!(await isAdmin())) {
-    return { success: false, error: "Access Denied" };
+    return { success: false as const, error: "Access Denied" };
   }
 
-  try {
-    const history = await db.select()
-      .from(creatives)
-      .where(eq(creatives.userId, userId))
-      .orderBy(desc(creatives.createdAt));
+  const safeLimit = Math.min(HISTORY_PAGE_SIZE_MAX, Math.max(1, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
 
-    return { success: true, history };
+  try {
+    const [history, totalRows] = await Promise.all([
+      db.select()
+        .from(creatives)
+        .where(eq(creatives.userId, userId))
+        .orderBy(desc(creatives.createdAt))
+        .limit(safeLimit)
+        .offset(safeOffset),
+      db.select({ c: sql<number>`count(*)::int` })
+        .from(creatives)
+        .where(eq(creatives.userId, userId)),
+    ]);
+
+    const totalCount = totalRows[0]?.c ?? 0;
+    const hasMore = safeOffset + history.length < totalCount;
+
+    return {
+      success: true as const,
+      history,
+      totalCount,
+      hasMore,
+      offset: safeOffset,
+      limit: safeLimit,
+    };
   } catch (e: any) {
     console.error("Error fetching user history:", e);
-    return { success: false, error: e.message };
+    return { success: false as const, error: e.message };
+  }
+}
+
+/**
+ * Return the last N admin actions for the audit-log UI.
+ */
+export async function getAdminAuditLog(limit = 100) {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  try {
+    const rows = await getRecentAuditLog(limit);
+    return { success: true as const, rows };
+  } catch (e: any) {
+    return { success: false as const, error: e.message };
+  }
+}
+
+/**
+ * Return the audit trail for a single user (all balance changes, bans).
+ */
+export async function getUserAuditLog(userId: string, limit = 50) {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  try {
+    const rows = await getAuditLogForUser(userId, limit);
+    return { success: true as const, rows };
+  } catch (e: any) {
+    return { success: false as const, error: e.message };
   }
 }

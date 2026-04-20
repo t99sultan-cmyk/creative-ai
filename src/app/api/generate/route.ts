@@ -1,24 +1,106 @@
 import { NextResponse } from 'next/server';
 import { db } from "@/db";
 import { users, creatives } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import crypto from "crypto";
+import { checkGenerateRateLimit, rateLimitMessage } from "@/lib/rate-limit";
+import { isAdmin } from "@/lib/admin-guard";
 
 export const maxDuration = 300;
 
+// ---- Input validation limits ----
+// These protect Claude-budget and API-call size.
+const MAX_PROMPT_LEN = 4000; // chars
+const MAX_REF_IMAGES = 4;
+const MAX_PRODUCT_IMAGES = 4;
+// Claude accepts base64 up to ~5 MB per image; we cap per-request total.
+const MAX_TOTAL_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB across all images
+const MAX_REMIX_HTML_LEN = 250_000; // chars
+
+function approxBase64Bytes(dataUrlOrBase64: string): number {
+  if (typeof dataUrlOrBase64 !== "string") return 0;
+  const idx = dataUrlOrBase64.indexOf(",");
+  const b64 = idx >= 0 ? dataUrlOrBase64.slice(idx + 1) : dataUrlOrBase64;
+  // base64 -> bytes: length * 3/4, minus padding
+  return Math.floor((b64.length * 3) / 4);
+}
+
 export async function POST(req: Request) {
+  // `deductedCost` is read in the catch block for refund. It must be declared
+  // outside the try so it's in scope there. We set it > 0 only AFTER a
+  // successful atomic deduct, so a pre-deduct failure never triggers refund.
+  let deductedUserId: string | null = null;
+  let deductedCost = 0;
   try {
     const { userId } = await auth();
     if (!userId) {
        return new Response(JSON.stringify({ error: "Не авторизован" }), { status: 401 });
     }
 
-    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode, remixScreenshotBase64, strictClone } = await req.json();
-    
-    const cost = 3;
-    let currentImpulses = 0;
+    const body = await req.json();
+    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode, remixScreenshotBase64, strictClone } = body;
 
+    // ---- Input validation ----
+    if (typeof prompt !== "string" || prompt.trim().length === 0) {
+      return new Response(JSON.stringify({ error: "Промпт не может быть пустым." }), { status: 400 });
+    }
+    if (prompt.length > MAX_PROMPT_LEN) {
+      return new Response(
+        JSON.stringify({ error: `Промпт слишком длинный (${prompt.length} симв., максимум ${MAX_PROMPT_LEN}).` }),
+        { status: 400 }
+      );
+    }
+    if (format !== "9:16" && format !== "1:1") {
+      return new Response(JSON.stringify({ error: "Неверный формат. Ожидается 9:16 или 1:1." }), { status: 400 });
+    }
+    const refs = Array.isArray(referenceImagesBase64) ? referenceImagesBase64 : [];
+    const prods = Array.isArray(productImagesBase64) ? productImagesBase64 : [];
+    if (refs.length > MAX_REF_IMAGES) {
+      return new Response(JSON.stringify({ error: `Максимум ${MAX_REF_IMAGES} референсных изображений.` }), { status: 400 });
+    }
+    if (prods.length > MAX_PRODUCT_IMAGES) {
+      return new Response(JSON.stringify({ error: `Максимум ${MAX_PRODUCT_IMAGES} фото продукта.` }), { status: 400 });
+    }
+    let totalImgBytes = 0;
+    for (const img of [...refs, ...prods]) totalImgBytes += approxBase64Bytes(img);
+    if (remixScreenshotBase64) totalImgBytes += approxBase64Bytes(remixScreenshotBase64);
+    if (totalImgBytes > MAX_TOTAL_IMAGE_BYTES) {
+      return new Response(
+        JSON.stringify({
+          error: `Слишком большой объём изображений (${(totalImgBytes / 1024 / 1024).toFixed(1)} МБ). Максимум ${(MAX_TOTAL_IMAGE_BYTES / 1024 / 1024).toFixed(0)} МБ.`,
+        }),
+        { status: 413 }
+      );
+    }
+    if (typeof remixHtmlCode === "string" && remixHtmlCode.length > MAX_REMIX_HTML_LEN) {
+      return new Response(
+        JSON.stringify({ error: `Слишком большой HTML в remix-контексте (${remixHtmlCode.length} симв.).` }),
+        { status: 413 }
+      );
+    }
+
+    // ---- Rate limit (admins bypass) ----
+    const adminBypass = await isAdmin();
+    if (!adminBypass) {
+      const rl = await checkGenerateRateLimit(userId);
+      if (!rl.ok) {
+        return new Response(
+          JSON.stringify({ error: rateLimitMessage(rl), rateLimit: rl }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(rl.retryAfterSec),
+            },
+          }
+        );
+      }
+    }
+
+    const cost = 3;
+
+    // ---- Lazy-create the user row on first generation (from Clerk). ----
     const userRecords = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (userRecords.length === 0) {
       const resp = await fetch("https://api.clerk.com/v1/users/" + userId, {
@@ -32,15 +114,31 @@ export async function POST(req: Request) {
           name: clerkUser.first_name || "Пользователь",
           impulses: 17,
         });
-        currentImpulses = 17;
       }
-    } else {
-      currentImpulses = userRecords[0].impulses || 0;
     }
 
-    if (currentImpulses < cost) {
-       return new Response(JSON.stringify({ error: "Недостаточно импульсов на балансе. Пожалуйста, пополните счет." }), { status: 400 });
+    // ---- Atomic deduct-upfront (fixes race condition on concurrent requests). ----
+    // We UPDATE with a DB-side `impulses - cost` expression AND a WHERE guard
+    // that only matches when the current balance is still >= cost. If two
+    // requests race, only one WHERE matches; the other gets an empty result
+    // and we reject with 400 BEFORE spending real money on the Claude API.
+    //
+    // If the Claude call (or anything below) fails, the catch block at the
+    // bottom refunds `deductedCost` back to the user.
+    const deducted = await db.update(users)
+      .set({ impulses: sql`${users.impulses} - ${cost}` })
+      .where(and(eq(users.id, userId), gte(users.impulses, cost)))
+      .returning({ impulses: users.impulses });
+
+    if (deducted.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Недостаточно импульсов на балансе. Пожалуйста, пополните счет." }),
+        { status: 400 }
+      );
     }
+
+    deductedUserId = userId;
+    deductedCost = cost;
 
     // Improved System instruction for elite Generative UI generation
     const systemPrompt = `You are an absolute elite, award-winning Frontend Developer & UI/UX Designer.
@@ -240,23 +338,21 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
       });
     }
 
-    // Deduct Balance and Save to History Bank
+    // Balance was deducted up-front; now just record the creative.
+    // If this INSERT itself throws, the outer catch refunds the user.
     const creativeId = crypto.randomUUID();
-    if (userId) {
-      await db.update(users)
-        .set({ impulses: currentImpulses - cost })
-        .where(eq(users.id, userId));
+    await db.insert(creatives).values({
+      id: creativeId,
+      userId,
+      prompt: prompt,
+      format,
+      cost: cost,
+      apiCostKzt: apiCostKzt,
+      htmlCode: code,
+    });
 
-      await db.insert(creatives).values({
-        id: creativeId,
-        userId,
-        prompt: prompt,
-        format,
-        cost: cost,
-        apiCostKzt: apiCostKzt,
-        htmlCode: code,
-      });
-    }
+    // Success — do NOT refund.
+    deductedCost = 0;
 
     return new Response(
       JSON.stringify({ code, creativeId }),
@@ -266,6 +362,20 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
       }
     );
   } catch (error: any) {
+    // If we already deducted impulses but failed before returning success,
+    // refund them. Claude API cost is sunk on our side, but the USER should
+    // not lose balance for a failed generation.
+    if (deductedCost > 0 && deductedUserId) {
+      try {
+        await db.update(users)
+          .set({ impulses: sql`${users.impulses} + ${deductedCost}` })
+          .where(eq(users.id, deductedUserId));
+        console.warn(`[Refund] Returned ${deductedCost} impulses to ${deductedUserId} after generation failure.`);
+      } catch (refundErr) {
+        // If the refund itself fails, log loudly — this needs manual fix.
+        console.error('[Refund FAILED]', { userId: deductedUserId, cost: deductedCost, refundErr });
+      }
+    }
     console.error('Claude API Error:', error);
     return Response.json({ error: error.message || 'Error generating content via Claude' }, { status: 500 });
   }

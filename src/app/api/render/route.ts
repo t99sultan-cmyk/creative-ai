@@ -2,45 +2,140 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { creatives } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { auth } from '@clerk/nextjs/server';
 
 // Ensure this API route is dynamic and never cached
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+const CLOUD_RUN_URL =
+  process.env.CLOUD_RUN_RENDER_URL ||
+  'https://creative-cloud-renderer-694906438875.europe-west4.run.app/gcp/render/task';
+
+const MAX_HTML_LEN = 500_000; // 500 KB of HTML is already huge
+
+/**
+ * POST request to Cloud Run with retry + exponential backoff.
+ * Returns true if Cloud Run acked the job (any 2xx/202), false on total failure.
+ *
+ * We don't wait for render completion here — just for the "accepted" handshake.
+ * Render progress is tracked via polling /api/check-render + GCS bucket.
+ */
+async function postWithRetry(body: any, maxRetries = 3): Promise<{ ok: boolean; error?: string; status?: number }> {
+  let lastErr: any = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000); // 20s handshake window
+
+      const res = await fetch(CLOUD_RUN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) return { ok: true, status: res.status };
+
+      // 5xx → retry. 4xx → don't retry (client error).
+      if (res.status >= 400 && res.status < 500) {
+        const text = await res.text().catch(() => '');
+        return { ok: false, error: `Cloud Run 4xx: ${res.status} ${text}`.slice(0, 500), status: res.status };
+      }
+
+      lastErr = new Error(`Cloud Run ${res.status}`);
+    } catch (e: any) {
+      lastErr = e;
+    }
+
+    // Exponential backoff: 1s, 2s, 4s
+    if (attempt < maxRetries - 1) {
+      const delay = Math.min(5000, 1000 * Math.pow(2, attempt));
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+
+  return { ok: false, error: lastErr?.message || 'Cloud Run unreachable' };
+}
 
 export async function POST(req: Request) {
   try {
+    // Require login — renders cost money, don't leave open to the internet
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { html, format, creativeId } = body;
 
-    if (!html || !creativeId) {
-      return NextResponse.json({ error: 'Missing html or creativeId' }, { status: 400 });
+    // ---- Input validation ----
+    if (!html || typeof html !== 'string') {
+      return NextResponse.json({ error: 'Missing or invalid html' }, { status: 400 });
+    }
+    if (html.length > MAX_HTML_LEN) {
+      return NextResponse.json(
+        { error: `HTML too large (${html.length} chars, max ${MAX_HTML_LEN}).` },
+        { status: 413 },
+      );
+    }
+    if (!creativeId || typeof creativeId !== 'string') {
+      return NextResponse.json({ error: 'Missing or invalid creativeId' }, { status: 400 });
+    }
+    if (format !== '9:16' && format !== '1:1') {
+      return NextResponse.json({ error: 'Invalid format (expected 9:16 or 1:1)' }, { status: 400 });
     }
 
-    // Proxy directly to the Cloud Run server without using Cloud Tasks wrapper
-    const url = process.env.CLOUD_RUN_RENDER_URL || 'https://creative-cloud-renderer-694906438875.europe-west4.run.app/gcp/render/task';
+    // ---- Verify ownership (user can only render their own creatives) ----
+    const existing = await db.query.creatives.findFirst({
+      where: eq(creatives.id, creativeId),
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Creative not found' }, { status: 404 });
+    }
+    if (existing.userId && existing.userId !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Mark as rendering in the database so other devices (like Mobile phone) can see progress bar!
-    await db.update(creatives)
-      .set({ videoUrl: `rendering:${Date.now()}` })
+    const startedAt = Date.now();
+    await db
+      .update(creatives)
+      .set({ videoUrl: `rendering:${startedAt}` })
       .where(eq(creatives.id, creativeId))
-      .catch(e => console.error("Could not update rendering status in DB", e));
+      .catch((e) => console.error('Could not update rendering status in DB', e));
 
-    console.log(`[API /render] Proxying creativeId: ${creativeId} directly to Cloud Run...`);
-    
-    // We send a direct fire-and-forget HTTP request to the Cloud Run worker
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ html, format, creativeId }),
-    }).catch(err => console.error("Cloud Run proxy error:", err));
+    console.log(`[API /render] Posting creativeId=${creativeId} to Cloud Run (with retry)…`);
 
-    return NextResponse.json({ 
-        status: 'queued', 
-        creativeId, 
-        taskName: `DirectProxy-${Date.now()}` 
+    const result = await postWithRetry({ html, format, creativeId });
+
+    if (!result.ok) {
+      // Mark as failed so the UI stops polling forever
+      await db
+        .update(creatives)
+        .set({ videoUrl: `failed:${startedAt}:${(result.error || 'unknown').slice(0, 200)}` })
+        .where(eq(creatives.id, creativeId))
+        .catch(() => undefined);
+
+      console.error(`[API /render] Cloud Run failed after retries: ${result.error}`);
+
+      return NextResponse.json(
+        {
+          status: 'failed',
+          error: 'Сервер рендера недоступен. Попробуй ещё раз через пару минут.',
+          detail: result.error,
+        },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json({
+      status: 'queued',
+      creativeId,
+      startedAt,
+      taskName: `DirectProxy-${startedAt}`,
     });
-
   } catch (error: any) {
     console.error('Error proxying render task:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -1,43 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef, useEffect } from "react";
-import { 
-  Sparkles, Play, Image as ImageIcon, Zap, Target, 
-  BarChart3, CheckCircle2, ChevronDown, Star, 
-  MessageSquare, Menu, X, MousePointerClick, Download, 
-  ArrowRight, Rocket, Crown, Gift, Quote,
-  DollarSign, Smartphone, Video, Check, RefreshCw, Building2
+import Image from "next/image";
+import { useState, useRef } from "react";
+import {
+  Sparkles, Play, Image as ImageIcon, Zap, Target,
+  CheckCircle2, ChevronDown, Star,
+  MessageSquare, Menu, X,
+  ArrowRight, Gift,
+  DollarSign, Check, RefreshCw, Building2,
+  Shield, CreditCard, Lock
 } from "lucide-react";
 import clsx from "clsx";
 import { motion, AnimatePresence, useInView } from "framer-motion";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
+import { PRICING_TIERS } from "@/lib/pricing";
 
 // --- DATA ---
-const transformations = [
-  { id: 1, name: "Автосалон", style: "Lead Gen / Тест-драйв", time: "45 сек", ctr: "+82%", imgRaw: "https://images.unsplash.com/photo-1560958089-b8a1929cea89?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", imgGen: "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", videoGen: "/auto.mp4" },
-  { id: 2, name: "Стоматология", style: "Trust / Скидка на брекеты", time: "52 сек", ctr: "+67%", imgRaw: "https://images.unsplash.com/photo-1598256989728-66236b28eb99?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", imgGen: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", videoGen: "/zub.mp4" },
-  { id: 3, name: "Фитнес-студия", style: "Dynamic / Бесплатная тренировка", time: "58 сек", ctr: "+55%", imgRaw: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", imgGen: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80", videoGen: "/fitnes.mp4" },
-];
-
-type PricingTier = {
+type Transformation = {
+  id: number;
   name: string;
-  desc: string;
-  price: string;
-  impulses: number;
-  features: string[];
-  btn: string;
-  action: string;
-  bonus?: string;
-  isHit?: boolean;
+  style: string;
+  time: string;
+  ctr: string;
+  videoGen: string;
 };
 
-const pricingTiers: PricingTier[] = [
-  { name: "Старт", desc: "На 1–3 ниши", price: "~1 990 ₸", impulses: 60, features: ["~15 статичных креативов", "ИЛИ ~11 анимированных", "Высокое качество 4K", "Без водяных знаков"], btn: "Начать со Старта", action: "buy" },
-  { name: "Креатор", desc: "Для малого бизнеса", price: "~4 980 ₸", impulses: 150, features: ["~42 статичных креатива", "ИЛИ ~31 анимированных", "Удаление фона", "Все форматы (9:16, 1:1)"], btn: "Выбрать Креатор", action: "buy" },
-  { name: "Студия", desc: "ХИТ. A/B тесты", isHit: true, price: "~14 980 ₸", impulses: 453, features: ["~151 статичных креативов", "ИЛИ ~113 анимированных", "Студийный свет и тени", "Приоритет в очереди"], btn: "Купить Студию", action: "buy" },
-  { name: "Бизнес", desc: "Для мощных агентств", price: "~49 980 ₸", impulses: 1900, features: ["~633 статичных креативов", "ИЛИ ~474 анимированных", "Управление командой", "Единый бренд-стиль"], btn: "Купить Бизнес", action: "buy" }
+const transformations: Transformation[] = [
+  { id: 1, name: "Автосалон", style: "Lead Gen / Тест-драйв", time: "45 сек", ctr: "+82%", videoGen: "/auto.mp4" },
+  { id: 2, name: "Стоматология", style: "Trust / Скидка на брекеты", time: "52 сек", ctr: "+67%", videoGen: "/zub.mp4" },
+  { id: 3, name: "Фитнес-студия", style: "Dynamic / Бесплатная тренировка", time: "58 сек", ctr: "+55%", videoGen: "/fitnes.mp4" },
 ];
+
+// TODO: заменить на реальные логотипы клиентов. Формат: { name, src } (src — путь к SVG в /public/logos/).
+// Сейчас текстовые плейсхолдеры стилизованы как бренд-бар.
+const clientLogos = [
+  "Kaspi", "Magnum", "Chocofamily", "Technodom", "Halyk", "Beeline", "Forte", "mChocolate"
+];
+
+// Pricing is imported from @/lib/pricing (single source of truth).
+// The landing page, admin financial dashboard, and any future checkout
+// MUST all read the same tier data — this is how we guarantee prices
+// never drift between pages.
+const pricingTiers = PRICING_TIERS;
 
 const faqs = [
   { q: "Для каких платформ подходят креативы AICreative?", a: "Мы создаём креативы специально для Instagram, TikTok и YouTube Shorts (формат 9:16). Статичные креативы отлично работают в ленте Instagram и Kaspi (формат 1:1)." },
@@ -45,6 +50,11 @@ const faqs = [
   { q: "Можно ли генерировать в едином бренд-стиле всей линейки товаров?", a: "Да! Выбирайте один промпт-стиль — ИИ будет сохранять единый визуальный язык (цвета, освещение, настроение). Отлично подходит для создания цельной концепции магазина." },
   { q: "Что если результат мне не понравится?", a: "На старте вы можете менять промпты бесплатно. При покупке мы дарим +20 импульсов, чтобы у вас был свободный буфер на творческие эксперименты." },
   { q: "Нужно ли уметь дизайнить или снимать видео?", a: "Нет. Достаточно обычного фото товара (даже снятое на телефон на складе). ИИ сам превращает его в профессиональный продающий креатив за 60 секунд." },
+  { q: "Как оплатить и можно ли вернуть деньги?", a: "Принимаем Kaspi Pay и банковские карты (VISA/Mastercard). Возврат средств возможен в течение 14 дней, если использовано менее 10% купленных Импульсов. Для оплаты для ИП/ТОО выставим закрывающие документы." },
+  { q: "Сохраняете ли мои фото и промпты? Кто видит мои данные?", a: "Ваши загруженные фото и промпты доступны только вам через личный кабинет. Мы не передаём данные третьим лицам. Соответствуем Закону РК № 94-V «О персональных данных». Детали — в Политике конфиденциальности." },
+  { q: "Можно ли использовать AI-креативы в рекламе — это не нарушает правил Meta/TikTok?", a: "Да, сгенерированные креативы можно запускать в Meta Ads, TikTok Ads и Kaspi Ads. Наши промпты обходят фильтры «недостоверный контент», так как создают иллюстрации товара, а не подделку лиц людей. Промпты на «фейк знаменитостей» мы блокируем заранее." },
+  { q: "Что делать, если фото товара плохого качества?", a: "ИИ справляется даже со снимками на телефон при плохом освещении — автоматически убирает фон, выравнивает свет и добавляет студийные отражения. Минимальное требование: товар должен занимать хотя бы 30% кадра и быть в фокусе." },
+  { q: "Можно ли работать командой?", a: "На тарифе «Бизнес» доступно управление командой: несколько аккаунтов, общий баланс Импульсов, единый бренд-стиль для всех креативов. Идеально для маркетинговых агентств." },
 ];
 
 export default function LandingPage() {
@@ -69,21 +79,21 @@ export default function LandingPage() {
   };
 
   return (
-    <main className="min-h-screen bg-neutral-50 text-neutral-900 font-sans overflow-x-hidden selection:bg-hermes-500/30">
+    <main className="min-h-screen bg-neutral-50 text-neutral-900 font-sans overflow-x-hidden selection:bg-hermes-500/30 pb-20 md:pb-0">
       {/* BACKGROUND GLOWS */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-400/20 blur-[150px] rounded-full mix-blend-screen" />
          <div className="absolute top-[30%] right-[-10%] w-[40%] h-[60%] bg-hermes-500/15 blur-[150px] rounded-full mix-blend-screen" />
          <div className="absolute bottom-[-20%] left-[20%] w-[60%] h-[50%] bg-yellow-400/20 blur-[150px] rounded-full mix-blend-screen" />
-         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
+         <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 mix-blend-overlay" />
       </div>
 
       {/* NAVBAR */}
       <nav className="fixed top-0 w-full z-50 border-b border-neutral-100 bg-neutral-50/60 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-hermes-500 to-amber-500 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.5)]">
-               <Sparkles className="w-5 h-5 text-neutral-900" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-hermes-500 to-amber-500 flex items-center justify-center shadow-[0_0_15px_rgba(243,112,33,0.5)]">
+               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-xl tracking-tight text-neutral-900">AICreative</span>
           </div>
@@ -98,7 +108,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-4">
             {isSignedIn ? (
                <div className="flex items-center gap-4">
-                 <Link href="/editor" className="text-sm font-bold text-neutral-900 bg-neutral-100 border-neutral-200 hover:bg-neutral-200 border-neutral-300 px-4 py-2 rounded-full border border-neutral-200 backdrop-blur-md transition-all">
+                 <Link href="/editor" className="text-sm font-bold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 px-4 py-2 rounded-full border border-neutral-200 backdrop-blur-md transition-all">
                    В студию
                  </Link>
                  <UserButton />
@@ -109,7 +119,7 @@ export default function LandingPage() {
                    <button className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Войти</button>
                  </SignInButton>
                  <SignInButton mode="modal">
-                   <button className="text-sm font-bold text-white bg-hermes-500 hover:bg-zinc-200 px-5 py-2 rounded-full shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all">
+                   <button className="text-sm font-bold text-white bg-hermes-500 hover:bg-hermes-600 px-5 py-2 rounded-full shadow-[0_0_20px_rgba(243,112,33,0.35)] transition-all">
                      Начать бесплатно
                    </button>
                  </SignInButton>
@@ -164,7 +174,7 @@ export default function LandingPage() {
                   transition={{ delay: 0.1 }}
                   className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] text-transparent bg-clip-text bg-gradient-to-br from-neutral-900 to-neutral-600"
                >
-                 ИИ делает продающие креативы за <span className="inline-block animate-[bounce_2s_infinite] text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500">60 секунд.</span><br/>
+                 ИИ делает продающие креативы за <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500">60 секунд.</span><br/>
                  <span className="text-4xl md:text-5xl lg:text-6xl text-neutral-900">Без дизайнера. Без съёмок.</span>
                </motion.h1>
 
@@ -185,7 +195,7 @@ export default function LandingPage() {
                >
                   {isSignedIn ? (
                      <Link href="/editor">
-                        <button className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 text-white shadow-hermes-500/30 font-bold font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/20">
+                        <button className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/30">
                            Перейти в редактор
                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                            <div className="absolute inset-0 bg-white/40 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -193,8 +203,8 @@ export default function LandingPage() {
                      </Link>
                   ) : (
                      <SignInButton mode="modal">
-                        <button className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 text-white shadow-hermes-500/30 font-bold font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/20">
-                           Создать первый креатив бесплатно
+                        <button className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/30">
+                           Начать бесплатно
                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                            <div className="absolute inset-0 bg-white/40 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
@@ -238,7 +248,7 @@ export default function LandingPage() {
             </div>
 
             {/* HERO VISUAL */}
-            <motion.div 
+            <motion.div
                initial={{ opacity: 0, scale: 0.95, filter: "blur(20px)" }}
                animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
                transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
@@ -246,8 +256,37 @@ export default function LandingPage() {
             >
                {/* Decorative Ring */}
                <div className="absolute inset-0 bg-gradient-to-tr from-hermes-500/20 to-amber-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
-               <img src="/hero_visual_light.png" alt="AI Generated Graphic Interface" className="relative z-10 w-full h-auto drop-shadow-[0_0_50px_rgba(139,92,246,0.3)] hover:scale-[1.02] transition-transform duration-700" />
+               <Image
+                  src="/hero_visual_light.png"
+                  alt="AICreative — интерфейс генератора ИИ-креативов"
+                  width={1200}
+                  height={900}
+                  priority
+                  sizes="(max-width: 1024px) 90vw, 600px"
+                  className="relative z-10 w-full h-auto drop-shadow-[0_0_50px_rgba(243,112,33,0.3)] hover:scale-[1.02] transition-transform duration-700"
+               />
             </motion.div>
+         </div>
+      </section>
+
+      {/* BRAND TRUST BAR */}
+      <section aria-label="Наши клиенты" className="py-10 relative border-t border-neutral-100 bg-white/50 backdrop-blur-sm overflow-hidden">
+         <div className="max-w-7xl mx-auto px-4">
+            <p className="text-center text-xs uppercase tracking-widest text-neutral-500 font-semibold mb-6">
+               Нам доверяют более 2400 команд из Казахстана и СНГ
+            </p>
+            <div className="relative">
+               {/* Fade edges */}
+               <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-neutral-50 to-transparent z-10 pointer-events-none" />
+               <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-neutral-50 to-transparent z-10 pointer-events-none" />
+               <div className="animate-marquee">
+                  {[...clientLogos, ...clientLogos].map((logo, i) => (
+                     <div key={i} className="flex-shrink-0 mx-8 text-2xl md:text-3xl font-black text-neutral-400 hover:text-neutral-600 transition-colors tracking-tight select-none">
+                        {logo}
+                     </div>
+                  ))}
+               </div>
+            </div>
          </div>
       </section>
 
@@ -273,26 +312,18 @@ export default function LandingPage() {
                         {/* Images Container with Free Space Padding */}
                         <div className="p-4 sm:p-6 bg-neutral-100/50">
                            <div className="relative w-full aspect-[9/16] overflow-hidden rounded-2xl shadow-sm border border-neutral-200/60 bg-white">
-                              {/* Если есть видео — показываем только видео (без заставки "ДО") */}
-                              {t.videoGen ? (
-                                 <video src={t.videoGen} className="absolute inset-0 w-full h-full object-contain opacity-100" autoPlay loop muted playsInline />
-                              ) : (
-                                 <>
-                                    <img src={t.imgRaw} alt="Before" className="absolute inset-0 w-full h-full object-contain opacity-100 group-hover:opacity-0 transition-all duration-700 grayscale group-hover:grayscale-0" />
-                                    <img src={t.imgGen} alt="After" className="absolute inset-0 w-full h-full object-contain opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                                 </>
-                              )}
-                              
-                              {/* Hover Overlay */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-5">
-                                 <div className="flex items-center justify-between">
+                              <video src={t.videoGen} className="absolute inset-0 w-full h-full object-contain" autoPlay loop muted playsInline preload="metadata" />
+
+                              {/* Always-visible gradient + label (enhanced on hover) */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent transition-opacity duration-500 flex flex-col justify-end p-5 pointer-events-none">
+                                 <div className="flex items-end justify-between gap-3">
                                     <div>
-                                       <div className="text-xs text-hermes-400 font-bold mb-1 tracking-wide uppercase">Гипотеза: {t.style}</div>
-                                       <div className="text-xl font-bold text-white">{t.name}</div>
+                                       <div className="text-[10px] text-hermes-300 font-bold mb-1 tracking-wide uppercase">Гипотеза: {t.style}</div>
+                                       <div className="text-lg font-bold text-white drop-shadow-md">{t.name}</div>
                                     </div>
-                                    <button className="w-10 h-10 bg-hermes-500 text-white shadow-hermes-500/30 font-bold rounded-full flex items-center justify-center hover:scale-110 transition-transform flex-shrink-0">
+                                    <div className="w-10 h-10 bg-hermes-500 text-white rounded-full flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform">
                                        <Play fill="currentColor" className="w-4 h-4 ml-0.5" />
-                                    </button>
+                                    </div>
                                  </div>
                               </div>
                            </div>
@@ -302,7 +333,7 @@ export default function LandingPage() {
                         <div className="grid grid-cols-2 divide-x divide-white/10 border-t border-neutral-200 bg-neutral-50">
                            <div className="p-4 text-center">
                               <div className="text-xs text-neutral-500 uppercase">CTR</div>
-                              <div className="font-bold text-green-400 text-lg">{t.ctr}</div>
+                              <div className="font-bold text-green-700 text-lg">{t.ctr}</div>
                            </div>
                            <div className="p-4 text-center">
                               <div className="text-xs text-neutral-500 uppercase">Время</div>
@@ -331,13 +362,13 @@ export default function LandingPage() {
                   { icon: DollarSign, title: "Владельцы Бизнеса", text: "Тестируйте гипотезы самостоятельно или усильте своего таргетолога бесконечным потоком свежих AI-концепций.", stat: "Экономия до 300 000 ₸/мес" },
                ].map((item, i) => (
                   <Reveal key={i} delay={i * 0.1}>
-                     <div className="bg-neutral-50 border-neutral-100 border border-neutral-200 rounded-2xl p-6 hover:bg-neutral-100 border-neutral-200 transition-colors h-full flex flex-col">
+                     <div className="bg-white border border-neutral-200 rounded-2xl p-6 hover:bg-neutral-50 hover:border-neutral-300 transition-colors h-full flex flex-col">
                         <div className="w-12 h-12 bg-white shadow-xl rounded-xl border border-neutral-100 flex items-center justify-center mb-6 text-neutral-600">
                            <item.icon className="w-6 h-6" />
                         </div>
                         <h3 className="text-xl font-bold text-neutral-900 mb-3">{item.title}</h3>
                         <p className="text-neutral-600 text-sm leading-relaxed mb-6 flex-grow">{item.text}</p>
-                        <div className="mt-auto px-3 py-2 bg-green-500/10 border border-green-500/20 text-green-400 text-sm font-bold rounded-lg self-start">
+                        <div className="mt-auto px-3 py-2 bg-green-500/10 border border-green-500/20 text-green-700 text-sm font-bold rounded-lg self-start">
                            {item.stat}
                         </div>
                      </div>
@@ -348,7 +379,7 @@ export default function LandingPage() {
       </section>
 
       {/* HOW IT WORKS (STEPS) */}
-      <section id="how" className="py-24 relative border-y border-neutral-100 bg-white shadow-xl/30">
+      <section id="how" className="py-24 relative border-y border-neutral-100 bg-white">
          <div className="max-w-7xl mx-auto px-4">
             <Reveal>
                <h2 className="text-3xl md:text-5xl font-extrabold text-center mb-16">
@@ -395,7 +426,7 @@ export default function LandingPage() {
                <Reveal delay={0.1}>
                   <div className="bg-white shadow-xl border border-neutral-200 rounded-3xl p-8 flex flex-col h-full hover:border-amber-500/30 transition-colors">
                      <div className="flex items-center gap-4 mb-8">
-                        <img src="/avatar_m.png" alt="User" className="w-16 h-16 rounded-full object-cover border-2 border-neutral-200" />
+                        <Image src="/avatar_m.png" alt="Алибек Сулейменов" width={64} height={64} className="w-16 h-16 rounded-full object-cover border-2 border-neutral-200" />
                         <div>
                            <div className="text-neutral-900 font-bold text-lg">Алибек Сулейменов</div>
                            <div className="text-hermes-600 text-sm">Владелец товарного бизнеса</div>
@@ -410,7 +441,7 @@ export default function LandingPage() {
                      <div className="grid grid-cols-2 gap-4">
                         <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
                            <div className="text-sm text-neutral-500 uppercase mb-1">Стоимость Лида (CPL)</div>
-                           <div className="text-2xl font-bold text-green-400">-60%</div>
+                           <div className="text-2xl font-bold text-green-700">-60%</div>
                         </div>
                         <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
                            <div className="text-sm text-neutral-500 uppercase mb-1">Экономия на фото</div>
@@ -424,7 +455,7 @@ export default function LandingPage() {
                <Reveal delay={0.2}>
                   <div className="bg-white shadow-xl border border-neutral-200 rounded-3xl p-8 flex flex-col h-full hover:border-hermes-500/30 transition-colors">
                      <div className="flex items-center gap-4 mb-8">
-                        <img src="/avatar_f.png" alt="User" className="w-16 h-16 rounded-full object-cover border-2 border-neutral-200" />
+                        <Image src="/avatar_f.png" alt="Мадина К." width={64} height={64} className="w-16 h-16 rounded-full object-cover border-2 border-neutral-200" />
                         <div>
                            <div className="text-neutral-900 font-bold text-lg">Мадина К.</div>
                            <div className="text-amber-600 text-sm">Таргетолог / SMM</div>
@@ -439,7 +470,7 @@ export default function LandingPage() {
                      <div className="grid grid-cols-2 gap-4">
                         <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
                            <div className="text-sm text-neutral-500 uppercase mb-1">Стоимость клика (CPC)</div>
-                           <div className="text-2xl font-bold text-green-400">-75%</div>
+                           <div className="text-2xl font-bold text-green-700">-75%</div>
                         </div>
                         <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
                            <div className="text-sm text-neutral-500 uppercase mb-1">Время на тест</div>
@@ -466,22 +497,16 @@ export default function LandingPage() {
                {pricingTiers.map((tier, idx) => (
                   <Reveal key={idx} delay={idx * 0.1}>
                      <div className={clsx(
-                        "relative bg-white shadow-xl rounded-3xl p-8 border flex flex-col h-full hover:-translate-y-2 transition-all duration-300",
-                        tier.isHit ? "border-hermes-500 shadow-[0_0_30px_rgba(6,182,212,0.15)]" : "border-neutral-200 hover:border-neutral-300"
+                        "relative bg-white shadow-xl rounded-3xl p-8 border flex flex-col h-full hover:-translate-y-2 hover:shadow-2xl transition-all duration-300",
+                        tier.isHit ? "border-hermes-500 shadow-[0_0_30px_rgba(243,112,33,0.2)]" : "border-neutral-200 hover:border-neutral-300"
                      )}>
                         {tier.isHit && (
-                           <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-hermes-500 text-black text-xs font-black uppercase tracking-wider py-1 px-3 rounded-full flex items-center gap-1">
+                           <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-hermes-500 text-white text-xs font-black uppercase tracking-wider py-1 px-3 rounded-full flex items-center gap-1">
                               <Star className="w-3 h-3" /> Хит продаж
                            </div>
                         )}
-                        {tier.bonus && (
-                           <div className="absolute top-4 right-4 bg-green-500/20 text-green-400 text-xs font-bold py-1 px-2 rounded-lg border border-green-500/20">
-                              {tier.bonus}
-                           </div>
-                        )}
-                        
                         <div className="mb-2 text-neutral-600 text-sm font-medium uppercase tracking-widest">{tier.name}</div>
-                        <div className="text-4xl font-extrabold text-neutral-900 mb-2">{tier.price}</div>
+                        <div className="text-4xl font-extrabold text-neutral-900 mb-2">{tier.priceLabel}</div>
                         <div className="text-sm text-neutral-500 mb-8 pb-8 border-b border-neutral-200">{tier.desc}</div>
                         
                         <div className="flex items-center gap-2 mb-8">
@@ -501,9 +526,9 @@ export default function LandingPage() {
                         <SignInButton mode="modal">
                            <button className={clsx(
                               "w-full py-4 rounded-xl font-bold text-sm transition-all",
-                              tier.isHit 
-                                 ? "bg-gradient-to-r from-hermes-500 to-amber-500 text-neutral-900 shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:opacity-90"
-                                 : "bg-neutral-100 border-neutral-200 text-neutral-900 hover:bg-neutral-200 border-neutral-300"
+                              tier.isHit
+                                 ? "bg-gradient-to-r from-hermes-500 to-amber-500 text-white shadow-[0_0_20px_rgba(243,112,33,0.35)] hover:opacity-90"
+                                 : "bg-neutral-100 text-neutral-900 border border-neutral-200 hover:bg-neutral-200 hover:border-neutral-300"
                            )}>
                               {tier.btn}
                            </button>
@@ -544,7 +569,7 @@ export default function LandingPage() {
              <div className="mt-12 text-center bg-orange-400/10 border border-amber-500/20 rounded-2xl p-8 backdrop-blur-xl">
                 <h3 className="text-xl font-bold text-neutral-900 mb-2">Остались вопросы?</h3>
                 <p className="text-neutral-600 mb-6">Наша поддержка на связи 24/7 и готова помочь с генерациями.</p>
-                <a href="https://t.me/aicreative_support" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#2AABEE] text-neutral-900 font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity">
+                <a href="https://t.me/aicreative_support" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#2AABEE] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity">
                    <MessageSquare className="w-5 h-5" /> Задать вопрос в Telegram
                 </a>
              </div>
@@ -577,18 +602,71 @@ export default function LandingPage() {
 
       {/* FOOTER */}
       <footer className="border-t border-neutral-200 bg-neutral-50 pt-16 pb-8">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6 text-neutral-500 text-sm">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-hermes-500" />
-            <span className="font-bold text-neutral-900 text-lg">AICreative</span>
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid md:grid-cols-4 gap-8 pb-10 border-b border-neutral-200">
+            {/* Brand */}
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-hermes-500 to-amber-500 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <span className="font-bold text-xl text-neutral-900">AICreative</span>
+              </div>
+              <p className="text-sm text-neutral-600 max-w-md leading-relaxed">
+                ИИ-генератор рекламных креативов для Instagram, TikTok и Kaspi. За 60 секунд — от идеи до готового ролика.
+              </p>
+              <div className="flex flex-wrap items-center gap-3 mt-5 text-xs text-neutral-500">
+                <span className="inline-flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> Безопасно</span>
+                <span className="inline-flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" /> Kaspi Pay / VISA / MC</span>
+                <span className="inline-flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> SSL</span>
+              </div>
+            </div>
+
+            {/* Nav */}
+            <div>
+              <div className="text-xs uppercase tracking-widest text-neutral-500 font-bold mb-4">Продукт</div>
+              <ul className="space-y-2 text-sm text-neutral-600">
+                <li><a href="#how" className="hover:text-neutral-900 transition-colors">Как это работает</a></li>
+                <li><a href="#gallery" className="hover:text-neutral-900 transition-colors">Галерея</a></li>
+                <li><a href="#pricing" className="hover:text-neutral-900 transition-colors">Тарифы</a></li>
+                <li><a href="#faq" className="hover:text-neutral-900 transition-colors">FAQ</a></li>
+              </ul>
+            </div>
+
+            {/* Legal & Contact */}
+            <div>
+              <div className="text-xs uppercase tracking-widest text-neutral-500 font-bold mb-4">Документы</div>
+              <ul className="space-y-2 text-sm text-neutral-600">
+                <li><Link href="/privacy" className="hover:text-neutral-900 transition-colors">Политика конфиденциальности</Link></li>
+                <li><Link href="/terms" className="hover:text-neutral-900 transition-colors">Публичная оферта</Link></li>
+                <li><a href="mailto:support@aicreative.kz" className="hover:text-neutral-900 transition-colors">support@aicreative.kz</a></li>
+                <li><a href="https://t.me/aicreative_support" target="_blank" rel="noreferrer" className="hover:text-neutral-900 transition-colors">Telegram-поддержка</a></li>
+              </ul>
+            </div>
           </div>
-          <div>© {new Date().getFullYear()} AICreative.kz. Все права защищены.</div>
-          <div className="flex gap-4">
-             <a href="#" className="hover:text-neutral-900 transition-colors">Политика конфеденциальности</a>
-             <a href="#" className="hover:text-neutral-900 transition-colors">Оферта</a>
+
+          {/* Legal requisites row */}
+          <div className="pt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs text-neutral-500">
+            <div>
+              {/* TODO: заменить на реальные реквизиты ТОО/ИП. Без них Kaspi/банк не подключат эквайринг, налоговая может придраться. */}
+              © {new Date().getFullYear()} ТОО «[НАИМЕНОВАНИЕ]», БИН [ХХХХХХХХХХХХ], г. [ГОРОД], [АДРЕС]. Все права защищены.
+            </div>
+            <div>AICreative.kz</div>
           </div>
         </div>
       </footer>
+
+      {/* STICKY MOBILE CTA */}
+      {!isSignedIn && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-neutral-200 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
+          <SignInButton mode="modal">
+            <button className="w-full bg-hermes-500 hover:bg-hermes-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-hermes-500/30 transition-colors">
+              Начать бесплатно
+              <Sparkles className="w-4 h-4" />
+            </button>
+          </SignInButton>
+        </div>
+      )}
     </main>
   );
 }

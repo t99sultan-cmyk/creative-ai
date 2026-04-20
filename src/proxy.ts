@@ -1,6 +1,18 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isProtectedRoute = createRouteMatcher(['/editor(.*)', '/api/restricted(.*)']);
+/**
+ * Routes that require at least a logged-in Clerk session.
+ * Admin-email allowlist is enforced in a deeper layer:
+ *   - /admin pages → src/app/admin/layout.tsx (fail-closed redirect)
+ *   - server actions in adminActions.ts → isAdmin() guard
+ *   - /api/admin/* handlers → assertAdmin() helper from src/lib/admin-guard.ts
+ */
+const isProtectedRoute = createRouteMatcher([
+  '/editor(.*)',
+  '/admin(.*)',
+  '/api/restricted(.*)',
+  '/api/admin(.*)',
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
