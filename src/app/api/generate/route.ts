@@ -179,24 +179,42 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
 
 7. ANIMATIONS (${isAnimated ? 'ON' : 'OFF'}):
    ${isAnimated ? `- You MUST animate typography and elements beautifully using CSS keyframes or GSAP.
-   - 🔴 CRITICAL TIMING — THE FINAL VIDEO IS ${format === '9:16' ? '15 SECONDS' : '10 SECONDS'} LONG.
-     Your animations MUST be timed for a cinematic, premium ad — NOT a busy UI with spinning loaders.
-     Default individual animation durations (single "ease" pass): 1.5s – 3s. Slow is premium.
-     If you use \`repeat: -1\` + \`yoyo: true\`, pick a duration long enough that you see AT MOST
-     2-4 full cycles over the whole video. A 0.5s loop = 30 cycles in 15s = looks like a glitch.
-   - 🔴 NO FAST-SPINNING ELEMENTS. Never use a loading spinner, fast-rotating circle, or any
-     "busy UI" animation. The viewer should see a beautiful SLOW reveal, not a progress bar
-     frantically loading. If you draw a decorative rotating ring, its rotation duration must be
-     8-15 SECONDS per full turn (not 1s).
-   - Use GSAP timelines to stagger element entrances across the first 2-4 seconds, then
-     hold/breathe for the remainder. Example:
-     \`const tl = gsap.timeline({ repeat: -1, yoyo: true });\`
-     \`tl.from(".title", { opacity: 0, y: 30, duration: 1.2, ease: "power2.out" });\`
-     \`tl.from(".subtitle", { opacity: 0, duration: 1, ease: "power2.out" }, "-=0.5");\`
-     \`tl.from(".cta", { scale: 0.8, opacity: 0, duration: 0.8 }, "-=0.3");\`
-     \`tl.to({}, { duration: 8 }); // hold the final look\`
-   - If you use CSS \`@keyframes\` with \`animation-iteration-count: infinite\`, set
-     \`animation-duration\` to **at least 3s**, ideally 5-10s.` : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
+   - 🔴 TARGET PLAYBACK — THE FINAL VIDEO IS ${format === '9:16' ? '15 SECONDS' : '10 SECONDS'} LONG, rendered at **30 FPS**.
+     Design for cinematic ad pacing, NOT a busy UI with spinning loaders.
+
+   - 🔴 TIMING RULES:
+     * Per-element entrance / exit: duration 1.5s – 3s (slow = premium).
+     * If you use \`repeat: -1\` + \`yoyo: true\`, pick duration so there are AT MOST 2-4 cycles
+       over the whole video. A 0.5s loop = 30 cycles = looks like a glitch.
+     * Decorative rotating rings: 8-15 SECONDS per full turn (never 1s).
+     * CSS @keyframes with infinite iteration: animation-duration ≥ 3s, ideally 5-10s.
+
+   - 🔴 SMOOTHNESS (avoids jittery 30-fps look):
+     * NEVER use \`ease: "linear"\` — it looks mechanical. Use curves that accelerate in and
+       decelerate out: \`power2.out\`, \`power3.out\`, \`power4.out\`, \`expo.out\`, \`cubic.inOut\`,
+       \`sine.inOut\`. For CSS prefer \`cubic-bezier(0.22, 1, 0.36, 1)\` (easeOutExpo).
+     * ALWAYS animate GPU-cheap properties: \`transform\` (translate/rotate/scale) and \`opacity\`.
+       NEVER animate \`left\`, \`top\`, \`width\`, \`height\`, \`margin\`, \`padding\`, \`filter: blur()\` —
+       these are expensive and can skip frames at 30 fps.
+     * Add \`will-change: transform, opacity\` on animated elements, and \`transform: translateZ(0)\`
+       on their parents to force GPU compositing.
+     * Overlap tweens in GSAP with negative offsets (e.g. \`"-=0.6"\`) so there is CONTINUOUS
+       motion — no "hard stops" between sequential entrances.
+     * On the long hold at the end, keep ONE subtle ambient animation (e.g. product image
+       floating y: +8px over 4s yoyo, or background gradient slow hue-shift) so the frame never
+       looks frozen.
+
+   - 🔴 NO FAST-SPINNING / BUSY-UI LOADERS. Ever. The viewer should feel a slow elegant reveal,
+     not a buffering indicator.
+
+   - CONCRETE GSAP TEMPLATE (adapt, don't copy verbatim):
+     \`const tl = gsap.timeline({ repeat: -1, yoyo: true, defaults: { ease: "power3.out" } });\`
+     \`tl.from(".title",    { y: 40, opacity: 0, duration: 1.4 });\`
+     \`tl.from(".subtitle", { y: 24, opacity: 0, duration: 1.2 }, "-=0.7");\`
+     \`tl.from(".product",  { scale: 0.85, opacity: 0, duration: 1.3, ease: "expo.out" }, "-=0.9");\`
+     \`tl.from(".cta",      { y: 20, opacity: 0, duration: 1.0 }, "-=0.5");\`
+     \`tl.to(".product",    { y: "-=10", duration: 3, ease: "sine.inOut", yoyo: true, repeat: 1 }, "+=0.3");\`
+     \`tl.to({},            { duration: ${format === '9:16' ? '4' : '2'} }); // final hold\`` : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
 
 8. HIGHLIGHTS & PRODUCT INTEGRATION:
    - Highlight 3-5 power words in a vibrant color (like text-yellow-400 or a gradient).
