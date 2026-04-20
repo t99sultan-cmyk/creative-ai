@@ -12,7 +12,12 @@ const CLOUD_RUN_URL =
   process.env.CLOUD_RUN_RENDER_URL ||
   'https://creative-cloud-renderer-694906438875.europe-west4.run.app/gcp/render/task';
 
-const MAX_HTML_LEN = 500_000; // 500 KB of HTML is already huge
+// HTML from Gemini embeds product images as base64 data URIs. With 4 product
+// images at ~1-2 MB each after background removal + WebP optimization, the
+// full HTML blob can reach 5-8 MB. 10 MB gives comfortable headroom without
+// inviting abuse. Cloud Run's own max request size is 32 MB, so we stay well
+// under that too.
+const MAX_HTML_LEN = 10_000_000; // 10 MB
 
 /**
  * POST request to Cloud Run with retry + exponential backoff.

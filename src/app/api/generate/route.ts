@@ -16,7 +16,11 @@ const MAX_REF_IMAGES = 4;
 const MAX_PRODUCT_IMAGES = 4;
 // Claude accepts base64 up to ~5 MB per image; we cap per-request total.
 const MAX_TOTAL_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB across all images
-const MAX_REMIX_HTML_LEN = 250_000; // chars
+// Raw remix HTML can carry several MB of embedded base64 product images.
+// We strip those out below (base64Regex → REMIX_PRESERVED_IMG_N) before
+// sending to Claude, so the effective Claude payload is small. This cap is
+// just a sanity check on the raw request.
+const MAX_REMIX_HTML_LEN = 10_000_000; // chars
 
 function approxBase64Bytes(dataUrlOrBase64: string): number {
   if (typeof dataUrlOrBase64 !== "string") return 0;
