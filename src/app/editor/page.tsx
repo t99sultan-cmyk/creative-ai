@@ -141,12 +141,15 @@ export default function Home() {
 
     let isPolling = true;
     const fetchStatuses = async () => {
-      // Use `cost` (in metadata, always available) instead of inspecting
-      // htmlCode for 'gsap'. Animated creatives cost 4 impulses, static
-      // cost 3 — so cost > 3 reliably identifies video renders that
-      // need status polling, without requiring htmlCode to be loaded yet.
+      // Animated detection: prefer htmlCode 'gsap' substring when loaded
+      // (reliable even for legacy creatives saved with cost=3), fall back
+      // to cost > 3 for items that don't have htmlCode yet. After the
+      // lazy-loader populates htmlCode, this effect re-runs (historyItems
+      // is in the deps array) and any missed animated items get picked up.
       const itemsToCheck = historyItems.filter(
-        (item: any) => (item.cost ?? 3) > 3 && !downloadedItems.includes(item.id),
+        (item: any) =>
+          (item.htmlCode?.includes('gsap') || (item.cost ?? 3) > 3) &&
+          !downloadedItems.includes(item.id),
       );
       for (const item of itemsToCheck) {
         if (!isPolling) break;
@@ -1046,7 +1049,11 @@ export default function Home() {
                                    setActiveCreativeId(item.id);
                                    setPrompt(item.prompt || "");
                                    setFormat(item.format || '9:16');
-                                   setIsAnimated((item.cost ?? 3) > 3);
+                                   // Animated = GSAP in HTML OR cost marks it (cost=4
+                                   // for animated in /api/generate). Check htmlCode
+                                   // first because legacy creatives were all saved
+                                   // with cost=3 regardless of animated flag.
+                                   setIsAnimated(html.includes('gsap') || (item.cost ?? 3) > 3);
                                    setShowHistory(false);
                                    setMobileTab('canvas');
                                  }}

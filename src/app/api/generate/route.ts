@@ -102,7 +102,12 @@ export async function POST(req: Request) {
       }
     }
 
-    const cost = 3;
+    // Animated creatives cost 4 impulses (video render in Cloud Run is
+    // expensive), static ones cost 3. The schema comment on `creative.cost`
+    // documents this convention — previously cost was hardcoded to 3
+    // regardless, which broke every UI path that relied on `cost > 3` to
+    // identify animated creatives (e.g. history modal, download button).
+    const cost = isAnimated ? 4 : 3;
 
     // ---- Lazy-create the user row on first generation (from Clerk). ----
     const userRecords = await db.select().from(users).where(eq(users.id, userId)).limit(1);
