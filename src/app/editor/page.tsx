@@ -869,7 +869,7 @@ export default function Home() {
                 <div className="p-4 sm:p-6 border-b border-neutral-100 flex-shrink-0">
                    <div className="flex items-center justify-between mb-0 sm:mb-3">
                      <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><PackageSearch className="w-5 h-5 sm:w-6 sm:h-6 text-hermes-500" /> Мои креативы ({historyItems.length})</h2>
-                     <button onClick={() => setShowHistory(false)} className="w-10 h-10 rounded-full flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 transition-colors">
+                     <button onClick={() => setShowHistory(false)} className="w-11 h-11 rounded-full flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 transition-colors" aria-label="Закрыть">
                        <X className="w-5 h-5 text-neutral-600" />
                      </button>
                    </div>
@@ -894,7 +894,10 @@ export default function Home() {
                      </AnimatePresence>
                    </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-neutral-100/50 flex flex-col sm:flex-row sm:flex-wrap gap-4 md:gap-6 items-center sm:items-start sm:justify-start content-start">
+                {/* Mobile: 2-column grid so the history list isn't an endless
+                    vertical scroll of full-screen cards. Desktop: keep the
+                    wrapping row layout with fixed-width cards. */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-neutral-100/50 grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:flex-wrap sm:gap-4 md:gap-6 items-start sm:justify-start content-start">
                    {historyItems.length === 0 ? (
                       <div className="w-full text-center text-neutral-400 font-bold py-20 bg-white rounded-3xl border border-neutral-100">Вы пока не создали ни одного креатива.</div>
                    ) : (
@@ -903,7 +906,7 @@ export default function Home() {
                         const isDownloaded = downloadedItems.includes(item.id);
                         
                         return (
-                          <div key={item.id} className="bg-white rounded-[24px] shadow-sm border border-neutral-200 overflow-hidden relative group flex flex-col w-full max-w-[320px] sm:w-[232px] shrink-0 hover:shadow-xl hover:border-neutral-300 transition-all duration-300 hover:-translate-y-1">
+                          <div key={item.id} className="bg-white rounded-2xl sm:rounded-[24px] shadow-sm border border-neutral-200 overflow-hidden relative group flex flex-col w-full sm:w-[232px] sm:max-w-[320px] shrink-0 hover:shadow-xl hover:border-neutral-300 transition-all duration-300 hover:-translate-y-1">
                             
                             {/* Top Bar: Format, Date & Delete */}
                             <div className="flex justify-between items-center p-3 border-b border-neutral-100 bg-white/50 backdrop-blur-md">
@@ -919,12 +922,13 @@ export default function Home() {
                                       >
                                         <Download className="w-3 h-3" /> Скачано
                                       </span>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); removeDownloadedState(item.id); }} 
-                                        className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-500 border border-neutral-200 rounded drop-shadow-sm transition-colors shrink-0"
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); removeDownloadedState(item.id); }}
+                                        className="w-7 h-7 sm:w-5 sm:h-5 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-neutral-500 border border-neutral-200 rounded drop-shadow-sm transition-colors shrink-0"
                                         title="Сбросить статус скачанного"
+                                        aria-label="Сбросить статус"
                                       >
-                                        <X className="w-3 h-3" />
+                                        <X className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                                       </button>
                                     </div>
                                   ) : backgroundStatuses[item.id] === 'done' ? (
@@ -950,12 +954,13 @@ export default function Home() {
                                         <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
                                         Сборка: {Math.min(renderJobs[item.id].totalFrames, Math.floor(((Date.now() - renderJobs[item.id].startTime) / 1000 / (renderJobs[item.id].totalFrames === 450 ? 100 : 60)) * renderJobs[item.id].totalFrames))} / {renderJobs[item.id].totalFrames}
                                       </span>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); cancelRender(item.id); }} 
-                                        className="w-5 h-5 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 rounded drop-shadow-sm transition-colors shrink-0"
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); cancelRender(item.id); }}
+                                        className="w-7 h-7 sm:w-5 sm:h-5 flex items-center justify-center bg-red-100 hover:bg-red-200 active:bg-red-300 text-red-600 border border-red-200 rounded drop-shadow-sm transition-colors shrink-0"
                                         title="Отменить очередь"
+                                        aria-label="Отменить рендер"
                                       >
-                                        <X className="w-3 h-3" />
+                                        <X className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                                       </button>
                                     </div>
                                   ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id] === 'rendering' || backgroundStatuses[item.id].startsWith('processing'))) ? (
@@ -964,12 +969,13 @@ export default function Home() {
                                         <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
                                         В очереди
                                       </span>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); cancelRender(item.id); }} 
-                                        className="w-5 h-5 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 rounded drop-shadow-sm transition-colors shrink-0"
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); cancelRender(item.id); }}
+                                        className="w-7 h-7 sm:w-5 sm:h-5 flex items-center justify-center bg-red-100 hover:bg-red-200 active:bg-red-300 text-red-600 border border-red-200 rounded drop-shadow-sm transition-colors shrink-0"
                                         title="Отменить очередь"
+                                        aria-label="Отменить рендер"
                                       >
-                                        <X className="w-3 h-3" />
+                                        <X className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                                       </button>
                                     </div>
                                   ) : backgroundStatuses[item.id] === 'error' ? (
@@ -982,20 +988,29 @@ export default function Home() {
                                     </span>
                                   )}
                                </div>
-                               <button 
+                               <button
                                   onClick={(e) => handleDeleteCreative(item.id, e)}
-                                  className="text-neutral-300 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-red-50 shrink-0"
+                                  className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-neutral-400 hover:text-red-500 active:bg-red-100 transition-colors rounded-md hover:bg-red-50 shrink-0"
                                   title="Удалить"
+                                  aria-label="Удалить креатив"
                                >
                                   <Trash2 className="w-4 h-4" />
                                </button>
                             </div>
 
                             {/* Creative Preview */}
-                            <div 
-                               className="w-full bg-neutral-50/50 flex items-center justify-center p-4 cursor-pointer relative"
+                            <div
+                               className="w-full bg-neutral-50/50 flex items-center justify-center p-2 sm:p-4 cursor-pointer relative"
                             >
-                               <div className={`shadow-lg bg-white rounded-xl overflow-hidden relative ${isVertical ? 'aspect-[9/16] w-[200px]' : 'aspect-square w-[200px]'}`}>
+                               {/* On mobile (2-col grid) preview uses container width
+                                   so it fits inside a ~150px column cell. On sm+ we
+                                   keep the classic 200px fixed box. */}
+                               <div className={clsx(
+                                 "shadow-lg bg-white rounded-xl overflow-hidden relative",
+                                 isVertical
+                                   ? "aspect-[9/16] w-[min(200px,100%)] sm:w-[200px]"
+                                   : "aspect-square w-[min(200px,100%)] sm:w-[200px]",
+                               )}>
                                   <iframe
                                      srcDoc={item.htmlCode}
                                      loading="lazy"
@@ -1057,10 +1072,17 @@ export default function Home() {
                                    setShowHistory(false);
                                    setMobileTab('canvas');
                                  }}
-                                 className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all duration-300 z-20"
+                                 /* On desktop (sm+): hidden overlay that fades in on hover,
+                                    scaled hero button, covers the whole card. On mobile:
+                                    touch has no hover, so the overlay is a permanently
+                                    visible bottom pill — users immediately see the card
+                                    is tappable. Note: opacity-0 does NOT block pointer
+                                    events so the click handler still fires on desktop
+                                    everywhere; no pointer-events overrides needed. */
+                                 className="absolute inset-x-0 bottom-0 sm:inset-0 bg-gradient-to-t from-black/70 to-transparent sm:bg-black/60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex flex-col items-center justify-end sm:justify-center pb-2 sm:pb-0 transition-all duration-300 z-20"
                                >
-                                  <div className="bg-white text-neutral-900 font-black px-5 py-3 rounded-2xl flex items-center gap-2 shadow-2xl transform scale-90 group-hover:scale-100 transition-all duration-300">
-                                     <Sparkles className="w-4 h-4" /> Посмотреть
+                                  <div className="bg-white text-neutral-900 font-black px-3 py-2 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-1.5 sm:gap-2 shadow-xl sm:shadow-2xl text-xs sm:text-base transform sm:scale-90 sm:group-hover:scale-100 transition-all duration-300">
+                                     <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Открыть
                                   </div>
                                </div>
                             </div>
@@ -1143,21 +1165,33 @@ export default function Home() {
                 Открыть кабинет →
               </Link>
             </div>
-            <div className="flex gap-2">
+            {/* flex-col on mobile: stacks input above button so neither is
+                squeezed on narrow viewports (iPhone SE ≈ 320px). flex-row
+                on sm+ brings back the inline look. text-base on input to
+                keep iOS from auto-zooming on focus. */}
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                 placeholder="PROMO-XXX-YYYY-ZZZZ"
-                className="flex-1 bg-white border border-hermes-200 rounded-lg px-3 py-2 text-sm uppercase outline-none focus:border-hermes-500 font-mono"
+                className="flex-1 bg-white border border-hermes-200 rounded-lg px-3 py-3 sm:py-2 text-base sm:text-sm uppercase outline-none focus:border-hermes-500 font-mono"
                 disabled={isRedeeming}
+                autoComplete="off"
+                autoCapitalize="characters"
               />
               <button
                 onClick={handleRedeem}
                 disabled={isRedeeming || !promoCode.trim()}
-                className="bg-hermes-600 hover:bg-hermes-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center min-w-[100px]"
+                className="bg-hermes-600 hover:bg-hermes-700 active:bg-hermes-800 disabled:opacity-50 text-white px-4 py-3 sm:py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2 sm:min-w-[100px]"
               >
-                {isRedeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "ОК"}
+                {isRedeeming ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Активация…
+                  </>
+                ) : (
+                  "Активировать"
+                )}
               </button>
             </div>
             {promoSuccess && <p className="text-xs text-green-600 font-bold mt-2">{promoSuccess}</p>}
@@ -1426,8 +1460,14 @@ export default function Home() {
               disabled={isLoading}
               readOnly={!!activeCreativeId}
               maxLength={500}
-              className={clsx("w-full bg-white border border-neutral-200 rounded-xl p-4 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500 transition-all resize-none shadow-sm placeholder:text-neutral-400", isLoading ? "opacity-50 cursor-not-allowed" : activeCreativeId ? "opacity-70 bg-neutral-50 h-24" : "h-40")}
-              placeholder="Опишите, что вы хотите... Например: 'Минималистичный рекламный постер с зелеными акцентами для курса по Upwork. Сделай крупный заголовок и кнопку Принять участие 👇'"
+              /* text-base (16px) on mobile prevents iOS Safari from auto-zooming.
+                 h-28 (112px) on mobile so the on-screen keyboard doesn't hide
+                 the rest of the form; h-40 (160px) back on sm+ for desktop comfort. */
+              className={clsx(
+                "w-full bg-white border border-neutral-200 rounded-xl p-4 text-base sm:text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500 transition-all resize-none shadow-sm placeholder:text-neutral-400",
+                isLoading ? "opacity-50 cursor-not-allowed" : activeCreativeId ? "opacity-70 bg-neutral-50 h-24" : "h-28 sm:h-40",
+              )}
+              placeholder="Опишите, что вы хотите... Например: 'Минималистичный рекламный постер с зелеными акцентами для курса по Upwork.'"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />

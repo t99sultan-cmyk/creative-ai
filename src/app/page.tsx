@@ -168,14 +168,14 @@ export default function LandingPage() {
                  <Sparkles className="w-4 h-4" /> ИИ-революция в маркетинге 2026
                </motion.div>
                
-               <motion.h1 
+               <motion.h1
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] text-transparent bg-clip-text bg-gradient-to-br from-neutral-900 to-neutral-600"
+                  className="text-[2rem] sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.15] sm:leading-[1.1] text-transparent bg-clip-text bg-gradient-to-br from-neutral-900 to-neutral-600"
                >
                  ИИ делает продающие креативы за <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500">60 секунд.</span><br/>
-                 <span className="text-4xl md:text-5xl lg:text-6xl text-neutral-900">Без дизайнера. Без съёмок.</span>
+                 <span className="text-[1.6rem] sm:text-4xl md:text-5xl lg:text-6xl text-neutral-900">Без дизайнера. Без съёмок.</span>
                </motion.h1>
 
                <motion.p 
