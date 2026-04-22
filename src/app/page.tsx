@@ -555,7 +555,12 @@ export default function LandingPage() {
             <Reveal>
                <div className="text-center mb-16">
                   <h2 className="text-4xl md:text-5xl font-extrabold text-neutral-900 mb-4">Выберите свой формат</h2>
-                  <p className="text-xl text-neutral-600">1 статичный креатив = 3 импульса. 1 видео (анимация) = 4 импульса.</p>
+                  <p className="text-base sm:text-lg text-neutral-600 leading-relaxed">
+                     Импульсы обновляются каждый месяц. Неиспользованные не переносятся.<br className="hidden sm:inline"/>
+                     <span className="font-semibold text-neutral-800">1 статика = 3 импульса</span>
+                     <span className="mx-2 text-neutral-300">·</span>
+                     <span className="font-semibold text-neutral-800">1 анимация = 4 импульса</span>
+                  </p>
                </div>
             </Reveal>
 
