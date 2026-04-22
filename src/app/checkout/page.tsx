@@ -2,9 +2,10 @@
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, CheckCircle2, ArrowLeft, Send, Receipt, CreditCard, ChevronRight, MessageCircle } from "lucide-react";
+import { Sparkles, CheckCircle2, ArrowLeft, Send, Receipt, CreditCard, ChevronRight, MessageCircle, QrCode, Link2 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -13,9 +14,15 @@ function CheckoutContent() {
   const impulses = searchParams.get("impulses") || "45";
   const { isSignedIn } = useAuth();
 
+  // Two payment entry points: tap-through deep-link for visitors on phone
+  // (opens Kaspi native), and a QR rendered inline for visitors on desktop
+  // who scan it with their phone. "link" is the default because ~70% of
+  // traffic is mobile.
+  const [payMethod, setPayMethod] = useState<"link" | "qr">("link");
+
   // Contact channels for the "send receipt" step. User chooses WhatsApp or
   // Telegram on step 3 depending on preference.
-  const KASPI_PAY_LINK = "https://pay.kaspi.kz/pay/7esn3yim";
+  const KASPI_PAY_LINK = "https://pay.kaspi.kz/pay/0p9drfes";
   const WA_NUMBER_E164 = "77765282788"; // +7 776 528 27 88
   const TG_USERNAME = "ai_creativekz"; // t.me/ai_creativekz
   const MESSAGE_TEXT = `Здравствуйте! Я оплатил пакет "${plan}" в AICreative.kz. Моя квитанция:`;
@@ -67,13 +74,72 @@ function CheckoutContent() {
              <div className="space-y-4 mb-8">
                 <div className="flex gap-4">
                   <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-black text-sm shrink-0">1</div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-bold text-neutral-800">Переведите сумму через Kaspi</p>
-                    <p className="text-sm text-neutral-500 mt-1 mb-3">Нажмите на кнопку ниже, чтобы перейти в приложение Kaspi и сделать перевод по нашему номеру телефона.</p>
-                    <a href={KASPI_PAY_LINK} target="_blank" rel="noreferrer" className="inline-flex items-center justify-between px-6 py-3 bg-[#f14635] text-white font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-red-500/20 w-full sm:w-auto">
-                       <span className="flex items-center gap-2"><CreditCard className="w-5 h-5"/> Оплатить на Kaspi</span>
-                       <ChevronRight className="w-5 h-5 opacity-50" />
-                    </a>
+                    <p className="text-sm text-neutral-500 mt-1 mb-3">Откройте Kaspi-ссылку с телефона или отсканируйте QR-код через камеру — откроется приложение Kaspi с уже заполненным переводом.</p>
+
+                    {/* Mode toggle: link (for mobile visitors tapping from
+                        their phone) vs QR (for desktop visitors who scan
+                        with phone). Rendered as a segmented control so it
+                        stays compact and doesn't look like a CTA itself. */}
+                    <div role="tablist" aria-label="Способ оплаты" className="inline-flex bg-neutral-100 p-1 rounded-xl mb-4">
+                       <button
+                         role="tab"
+                         aria-selected={payMethod === "link"}
+                         onClick={() => setPayMethod("link")}
+                         className={`px-4 py-2 text-sm font-bold rounded-lg inline-flex items-center gap-2 transition-colors ${
+                           payMethod === "link"
+                             ? "bg-white shadow-sm text-neutral-900"
+                             : "text-neutral-500 hover:text-neutral-800"
+                         }`}
+                       >
+                         <Link2 className="w-4 h-4" /> По ссылке
+                       </button>
+                       <button
+                         role="tab"
+                         aria-selected={payMethod === "qr"}
+                         onClick={() => setPayMethod("qr")}
+                         className={`px-4 py-2 text-sm font-bold rounded-lg inline-flex items-center gap-2 transition-colors ${
+                           payMethod === "qr"
+                             ? "bg-white shadow-sm text-neutral-900"
+                             : "text-neutral-500 hover:text-neutral-800"
+                         }`}
+                       >
+                         <QrCode className="w-4 h-4" /> По QR-коду
+                       </button>
+                    </div>
+
+                    {payMethod === "link" ? (
+                      <a
+                        href={KASPI_PAY_LINK}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-between px-6 py-3 bg-[#f14635] text-white font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-red-500/20 w-full sm:w-auto"
+                      >
+                        <span className="flex items-center gap-2"><CreditCard className="w-5 h-5"/> Оплатить на Kaspi</span>
+                        <ChevronRight className="w-5 h-5 opacity-50" />
+                      </a>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white rounded-2xl border border-neutral-200 p-4 sm:p-5 w-full sm:w-auto">
+                        {/* SVG render so the code stays crisp at every
+                            zoom level and doesn't eat extra paint cycles
+                            like a rasterized canvas would on re-render. */}
+                        <div className="bg-white p-2 rounded-lg border border-neutral-100 shrink-0 self-center">
+                          <QRCodeSVG
+                            value={KASPI_PAY_LINK}
+                            size={180}
+                            level="M"
+                            marginSize={0}
+                            bgColor="#ffffff"
+                            fgColor="#0f172a"
+                          />
+                        </div>
+                        <div className="text-sm text-neutral-600 leading-snug">
+                          <p className="font-bold text-neutral-900 mb-1">Отсканируйте с телефона</p>
+                          <p>Откройте камеру на смартфоне и наведите на код — откроется приложение Kaspi с уже заполненным переводом.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
