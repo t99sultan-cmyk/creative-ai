@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
 import { ruRU } from '@clerk/localizations';
 import { MetaPixel } from '@/components/MetaPixel';
+import { YandexMetrika } from '@/components/YandexMetrika';
 import { RegistrationTracker } from '@/components/RegistrationTracker';
 import './globals.css';
 
@@ -92,6 +93,10 @@ export default function RootLayout({
         <body className={`${inter.variable} font-sans antialiased`}>
           {/* Meta Pixel — global base script + SPA-aware PageView tracker */}
           <MetaPixel />
+          {/* Yandex.Metrika — counter 108720841 (via env). Same SPA-aware
+              pattern as the Meta Pixel so client-side navigations are
+              logged as separate hits. */}
+          <YandexMetrika />
           {/* Fires `CompleteRegistration` exactly once when a freshly-signed
               up Clerk user lands on any page. Mounted here so it covers the
               full app (users often land on /editor right after Clerk's

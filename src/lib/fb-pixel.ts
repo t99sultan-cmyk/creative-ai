@@ -18,13 +18,29 @@ import { estimateRevenueKztFromImpulses } from "@/lib/pricing";
 
 export const FB_CURRENCY = "KZT" as const;
 
-/** Raw event-firing primitive. */
-export function trackFbEvent(event: string, params?: Record<string, unknown>): void {
+/** Raw event-firing primitive.
+ *
+ * The optional `eventId` is what Meta uses to dedupe this browser-pixel
+ * fire against the matching server-side CAPI fire (see @/lib/fb-capi).
+ * Both sides MUST pass the same string for the same logical event.
+ * When provided, it's forwarded as Meta's `eventID` option (note the
+ * capital-D — that's their wire format). If omitted, the event is sent
+ * standalone and de-duplication falls back to user/time-window matching
+ * on Meta's end.
+ */
+export function trackFbEvent(
+  event: string,
+  params?: Record<string, unknown>,
+  eventId?: string,
+): void {
   if (typeof window === "undefined") return;
   const fbq = window.fbq;
   if (typeof fbq !== "function") return;
   try {
-    if (params) fbq("track", event, params);
+    const opts = eventId ? { eventID: eventId } : undefined;
+    if (params && opts) fbq("track", event, params, opts);
+    else if (params) fbq("track", event, params);
+    else if (opts) fbq("track", event, {}, opts);
     else fbq("track", event);
   } catch {
     // Pixel errors should never break the app — swallow.
@@ -33,14 +49,25 @@ export function trackFbEvent(event: string, params?: Record<string, unknown>): v
 
 /**
  * Fire CompleteRegistration. Called once per user after Clerk successfully
- * signs them up. De-duplication is handled in <RegistrationTracker />.
+ * signs them up. Browser-side dedup (once per user-id in localStorage) is
+ * handled in <RegistrationTracker />; cross-channel dedup with the CAPI
+ * fire in the Clerk webhook is handled via a deterministic event id of
+ * the form `reg_<clerkUserId>`.
  */
-export function trackRegistration(opts?: { method?: "email" | "google" | "other" }): void {
-  trackFbEvent("CompleteRegistration", {
-    content_name: "AICreative account",
-    status: "completed",
-    ...(opts?.method ? { registration_method: opts.method } : {}),
-  });
+export function trackRegistration(opts?: {
+  method?: "email" | "google" | "other";
+  userId?: string;
+}): void {
+  const eventId = opts?.userId ? `reg_${opts.userId}` : undefined;
+  trackFbEvent(
+    "CompleteRegistration",
+    {
+      content_name: "AICreative account",
+      status: "completed",
+      ...(opts?.method ? { registration_method: opts.method } : {}),
+    },
+    eventId,
+  );
 }
 
 /**
@@ -75,12 +102,21 @@ export function trackInitiateCheckout(tier: {
  */
 export function trackPurchase(opts: { impulses: number; code?: string }): void {
   const value = estimateRevenueKztFromImpulses(opts.impulses);
-  trackFbEvent("Purchase", {
-    value,
-    currency: FB_CURRENCY,
-    content_name: `+${opts.impulses} impulses`,
-    content_ids: opts.code ? [opts.code] : [`promo_${opts.impulses}`],
-    content_category: "promo_redemption",
-    num_items: 1,
-  });
+  // Event id matches the server-side CAPI fire in `redeemPromoCode` so
+  // Meta can dedupe browser + server events for the same redemption.
+  // If the caller didn't pass a code we still emit the event, just
+  // without cross-channel dedup (better than dropping the conversion).
+  const eventId = opts.code ? `promo_${opts.code.trim().toUpperCase()}` : undefined;
+  trackFbEvent(
+    "Purchase",
+    {
+      value,
+      currency: FB_CURRENCY,
+      content_name: `+${opts.impulses} impulses`,
+      content_ids: opts.code ? [opts.code] : [`promo_${opts.impulses}`],
+      content_category: "promo_redemption",
+      num_items: 1,
+    },
+    eventId,
+  );
 }

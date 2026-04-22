@@ -54,7 +54,10 @@ export function RegistrationTracker() {
           : ("other" as const)
         : ("email" as const);
 
-      trackRegistration({ method });
+      // Pass userId so the pixel fires with eventID = `reg_<userId>`.
+      // The Clerk `user.created` webhook emits the same id via CAPI —
+      // Meta dedupes the pair (see @/lib/fb-capi).
+      trackRegistration({ method, userId: user.id });
     }
 
     try {

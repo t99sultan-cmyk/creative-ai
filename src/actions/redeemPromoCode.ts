@@ -5,6 +5,9 @@ import { promoCodes, users } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { sendCapiEvent } from "@/lib/fb-capi";
+import { estimateRevenueKztFromImpulses } from "@/lib/pricing";
 
 /**
  * Redeem a promo code → add its impulses to the current user's balance.
@@ -90,6 +93,46 @@ export async function redeemPromoCode(code: string) {
     // Revalidate both pages that show balance so the UI updates fast.
     revalidatePath("/editor");
     revalidatePath("/account");
+
+    // Mirror the browser-pixel Purchase fire via Meta CAPI so the
+    // conversion still lands even if the user's browser blocks Meta
+    // requests (iOS ATT, ad-blockers). Event id matches what
+    // `trackPurchase` sends from the client — Meta dedupes the pair.
+    //
+    // We resolve the user's email lazily: if we just inserted the row
+    // above we have `clerkUser`, otherwise we use whatever is on the
+    // existing DB row (which Clerk keeps fresh via webhook).
+    try {
+      const headerPayload = await headers();
+      const capiEmail =
+        userRecord?.email ||
+        (await currentUser())?.emailAddresses[0]?.emailAddress ||
+        undefined;
+
+      await sendCapiEvent({
+        eventName: "Purchase",
+        eventId: `promo_${cleanCode}`,
+        user: {
+          email: capiEmail,
+          externalId: userId,
+          clientIp:
+            headerPayload.get("x-forwarded-for")?.split(",")[0].trim() ??
+            undefined,
+          clientUserAgent: headerPayload.get("user-agent") ?? undefined,
+        },
+        customData: {
+          value: estimateRevenueKztFromImpulses(added),
+          currency: "KZT",
+          content_name: `+${added} impulses`,
+          content_ids: [cleanCode],
+          content_category: "promo_redemption",
+          num_items: 1,
+        },
+      });
+    } catch (capiErr) {
+      // Never fail a real redemption because of a Meta call. Log and move on.
+      console.error("[redeemPromoCode] CAPI Purchase failed:", capiErr);
+    }
 
     return { success: true, impulsesAdded: added };
   } catch (error) {

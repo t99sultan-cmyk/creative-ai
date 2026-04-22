@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import { WebhookEvent } from '@clerk/nextjs/server'
 import { db } from '@/db'
 import { users } from '@/db/schema'
+import { sendCapiEvent } from '@/lib/fb-capi'
 
 export async function POST(req: Request) {
   // You can find this in the Clerk Dashboard -> Webhooks -> choose the endpoint
@@ -70,6 +71,28 @@ export async function POST(req: Request) {
         console.error('Error inserting user to database', err)
         return new Response('Error saving user', { status: 500 })
       }
+
+      // Fire CompleteRegistration to Meta via CAPI. The event id matches
+      // what <RegistrationTracker /> emits from the browser (`reg_<id>`)
+      // so Meta dedupes the pair and counts one conversion, not two.
+      // We await here so Vercel's serverless function doesn't terminate
+      // before the request lands; the 3.5s timeout inside sendCapiEvent
+      // guarantees this won't stall the webhook response past Clerk's
+      // retry threshold.
+      await sendCapiEvent({
+        eventName: 'CompleteRegistration',
+        eventId: `reg_${id}`,
+        user: {
+          email,
+          externalId: id,
+          clientIp: headerPayload.get('x-forwarded-for')?.split(',')[0].trim() ?? undefined,
+          clientUserAgent: headerPayload.get('user-agent') ?? undefined,
+        },
+        customData: {
+          content_name: 'AICreative account',
+          status: 'completed',
+        },
+      })
     }
   }
 
