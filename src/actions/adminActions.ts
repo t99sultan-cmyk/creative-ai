@@ -528,7 +528,10 @@ export async function getUserHistory(
   const safeOffset = Math.max(0, Math.floor(offset));
 
   try {
-    const [history, totalRows] = await Promise.all([
+    // Admin panel ALWAYS includes soft-deleted rows — that's the point.
+    // UI marks them visually (see Admin history modal: deletedAt is surfaced
+    // as `item.deletedAt` and rendered with a red "Удалено" badge).
+    const [history, totalRows, liveRows] = await Promise.all([
       db.select()
         .from(creatives)
         .where(eq(creatives.userId, userId))
@@ -538,15 +541,22 @@ export async function getUserHistory(
       db.select({ c: sql<number>`count(*)::int` })
         .from(creatives)
         .where(eq(creatives.userId, userId)),
+      db.select({ c: sql<number>`count(*)::int` })
+        .from(creatives)
+        .where(and(eq(creatives.userId, userId), sql`${creatives.deletedAt} IS NULL`)),
     ]);
 
     const totalCount = totalRows[0]?.c ?? 0;
+    const activeCount = liveRows[0]?.c ?? 0;
+    const deletedCount = Math.max(0, totalCount - activeCount);
     const hasMore = safeOffset + history.length < totalCount;
 
     return {
       success: true as const,
       history,
       totalCount,
+      activeCount,
+      deletedCount,
       hasMore,
       offset: safeOffset,
       limit: safeLimit,
@@ -583,6 +593,187 @@ export async function getUserAuditLog(userId: string, limit = 50) {
     const rows = await getAuditLogForUser(userId, limit);
     return { success: true as const, rows };
   } catch (e: any) {
+    return { success: false as const, error: e.message };
+  }
+}
+
+/**
+ * Resolve a downloadable target for an arbitrary creative (any user's).
+ *
+ * Usage from the admin panel: admin views a user's creative-history modal,
+ * clicks "Скачать" on a row. This action returns a `downloadUrl` the client
+ * can <a href=""> or trigger — either a direct GCS mp4 link, or a blob-url
+ * built from the raw htmlCode so admin gets the source as a fallback.
+ *
+ * Every hit is written to the audit log so we can trace which admin pulled
+ * which customer's file and when.
+ */
+export async function adminDownloadCreative(creativeId: string) {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  if (typeof creativeId !== "string" || creativeId.trim().length === 0) {
+    return { success: false as const, error: "Неверный id креатива." };
+  }
+
+  try {
+    const row = await db.query.creatives.findFirst({
+      where: eq(creatives.id, creativeId),
+    });
+    if (!row) {
+      return { success: false as const, error: "Креатив не найден." };
+    }
+
+    const v = row.videoUrl ?? "";
+
+    // Audit every download attempt — success or not.
+    await recordAdminAction({
+      action: "admin_download_creative",
+      targetType: "creative",
+      targetId: creativeId,
+      meta: { ownerUserId: row.userId, format: row.format, videoStatus: v.split(":")[0] || "none" },
+    }).catch(() => undefined);
+
+    // Case 1: video is ready — admin just downloads the MP4 directly.
+    if (v.startsWith("http://") || v.startsWith("https://")) {
+      return {
+        success: true as const,
+        kind: "video" as const,
+        url: v,
+        filename: `creative_${creativeId}.mp4`,
+      };
+    }
+
+    // Case 2: video failed / cancelled.
+    if (v.startsWith("failed:")) {
+      return {
+        success: false as const,
+        error: `Рендер этого креатива помечен как failed: ${v.slice("failed:".length)}`,
+      };
+    }
+
+    // Case 3: video still rendering. Admin can download the source HTML
+    // for debugging meanwhile.
+    if (v.startsWith("rendering:")) {
+      if (!row.htmlCode) {
+        return { success: false as const, error: "Рендер ещё идёт, исходный HTML недоступен." };
+      }
+      return {
+        success: true as const,
+        kind: "html" as const,
+        html: row.htmlCode,
+        filename: `creative_${creativeId}_source.html`,
+        warning: "Видео ещё рендерится — скачан исходный HTML для отладки.",
+      };
+    }
+
+    // Case 4: never-rendered creative (static) — give the HTML so admin can
+    // open it in a browser and screenshot / repurpose.
+    if (row.htmlCode) {
+      return {
+        success: true as const,
+        kind: "html" as const,
+        html: row.htmlCode,
+        filename: `creative_${creativeId}.html`,
+      };
+    }
+
+    return { success: false as const, error: "Ни видео, ни HTML у этого креатива нет." };
+  } catch (e: any) {
+    console.error("adminDownloadCreative error:", e);
+    return { success: false as const, error: e.message };
+  }
+}
+
+/**
+ * Admin impersonation via Clerk sign-in tokens.
+ *
+ * Flow:
+ *   1. Admin clicks "Войти как <email>" in the CRM row.
+ *   2. We call Clerk's backend API to create a one-time sign-in ticket
+ *      scoped to the target user.
+ *   3. We return the ticket URL; the client-side redirects admin to it.
+ *   4. Clerk silently swaps the session: admin is now signed in AS the
+ *      target user (single-session mode, the admin's previous session is
+ *      replaced).
+ *   5. A persistent banner (see ImpersonationBanner component) appears on
+ *      every page while this cookie is set, offering "Выйти и вернуться
+ *      к админке" — which signs out and lands back on the landing.
+ *
+ * Security:
+ *   - Only admins (ADMIN_EMAILS) can trigger this.
+ *   - The audit log records who impersonated whom and when.
+ *   - We DO NOT persist the real admin's identity in a cookie in plain
+ *     text — the banner just asks the admin to re-sign-in after they're
+ *     done. This avoids accidental privilege preservation.
+ */
+export async function adminImpersonateUser(targetUserId: string) {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  if (typeof targetUserId !== "string" || targetUserId.trim().length === 0) {
+    return { success: false as const, error: "Неверный userId." };
+  }
+
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!secret) {
+    return {
+      success: false as const,
+      error: "CLERK_SECRET_KEY не настроен на сервере.",
+    };
+  }
+
+  try {
+    // Fetch target's email for the audit log + pretty banner label.
+    const target = await db.query.users.findFirst({ where: eq(users.id, targetUserId) });
+
+    // Clerk Backend API: create a sign-in token valid for a single use.
+    // docs: https://clerk.com/docs/reference/backend-api/tag/Sign-In-Tokens
+    const resp = await fetch("https://api.clerk.com/v1/sign_in_tokens", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: targetUserId,
+        // 15 minutes — plenty of time for admin to click through.
+        expires_in_seconds: 900,
+      }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return {
+        success: false as const,
+        error: `Clerk вернул ${resp.status}: ${text.slice(0, 300)}`,
+      };
+    }
+
+    const data = (await resp.json()) as { token?: string; url?: string; id?: string };
+    if (!data.token) {
+      return { success: false as const, error: "Clerk не вернул token." };
+    }
+
+    // Clerk's sign-in-token consumption URL. We construct it to land on /editor
+    // right after the session swap so admin is immediately in the user's
+    // editor view.
+    const consumeUrl = `/sign-in?__clerk_ticket=${encodeURIComponent(data.token)}&redirect_url=${encodeURIComponent("/editor?impersonating=1")}`;
+
+    await recordAdminAction({
+      action: "impersonate_user",
+      targetType: "user",
+      targetId: targetUserId,
+      meta: { targetEmail: target?.email ?? null, tokenId: data.id ?? null },
+    }).catch(() => undefined);
+
+    return {
+      success: true as const,
+      url: consumeUrl,
+      targetEmail: target?.email ?? null,
+    };
+  } catch (e: any) {
+    console.error("adminImpersonateUser error:", e);
     return { success: false as const, error: e.message };
   }
 }

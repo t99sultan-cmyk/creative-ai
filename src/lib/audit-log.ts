@@ -8,7 +8,9 @@ export type AdminAction =
   | "toggle_ban"
   | "create_promo"
   | "delete_promo"
-  | "delete_user";
+  | "delete_user"
+  | "admin_download_creative"
+  | "impersonate_user";
 
 export type AdminAuditMeta = Record<string, unknown>;
 
@@ -20,7 +22,7 @@ export type AdminAuditMeta = Record<string, unknown>;
  */
 export async function recordAdminAction(params: {
   action: AdminAction;
-  targetType?: "user" | "promo" | null;
+  targetType?: "user" | "promo" | "creative" | null;
   targetId?: string | null;
   meta?: AdminAuditMeta;
 }): Promise<void> {

@@ -10,6 +10,8 @@ import {
   toggleUserBan,
   getAdminStats,
   getAdminAuditLog,
+  adminDownloadCreative,
+  adminImpersonateUser,
   type UserStatusFilter,
 } from "@/actions/adminActions";
 import { useRouter } from "next/navigation";
@@ -32,6 +34,8 @@ import {
   TrendingUpIcon,
   ShieldAlertIcon,
   ActivityIcon,
+  DownloadIcon,
+  UserCogIcon,
 } from "lucide-react";
 
 function formatKzt(n: number): string {
@@ -98,6 +102,30 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
       alert("Ошибка бана: " + res.error);
     }
     setSaving(false);
+  };
+
+  const handleImpersonate = async () => {
+    const ok = confirm(
+      `Войти под аккаунтом ${u.email}?\n\n` +
+      `Ты увидишь приложение глазами пользователя — его балансом, историей ` +
+      `и скачиваниями. Текущая админ-сессия будет заменена.\n\n` +
+      `Чтобы вернуться в админку — выйди через UserButton и войди снова как админ.\n\n` +
+      `Действие пишется в audit log.`
+    );
+    if (!ok) return;
+    setSaving(true);
+    const res = await adminImpersonateUser(u.id);
+    if (res.success && res.url) {
+      // Remember the impersonation locally so the banner on /editor can
+      // show the target email without an extra DB call.
+      try {
+        sessionStorage.setItem("impersonating_email", res.targetEmail || u.email);
+      } catch {}
+      window.location.href = res.url;
+    } else {
+      alert("Не удалось войти: " + res.error);
+      setSaving(false);
+    }
   };
 
   return (
@@ -179,6 +207,15 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
             className="text-xs w-full justify-center bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 flex items-center transition-colors"
           >
             <HistoryIcon className="w-3.5 h-3.5 mr-1" /> История
+          </button>
+
+          <button
+            onClick={handleImpersonate}
+            disabled={saving || u.isBanned}
+            className="text-xs w-full justify-center px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Войти как этот пользователь"
+          >
+            <UserCogIcon className="w-3.5 h-3.5 mr-1" /> Войти как
           </button>
 
           <button
@@ -276,6 +313,8 @@ export default function AdminPage() {
   const [userHistory, setUserHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyTotalCount, setHistoryTotalCount] = useState(0);
+  const [historyActiveCount, setHistoryActiveCount] = useState(0);
+  const [historyDeletedCount, setHistoryDeletedCount] = useState(0);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
 
@@ -380,11 +419,15 @@ export default function AdminPage() {
     // Reset paginated state when opening a new user's history.
     setUserHistory([]);
     setHistoryTotalCount(0);
+    setHistoryActiveCount(0);
+    setHistoryDeletedCount(0);
     setHistoryHasMore(false);
     const res = await getUserHistory(userId, HISTORY_PAGE_SIZE, 0);
     if (res.success) {
        setUserHistory((res.history as any[]) || []);
        setHistoryTotalCount(res.totalCount ?? 0);
+       setHistoryActiveCount((res as any).activeCount ?? 0);
+       setHistoryDeletedCount((res as any).deletedCount ?? 0);
        setHistoryHasMore(res.hasMore ?? false);
     } else {
        alert("Ошибка загрузки истории");
@@ -404,6 +447,33 @@ export default function AdminPage() {
       alert("Ошибка загрузки следующей страницы");
     }
     setHistoryLoadingMore(false);
+  };
+
+  const handleAdminDownload = async (creativeId: string) => {
+    const res = await adminDownloadCreative(creativeId);
+    if (!res.success) {
+      alert("Ошибка скачивания: " + res.error);
+      return;
+    }
+    if (res.kind === "video") {
+      // MP4 is public in the GCS bucket — direct link works.
+      window.open(res.url, "_blank", "noopener");
+      return;
+    }
+    if (res.kind === "html") {
+      // Package the raw HTML source into a client-side blob so admin gets
+      // a .html file they can open in a browser.
+      const blob = new Blob([res.html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      if (res.warning) alert(res.warning);
+    }
   };
 
   const openAuditLog = async () => {
@@ -787,13 +857,25 @@ export default function AdminPage() {
               <div>
                 <h2 className="text-xl font-bold">История Креативов</h2>
                 <p className="text-sm text-neutral-500">
-                  ID пользователя: {historyModalUser}
+                  ID: {historyModalUser}
                   {historyTotalCount > 0 && (
                     <span className="ml-2 bg-neutral-200 text-neutral-700 px-2 py-0.5 rounded-full font-mono text-xs">
-                      {userHistory.length} / {historyTotalCount}
+                      показано {userHistory.length} / {historyTotalCount}
                     </span>
                   )}
                 </p>
+                {historyTotalCount > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px]">
+                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">
+                      ✓ Активно: {historyActiveCount}
+                    </span>
+                    {historyDeletedCount > 0 && (
+                      <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">
+                        🗑 Удалено: {historyDeletedCount}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setHistoryModalUser(null)}
@@ -812,11 +894,23 @@ export default function AdminPage() {
               ) : (
                 <div className="grid grid-cols-1 gap-6 pb-4">
                   {userHistory.map((item) => (
-                    <div key={item.id} className="border border-neutral-200 rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row bg-white">
+                    <div
+                      key={item.id}
+                      className={`border rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row transition-colors ${
+                        item.deletedAt
+                          ? 'border-red-200 bg-red-50/40'
+                          : 'border-neutral-200 bg-white'
+                      }`}
+                    >
 
                       {/* Left: Metadata & Prompt */}
                       <div className="p-5 flex-1 space-y-4 border-b md:border-b-0 md:border-r border-neutral-100">
-                         <div className="flex flex-wrap gap-2 text-xs font-bold font-mono">
+                         <div className="flex flex-wrap gap-2 text-xs font-bold font-mono items-center">
+                            {item.deletedAt && (
+                              <span className="bg-red-600 text-white px-2 py-1 rounded uppercase tracking-wider font-bold">
+                                🗑 Удалено пользователем
+                              </span>
+                            )}
                             <span className="bg-neutral-100 px-2 py-1 rounded">Формат: {item.format}</span>
                             <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded">Токены: {item.cost} ⚡</span>
                             {item.apiCostKzt > 0 && (
@@ -825,11 +919,16 @@ export default function AdminPage() {
                                </span>
                             )}
                             <span className="bg-neutral-100 px-2 py-1 rounded">{new Date(item.createdAt).toLocaleString("ru-RU")}</span>
+                            {item.deletedAt && (
+                              <span className="bg-red-100 text-red-700 px-2 py-1 rounded">
+                                Удалено: {new Date(item.deletedAt).toLocaleString("ru-RU")}
+                              </span>
+                            )}
                          </div>
 
                          <div>
                             <h4 className="text-xs uppercase font-bold text-neutral-400 mb-1">Задание (Промпт)</h4>
-                            <p className="text-sm text-neutral-700 bg-neutral-50 p-3 rounded-xl border border-neutral-100 whitespace-pre-wrap leading-relaxed">
+                            <p className="text-sm text-neutral-700 bg-white p-3 rounded-xl border border-neutral-100 whitespace-pre-wrap leading-relaxed">
                               {item.prompt}
                             </p>
                          </div>
@@ -838,6 +937,18 @@ export default function AdminPage() {
                                Оценка ИИ: {item.feedbackScore === 1 ? '👍 Понравилось' : '👎 Не понравилось'}
                             </div>
                          )}
+
+                         {/* Admin action — download the creative (video if
+                             rendered, else source HTML). Audit-logged. */}
+                         <div className="pt-1">
+                           <button
+                             onClick={() => handleAdminDownload(item.id)}
+                             className="inline-flex items-center gap-2 text-xs font-bold bg-neutral-900 text-white px-3 py-2 rounded-lg hover:bg-neutral-800 active:scale-95 transition-all"
+                           >
+                             <DownloadIcon className="w-4 h-4" />
+                             Скачать
+                           </button>
+                         </div>
                       </div>
 
                       {/* Right: Rendered HTML iframe preview */}

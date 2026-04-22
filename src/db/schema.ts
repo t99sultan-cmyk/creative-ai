@@ -23,6 +23,12 @@ export const creatives = pgTable("creative", {
   feedbackScore: integer("feedback_score"), // 1 for Like, -1 for Dislike, null for unrated
   feedbackText: text("feedback_text"), // Text comment from user telling the AI what went wrong/right
   createdAt: timestamp("created_at").defaultNow(),
+  /** Soft-delete timestamp. When set, the user can no longer see this
+   *  creative in their editor history, but it stays in the DB and is
+   *  still visible to admins in the CRM (marked as deleted). Enables
+   *  "ghost audit" for support and dispute resolution. Nothing is ever
+   *  hard-deleted now. */
+  deletedAt: timestamp("deleted_at"),
 });
 
 /**

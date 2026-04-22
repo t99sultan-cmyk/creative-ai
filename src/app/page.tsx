@@ -180,7 +180,13 @@ export default function LandingPage() {
                >
                  ИИ делает продающие креативы за{" "}
                  <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500 tabular-nums">
-                   <CountdownLoop from={60} to={0} tickMs={100} suffix=" сек." />
+                   {/* One-shot countdown: starts at 120, ticks down every
+                       100ms, stops at 10 and stays. Visually demonstrates
+                       "we go from two minutes of human work down to 10
+                       seconds" — the result stays on screen so the viewer
+                       reads the final promise, not a constantly-flashing
+                       ticker. */}
+                   <CountdownLoop from={120} to={10} tickMs={100} loop={false} suffix=" сек." />
                  </span>
                  <br/>
                  <span className="text-[1.6rem] sm:text-4xl md:text-5xl lg:text-6xl text-neutral-900">Без дизайнера. Без съёмок.</span>

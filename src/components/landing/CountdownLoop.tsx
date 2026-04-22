@@ -6,28 +6,38 @@ import { useInView } from "framer-motion";
 type Props = {
   /** Starting value. */
   from?: number;
-  /** End value (exclusive — loop resets after reaching it). */
+  /** End value. When loop is true, resets back to `from` after reaching
+   *  this. When loop is false, stops ticking and stays on this value. */
   to?: number;
   /** Milliseconds between each tick. */
   tickMs?: number;
   /** Suffix after the digits. */
   suffix?: string;
+  /** If true (default), restart from `from` after hitting `to`. If false,
+   *  the counter runs once `from` → `to` and then halts. */
+  loop?: boolean;
   className?: string;
 };
 
 /**
- * Looping countdown used in the hero. Shows "60, 59, 58, …, 1, 0" then
- * resets to 60 — visually hammers the "60 seconds to a creative" claim.
+ * Countdown used in the hero. Two modes:
+ *
+ *  - loop:true  → e.g. 60, 59, …, 0, 60, 59, … — visually hammers a "how
+ *                 fast" promise by continuously replaying the descent.
+ *  - loop:false → e.g. 120, 119, …, 10 and stops. One-shot animation that
+ *                 settles on the bottom value, used when we want the final
+ *                 number to stay visible (e.g. "our goal: 10 seconds").
  *
  * Only ticks while in the viewport (useInView) + while the tab is visible
- * (document.visibilityState). Otherwise we'd burn React re-renders every
- * second for someone who closed the tab or scrolled past.
+ * (document.visibilityState). Otherwise we'd burn React re-renders for
+ * someone who closed the tab or scrolled away.
  */
 export function CountdownLoop({
   from = 60,
   to = 0,
   tickMs = 1000,
   suffix = "",
+  loop = true,
   className,
 }: Props) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -40,21 +50,30 @@ export function CountdownLoop({
     let id: ReturnType<typeof setInterval> | null = null;
 
     const tick = () => {
-      // Only count down when the tab is visible — no point burning CPU
-      // on a counter the user can't see.
       if (typeof document !== "undefined" && document.hidden) return;
-      setN((curr) => (curr <= to ? from : curr - 1));
+      setN((curr) => {
+        if (curr <= to) {
+          if (loop) return from; // restart
+          // one-shot done — stop the interval so we don't waste ticks.
+          if (id !== null) {
+            clearInterval(id);
+            id = null;
+          }
+          return to;
+        }
+        return curr - 1;
+      });
     };
 
     id = setInterval(tick, tickMs);
     return () => {
       if (id !== null) clearInterval(id);
     };
-  }, [inView, from, to, tickMs]);
+  }, [inView, from, to, tickMs, loop]);
 
   return (
     <span ref={ref} className={className}>
-      <span className="tabular-nums inline-block min-w-[2ch] text-right">{n}</span>
+      <span className="tabular-nums inline-block min-w-[3ch] text-right">{n}</span>
       {suffix}
     </span>
   );

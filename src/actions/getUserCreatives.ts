@@ -3,7 +3,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/db';
 import { creatives } from '@/db/schema';
-import { and, eq, desc, inArray } from 'drizzle-orm';
+import { and, eq, desc, inArray, isNull } from 'drizzle-orm';
 
 /**
  * Cap on how many creatives the editor's history modal ever pulls at once.
@@ -34,6 +34,8 @@ export async function getUserCreatives() {
       return { success: false, error: 'Unauthorized' };
     }
 
+    // Soft-delete aware: users never see creatives they've deleted.
+    // (Admin panel still sees them via getUserHistory.)
     const userCreatives = await db
       .select({
         id: creatives.id,
@@ -45,7 +47,7 @@ export async function getUserCreatives() {
         createdAt: creatives.createdAt,
       })
       .from(creatives)
-      .where(eq(creatives.userId, userId))
+      .where(and(eq(creatives.userId, userId), isNull(creatives.deletedAt)))
       .orderBy(desc(creatives.createdAt))
       .limit(MAX_HISTORY_ITEMS);
 
@@ -90,7 +92,13 @@ export async function getCreativeHtml(ids: string[]) {
         htmlCode: creatives.htmlCode,
       })
       .from(creatives)
-      .where(and(eq(creatives.userId, userId), inArray(creatives.id, clean)));
+      .where(
+        and(
+          eq(creatives.userId, userId),
+          inArray(creatives.id, clean),
+          isNull(creatives.deletedAt),
+        ),
+      );
 
     const htmlMap: Record<string, string> = {};
     for (const r of rows) {

@@ -13,6 +13,7 @@ import { deleteUserCreative } from "@/actions/deleteUserCreative";
 import { cancelGeneration } from "@/actions/generationActions";
 import { buildLoadingTexts, optimizeImageToWebP } from "@/lib/editor-utils";
 import { VideoRecordingModal } from "@/components/editor/VideoRecordingModal";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
@@ -860,6 +861,10 @@ export default function Home() {
 
   return (
     <main className="flex h-screen w-full overflow-hidden text-neutral-900 font-sans relative z-0">
+      {/* Shows a warning banner when an admin is impersonating a user via
+          the /admin "Войти как" flow. Offers a one-click sign-out back to
+          /admin. */}
+      <ImpersonationBanner />
       
       {/* HISTORY BANK OVERLAY */}
       <AnimatePresence>
