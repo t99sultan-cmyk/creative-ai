@@ -8,6 +8,7 @@ import { toPng } from "html-to-image";
 import { useUser } from "@clerk/nextjs";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
+import { trackPurchase } from "@/lib/fb-pixel";
 import { getUserCreatives, getCreativeHtml } from "@/actions/getUserCreatives";
 import { deleteUserCreative } from "@/actions/deleteUserCreative";
 import { cancelGeneration } from "@/actions/generationActions";
@@ -402,6 +403,11 @@ export default function Home() {
         setPromoSuccess(`Успешно! Начислено +${result.impulsesAdded} ⚡️`);
         if (impulses !== null && result.impulsesAdded) {
           setImpulses(impulses + result.impulsesAdded);
+        }
+        // Meta Pixel conversion — fire Purchase with KZT value derived
+        // from impulses so FB Ads Manager ROAS lines up with real revenue.
+        if (result.impulsesAdded) {
+          trackPurchase({ impulses: result.impulsesAdded, code: promoCode });
         }
         setPromoCode("");
         setTimeout(() => {

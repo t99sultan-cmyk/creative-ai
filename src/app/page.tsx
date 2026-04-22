@@ -19,6 +19,7 @@ import { GoldParticles } from "@/components/landing/GoldParticles";
 import { TiltCard } from "@/components/landing/TiltCard";
 import { CountUp } from "@/components/landing/CountUp";
 import { CountdownLoop } from "@/components/landing/CountdownLoop";
+import { trackInitiateCheckout } from "@/lib/fb-pixel";
 
 // --- DATA ---
 type Transformation = {
@@ -612,13 +613,30 @@ export default function LandingPage() {
                               ? "bg-gradient-to-r from-hermes-500 to-amber-500 text-white shadow-[0_0_20px_rgba(243,112,33,0.35)] hover:opacity-90 active:scale-[0.98]"
                               : "bg-neutral-100 text-neutral-900 border border-neutral-200 hover:bg-neutral-200 hover:border-neutral-300 active:scale-[0.98]",
                           );
+                          // Fire Meta Pixel InitiateCheckout on button click
+                          // regardless of auth state. Meta's ROAS uses the
+                          // `value` + `currency` we pass here — keep it in
+                          // sync with the tier's real KZT price.
+                          const handlePricingClick = () => {
+                            trackInitiateCheckout({
+                              name: tier.name,
+                              priceKzt: tier.priceKzt,
+                              impulses: tier.impulses,
+                            });
+                          };
                           return isSignedIn ? (
-                            <Link href={checkoutHref} className={buttonClass + " inline-block text-center"}>
+                            <Link
+                              href={checkoutHref}
+                              onClick={handlePricingClick}
+                              className={buttonClass + " inline-block text-center"}
+                            >
                               {tier.btn}
                             </Link>
                           ) : (
                             <SignInButton mode="modal" forceRedirectUrl={checkoutHref}>
-                              <button className={buttonClass}>{tier.btn}</button>
+                              <button onClick={handlePricingClick} className={buttonClass}>
+                                {tier.btn}
+                              </button>
                             </SignInButton>
                           );
                         })()}

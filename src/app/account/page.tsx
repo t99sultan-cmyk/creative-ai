@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { getAccountData } from "@/actions/getAccountData";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
+import { trackPurchase } from "@/lib/fb-pixel";
 
 type AccountData = Awaited<ReturnType<typeof getAccountData>>;
 
@@ -64,6 +65,13 @@ export default function AccountPage() {
     if (res.success) {
       setSuccessMsg(`✅ Промокод активирован! +${res.impulsesAdded} импульсов.`);
       setPromoCode("");
+      // Meta Pixel: this is the actual conversion — user has paid (Kaspi),
+      // received a code, and we just credited their balance. The value is
+      // back-computed from impulses using the same pricing table the
+      // landing uses, so campaign ROAS reports line up with admin revenue.
+      if (res.impulsesAdded) {
+        trackPurchase({ impulses: res.impulsesAdded, code });
+      }
       // Refresh balance + history
       await loadData();
     } else {

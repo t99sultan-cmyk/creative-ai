@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
 import { MetaPixel } from '@/components/MetaPixel';
+import { RegistrationTracker } from '@/components/RegistrationTracker';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'], variable: '--font-inter' });
@@ -86,6 +87,11 @@ export default function RootLayout({
         <body className={`${inter.variable} font-sans antialiased`}>
           {/* Meta Pixel — global base script + SPA-aware PageView tracker */}
           <MetaPixel />
+          {/* Fires `CompleteRegistration` exactly once when a freshly-signed
+              up Clerk user lands on any page. Mounted here so it covers the
+              full app (users often land on /editor right after Clerk's
+              redirect). */}
+          <RegistrationTracker />
           {children}
         </body>
       </html>
