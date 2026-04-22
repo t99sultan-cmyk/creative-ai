@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, CheckCircle2, ArrowLeft, Send, Receipt, CreditCard, ChevronRight } from "lucide-react";
+import { Sparkles, CheckCircle2, ArrowLeft, Send, Receipt, CreditCard, ChevronRight, MessageCircle } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { Suspense } from "react";
 
@@ -12,10 +12,16 @@ function CheckoutContent() {
   const price = searchParams.get("price") || "1 990";
   const impulses = searchParams.get("impulses") || "45";
   const { isSignedIn } = useAuth();
-  
-  // Replace these with real links once the user provides them
-  const KASPI_PAY_LINK = "https://pay.kaspi.kz/pay/7esn3yim"; 
-  const WHATSAPP_LINK = "https://wa.me/77770000000?text=Здравствуйте!%20Я%20оплатил%20пакет%20" + plan + " в AICreative.kz.%20Моя%20квитанция:";
+
+  // Contact channels for the "send receipt" step. User chooses WhatsApp or
+  // Telegram on step 3 depending on preference.
+  const KASPI_PAY_LINK = "https://pay.kaspi.kz/pay/7esn3yim";
+  const WA_NUMBER_E164 = "77765282788"; // +7 776 528 27 88
+  const TG_USERNAME = "ai_creativekz"; // t.me/ai_creativekz
+  const MESSAGE_TEXT = `Здравствуйте! Я оплатил пакет "${plan}" в AICreative.kz. Моя квитанция:`;
+  const ENCODED_MSG = encodeURIComponent(MESSAGE_TEXT);
+  const WHATSAPP_LINK = `https://wa.me/${WA_NUMBER_E164}?text=${ENCODED_MSG}`;
+  const TELEGRAM_LINK = `https://t.me/${TG_USERNAME}?text=${ENCODED_MSG}`;
 
   return (
     <main className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 selection:bg-hermes-200">
@@ -81,13 +87,41 @@ function CheckoutContent() {
 
                 <div className="flex gap-4">
                   <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-black text-sm shrink-0">3</div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-bold text-neutral-800">Отправьте скриншот менеджеру</p>
-                    <p className="text-sm text-neutral-500 mt-1 mb-3">Менеджер проверит платеж и моментально пришлет вам промокод на {impulses} Импульсов.</p>
-                    <a href={WHATSAPP_LINK} target="_blank" rel="noreferrer" className="inline-flex items-center justify-between px-6 py-3 bg-[#25D366] text-white font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-green-500/20 w-full sm:w-auto">
-                       <span className="flex items-center gap-2"><Send className="w-5 h-5"/> Отправить в WhatsApp</span>
-                       <ChevronRight className="w-5 h-5 opacity-50" />
-                    </a>
+                    <p className="text-sm text-neutral-500 mt-1 mb-3">
+                      Менеджер проверит платёж и <b>моментально пришлёт вам промокод на {impulses} Импульсов</b>.
+                      Выберите удобный мессенджер:
+                    </p>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <a
+                        href={WHATSAPP_LINK}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-between px-5 py-3 bg-[#25D366] hover:bg-[#1dbf58] text-white font-bold rounded-xl active:scale-[0.97] transition-all shadow-lg shadow-green-500/20"
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Send className="w-5 h-5 shrink-0" />
+                          <span className="truncate">WhatsApp</span>
+                        </span>
+                        <ChevronRight className="w-5 h-5 opacity-60 shrink-0" />
+                      </a>
+                      <a
+                        href={TELEGRAM_LINK}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-between px-5 py-3 bg-[#2AABEE] hover:bg-[#1e95d5] text-white font-bold rounded-xl active:scale-[0.97] transition-all shadow-lg shadow-sky-500/20"
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <MessageCircle className="w-5 h-5 shrink-0" />
+                          <span className="truncate">Telegram</span>
+                        </span>
+                        <ChevronRight className="w-5 h-5 opacity-60 shrink-0" />
+                      </a>
+                    </div>
+                    <div className="mt-2 text-xs text-neutral-400">
+                      WhatsApp: <span className="font-mono">+7 776 528 27 88</span> · Telegram: <span className="font-mono">@{TG_USERNAME}</span>
+                    </div>
                   </div>
                 </div>
              </div>

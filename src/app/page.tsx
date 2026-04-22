@@ -18,6 +18,7 @@ import { PRICING_TIERS } from "@/lib/pricing";
 import { GoldParticles } from "@/components/landing/GoldParticles";
 import { TiltCard } from "@/components/landing/TiltCard";
 import { CountUp } from "@/components/landing/CountUp";
+import { CountdownLoop } from "@/components/landing/CountdownLoop";
 
 // --- DATA ---
 type Transformation = {
@@ -177,7 +178,11 @@ export default function LandingPage() {
                   transition={{ delay: 0.1 }}
                   className="text-[2rem] sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.15] sm:leading-[1.1] text-transparent bg-clip-text bg-gradient-to-br from-neutral-900 to-neutral-600"
                >
-                 ИИ делает продающие креативы за <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500">60 секунд.</span><br/>
+                 ИИ делает продающие креативы за{" "}
+                 <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500 tabular-nums">
+                   <CountdownLoop from={60} to={0} tickMs={100} suffix=" сек." />
+                 </span>
+                 <br/>
                  <span className="text-[1.6rem] sm:text-4xl md:text-5xl lg:text-6xl text-neutral-900">Без дизайнера. Без съёмок.</span>
                </motion.h1>
 
@@ -312,41 +317,52 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-3 gap-6">
                {transformations.map((t, idx) => (
                   <Reveal key={t.id} delay={idx * 0.1}>
-                     <div className="group relative rounded-3xl bg-white shadow-xl border border-neutral-200 overflow-hidden cursor-pointer hover:border-hermes-500/50 transition-colors shadow-2xl">
-                        {/* Status Label */}
-                        <div className="absolute top-4 left-4 z-20 bg-white/90 shadow-sm backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-neutral-200 text-neutral-900 flex items-center gap-2">
-                           <span className="w-2 h-2 rounded-full bg-hermes-600 animate-pulse" /> Отрендерено
+                     <div className="group relative rounded-3xl bg-white shadow-xl border border-neutral-200 overflow-hidden hover:border-hermes-500/50 transition-colors shadow-2xl flex flex-col">
+                        {/* "Made on AICreative" attribution badge — makes it
+                            unambiguous these are not stock videos, but things
+                            actually produced by the product. */}
+                        <div className="absolute top-3 left-3 z-20 bg-white/95 shadow-sm backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold border border-neutral-200 text-neutral-900 flex items-center gap-1.5">
+                           <Sparkles className="w-3 h-3 text-hermes-500" />
+                           <span className="hidden sm:inline">Сделано в</span> AICreative
                         </div>
 
-                        {/* Images Container with Free Space Padding */}
-                        <div className="p-4 sm:p-6 bg-neutral-100/50">
+                        {/* Video area */}
+                        <div className="p-3 sm:p-5 bg-neutral-100/50">
                            <div className="relative w-full aspect-[9/16] overflow-hidden rounded-2xl shadow-sm border border-neutral-200/60 bg-white">
                               <video src={t.videoGen} className="absolute inset-0 w-full h-full object-contain" autoPlay loop muted playsInline preload="metadata" />
 
-                              {/* Always-visible gradient + label (enhanced on hover) */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent transition-opacity duration-500 flex flex-col justify-end p-5 pointer-events-none">
-                                 <div className="flex items-end justify-between gap-3">
-                                    <div>
-                                       <div className="text-[10px] text-hermes-300 font-bold mb-1 tracking-wide uppercase">Гипотеза: {t.style}</div>
-                                       <div className="text-lg font-bold text-white drop-shadow-md">{t.name}</div>
+                              {/* Bottom label strip on video — hypothesis + niche.
+                                  Compact so it doesn't cover more than 1/4 of the
+                                  video. */}
+                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-3 px-4 pointer-events-none">
+                                 <div className="flex items-end justify-between gap-2">
+                                    <div className="min-w-0">
+                                       <div className="text-[9px] sm:text-[10px] text-hermes-300 font-bold mb-1 tracking-wide uppercase truncate">Гипотеза: {t.style}</div>
+                                       <div className="text-base sm:text-lg font-bold text-white drop-shadow-md truncate">{t.name}</div>
                                     </div>
-                                    <div className="w-10 h-10 bg-hermes-500 text-white rounded-full flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-                                       <Play fill="currentColor" className="w-4 h-4 ml-0.5" />
+                                    <div className="w-9 h-9 sm:w-10 sm:h-10 bg-hermes-500 text-white rounded-full flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+                                       <Play fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />
                                     </div>
                                  </div>
                               </div>
                            </div>
                         </div>
 
-                        {/* Bottom Stats */}
-                        <div className="grid grid-cols-2 divide-x divide-white/10 border-t border-neutral-200 bg-neutral-50">
-                           <div className="p-4 text-center">
-                              <div className="text-xs text-neutral-500 uppercase">CTR</div>
-                              <div className="font-bold text-green-700 text-lg">{t.ctr}</div>
+                        {/* Bottom stats — clearer labels so "Время" no longer
+                            reads as "время чего". Three columns so everything
+                            breathes on mobile. */}
+                        <div className="grid grid-cols-3 divide-x divide-neutral-200 border-t border-neutral-200 bg-neutral-50 mt-auto">
+                           <div className="p-3 sm:p-4 text-center">
+                              <div className="text-[10px] sm:text-xs text-neutral-500 uppercase tracking-wider">CTR</div>
+                              <div className="font-bold text-green-700 text-base sm:text-lg">{t.ctr}</div>
                            </div>
-                           <div className="p-4 text-center">
-                              <div className="text-xs text-neutral-500 uppercase">Время</div>
-                              <div className="font-bold text-neutral-900 text-lg">{t.time}</div>
+                           <div className="p-3 sm:p-4 text-center">
+                              <div className="text-[10px] sm:text-xs text-neutral-500 uppercase tracking-wider leading-tight">Время<br className="sm:hidden" /> генерации</div>
+                              <div className="font-bold text-neutral-900 text-base sm:text-lg">{t.time}</div>
+                           </div>
+                           <div className="p-3 sm:p-4 text-center">
+                              <div className="text-[10px] sm:text-xs text-neutral-500 uppercase tracking-wider">Формат</div>
+                              <div className="font-bold text-neutral-900 text-base sm:text-lg">9:16</div>
                            </div>
                         </div>
                      </div>
@@ -388,31 +404,66 @@ export default function LandingPage() {
       </section>
 
       {/* HOW IT WORKS (STEPS) */}
-      <section id="how" className="py-24 relative border-y border-neutral-100 bg-white">
-         <div className="max-w-7xl mx-auto px-4">
+      <section id="how" className="py-20 md:py-28 relative border-y border-neutral-100 bg-gradient-to-b from-white via-neutral-50/50 to-white overflow-hidden">
+         <div className="max-w-7xl mx-auto px-4 relative">
             <Reveal>
-               <h2 className="text-3xl md:text-5xl font-extrabold text-center mb-16">
+               <h2 className="text-3xl md:text-5xl font-extrabold text-center mb-4">
                   Всего <span className="text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500">4 шага</span> до готового креатива
                </h2>
+               <p className="text-center text-neutral-500 mb-14 md:mb-20 text-base md:text-lg max-w-xl mx-auto">От идеи до запущенной рекламы — меньше минуты работы.</p>
             </Reveal>
-            
-            <div className="grid md:grid-cols-4 gap-8 relative">
-               {/* Connection Line */}
-               <div className="hidden md:block absolute top-12 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent z-0" />
-               
+
+            <div className="relative grid md:grid-cols-4 gap-y-12 md:gap-x-6">
+               {/* Dashed connection arrow on desktop — sits behind the step circles,
+                   visually linking them into a pipeline. Gradient from hermes-orange
+                   to amber so it matches brand colors. */}
+               <div aria-hidden className="hidden md:block absolute top-[56px] left-[12.5%] right-[12.5%] h-0.5 bg-gradient-to-r from-hermes-500/40 via-amber-500/40 to-hermes-500/40 z-0" />
+               <div aria-hidden className="hidden md:block absolute top-[52px] left-[12.5%] right-[12.5%] h-[10px] z-0"
+                    style={{
+                      backgroundImage: 'radial-gradient(circle, rgba(243,112,33,0.5) 1.5px, transparent 1.5px)',
+                      backgroundSize: '12px 10px',
+                      backgroundRepeat: 'repeat-x',
+                      backgroundPosition: 'center',
+                    }} />
+
                {[
-                  { step: "01", title: "Придумай оффер", text: "Опиши текстом, что именно хочешь продать и с какой скидкой." },
-                  { step: "02", title: "Загрузи референс", text: "Прикрепи картинку идеального дизайна, на который ИИ должен опереться." },
-                  { step: "03", title: "ИИ творит магию", text: "Анализирует твой референс и создает уникальную анимацию и графику." },
-                  { step: "04", title: "Скачай и получай заявки", text: "Забирай готовый MP4 ролик или JPEG (4K) за 60 секунд. Запускай таргет!" },
+                  { step: "01", icon: MessageSquare, title: "Придумай оффер", text: "Опиши текстом, что именно хочешь продать и с какой скидкой.", accent: "from-hermes-500 to-amber-500" },
+                  { step: "02", icon: ImageIcon, title: "Загрузи референс", text: "Прикрепи картинку идеального дизайна, на который ИИ должен опереться.", accent: "from-amber-500 to-yellow-500" },
+                  { step: "03", icon: Sparkles, title: "ИИ творит магию", text: "Анализирует твой референс и создает уникальную анимацию и графику.", accent: "from-pink-500 to-hermes-500" },
+                  { step: "04", icon: RefreshCw, title: "Скачай креатив", text: "Забирай готовый MP4 ролик или PNG (4K) за 60 секунд. Запускай таргет!", accent: "from-green-500 to-emerald-500" },
                ].map((item, i) => (
-                  <Reveal key={i} delay={i * 0.1}>
-                     <div className="relative z-10 flex flex-col items-center text-center">
-                        <div className="w-24 h-24 rounded-full bg-neutral-50 border border-neutral-200 flex items-center justify-center text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-neutral-900 to-neutral-500 mb-6 shadow-xl">
-                           {item.step}
+                  <Reveal key={i} delay={i * 0.12}>
+                     <div className="relative z-10 flex flex-col items-center text-center px-2">
+                        {/* Step circle: big gradient ring + inner white badge with the
+                            number + a tiny lucide icon as a hint at what the step is. */}
+                        <div className="relative mb-5 md:mb-6">
+                           <div className={clsx(
+                              "w-28 h-28 rounded-full p-1 bg-gradient-to-br shadow-xl",
+                              item.accent,
+                           )}>
+                              <div className="w-full h-full rounded-full bg-white flex flex-col items-center justify-center gap-0.5">
+                                 <item.icon className="w-5 h-5 text-neutral-400" />
+                                 <span className={clsx(
+                                    "text-3xl font-black text-transparent bg-clip-text bg-gradient-to-br",
+                                    item.accent,
+                                 )}>{item.step}</span>
+                              </div>
+                           </div>
+                           {/* Soft halo behind circle — makes it feel lifted off the page */}
+                           <div className={clsx(
+                              "absolute inset-0 rounded-full blur-xl opacity-40 -z-10 bg-gradient-to-br",
+                              item.accent,
+                           )} />
                         </div>
+
                         <h3 className="text-xl font-bold text-neutral-900 mb-2">{item.title}</h3>
-                        <p className="text-neutral-600 text-sm leading-relaxed">{item.text}</p>
+                        <p className="text-neutral-600 text-sm leading-relaxed max-w-[260px]">{item.text}</p>
+
+                        {/* Mobile-only connector — vertical line to next step so the
+                            stacked timeline reads as a sequence, not random cards. */}
+                        {i < 3 && (
+                          <div aria-hidden className="md:hidden w-px h-10 bg-gradient-to-b from-neutral-300 to-transparent mt-6" />
+                        )}
                      </div>
                   </Reveal>
                ))}
