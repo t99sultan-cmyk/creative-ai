@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
+import { MetaPixel } from '@/components/MetaPixel';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'], variable: '--font-inter' });
@@ -83,6 +84,8 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="ru">
         <body className={`${inter.variable} font-sans antialiased`}>
+          {/* Meta Pixel — global base script + SPA-aware PageView tracker */}
+          <MetaPixel />
           {children}
         </body>
       </html>
