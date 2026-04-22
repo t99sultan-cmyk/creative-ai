@@ -195,12 +195,39 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
      <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
      Use when: user asks for a specific iconographic animation (fire, star, tick). Load JSON from lottiefiles.com URL — NEVER embed large JSON inline.
 
+   🔴 HARD TRIGGERS — when the user's prompt contains ANY of these keywords
+   (Russian or English), you MUST load and meaningfully use the matching lib.
+   Do NOT substitute with GSAP-only — GSAP cannot replicate these effects.
+
+   | Keyword in prompt                                    | Required lib      |
+   |------------------------------------------------------|-------------------|
+   | "3D", "3d", "объём", "объем", "перспектива",          | Three.js          |
+   |  "вращ*ется в пространстве", "depth", "parallax"     |                   |
+   | "физика", "пружин*", "отскок", "падают буквами",     | Matter.js         |
+   |  "physics", "bounce", "gravity", "springy"           |                   |
+   | "конфетти", "искры", "частицы", "снег", "пыльца",    | tsParticles       |
+   |  "confetti", "sparkle", "particles", "dust"          |                   |
+   | "glitch", "глитч", "искажение", "rgb split",          | Pixi.js           |
+   |  "displacement", "water ripple", "heat distortion"   |                   |
+   | "lottie", "галочка анимация", "ракета", "иконка AE"  | Lottie Web        |
+   | "побуквенно", "буквы появляются", "per-letter",       | SplitType         |
+   |  "char reveal", "typewriter"                          |                   |
+
    🟠 LIB BUDGET:
-   - 1-2 extra libs = sweet spot. 3+ = slow to render, often looks overwrought.
-   - For a simple product reveal: GSAP alone is plenty.
-   - For "wow" concepts: GSAP + (SplitType OR tsParticles OR Three).
-   - NEVER load both Three and Pixi in the same creative. NEVER load Matter AND tsParticles (pick one for motion).
-   - If you use a lib, actually USE it — don't load a script and never call its API.` : ''}
+   - Trigger libs are MANDATORY when keyword matches — no budget excuse.
+   - Additional libs (beyond triggers) — cap at 2 extras.
+   - Simple product reveal without any trigger → GSAP alone is fine.
+   - NEVER load both Three and Pixi in the same creative (both WebGL, conflict).
+   - NEVER load Matter AND tsParticles together (pick ONE motion source).
+   - If you load a lib, you MUST call its API in a way that affects the rendered output.
+     Loading a 200 KB script and not using it is a failure.
+
+   🔴 EXAMPLES of correct behavior:
+   - Prompt "3D флакон вращается" → MUST load Three.js + GSAP. Show product on a plane or cube with rotation.
+   - Prompt "ценник качается на пружине" → MUST load Matter.js + GSAP. Real constraint-based swing.
+   - Prompt "взрыв конфетти" → MUST load tsParticles + GSAP. Particle burst with gold/amber colors.
+   - Prompt "RGB glitch" → MUST load Pixi.js + GSAP. DisplacementFilter or RGB split filter.
+   - Prompt "минималистичный продуктовый постер" (no trigger) → GSAP alone, clean & fast.` : ''}
 4. STRICT BAN ON SOCIAL MEDIA UI & EXTERNAL BUTTONS:
    - Generate the ACTUAL promotional banner. DO NOT include fake Instagram UI (no comments, no avatars).
    - DO NOT generate external link buttons like "Подробнее", "Узнать подробнее", or "Перейти", because social media ad platforms natively overlay their own link buttons over the creative.
@@ -404,7 +431,13 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
          body: JSON.stringify({
             model: "claude-opus-4-7",
             system: systemPrompt,
-            max_tokens: 4000,
+            /* Bumped from 4000 → 8192. Claude was hitting the 4000 ceiling on
+               every generation, which forced it to pick minimal-code libs
+               (GSAP+SplitType) and skip Three/Matter/Pixi setups that need
+               more boilerplate. With 8192 the model has room to actually
+               wire up the opt-in libs. Opus 4 supports up to 32K output
+               if we ever need more. */
+            max_tokens: 8192,
             messages: [{ role: "user", content: claudeContent }]
          })
       });

@@ -44,3 +44,4 @@ next-env.d.ts
 src/lib/agents/**/*.md
 .windsurfrules
 *.md
+scripts/test-output/
