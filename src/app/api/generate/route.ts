@@ -156,10 +156,51 @@ Your task is to generate an incredibly beautiful, modern, and production-ready H
 CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
 1. Return ONLY raw HTML code. NO markdown formatting (\`\`\`html), NO explanations. Just start with <!DOCTYPE html> and end with </html>.
 2. Single File: All HTML, CSS (<style>), and JS (<script>) must be in one file.
-3. Libraries: 
-   - ALWAYS include Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>.
-   - ALWAYS use modern Google Fonts via CDN.
-   - Use GSAP for animations if isAnimated is true.
+3. Libraries — "Creative Arsenal" via CDN:
+
+   🔴 ALWAYS LOAD (these are mandatory):
+   - Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
+   - Modern Google Fonts (e.g. Inter, Manrope, Unbounded, Space Grotesk, Bricolage Grotesque)
+   - ${isAnimated ? 'GSAP (baseline animation engine): <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>' : 'No animation libs — OFF mode.'}
+
+   ${isAnimated ? `🟢 OPT-IN LIBS (load ONLY when the concept needs them, max 2-3 extras per creative to keep render time reasonable):
+
+   • **SplitType** — per-letter / per-word text reveal (for cinematic headline entrances).
+     <script src="https://cdn.jsdelivr.net/npm/split-type@0.3.4/umd/index.min.js"></script>
+     Use when: the hero text should stagger letter-by-letter.
+     Example: \`const split = new SplitType(".title", { types: "chars" });
+              gsap.from(".title .char", { y: 40, opacity: 0, duration: 0.8, stagger: 0.03, ease: "power3.out" });\`
+
+   • **Three.js + drei helpers** — 3D perspective, product orbiting on a ring, tilted planes, parallax.
+     <script src="https://cdn.jsdelivr.net/npm/three@0.169/build/three.min.js"></script>
+     (No react-three-fiber in the iframe — use vanilla Three.js with WebGLRenderer appended to a <canvas>.)
+     Use when: concept calls for depth, rotating product showcase, dramatic lighting, floating cards in 3D space.
+     Keep scene simple: one product image on a plane, one directional light, one ambient. Don't import drei.
+
+   • **Matter.js** — 2D physics: text letters falling with bounce, price tag swinging on a pin, confetti with gravity.
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+     Use when: product or badge should "drop into frame" with real physics, or letters pile up.
+     Only use Matter if the concept genuinely calls for physical motion — otherwise GSAP is cheaper.
+
+   • **tsParticles** — snow, sparks, gold confetti, magical dust, background bokeh.
+     <script src="https://cdn.jsdelivr.net/npm/@tsparticles/slim@3/tsparticles.slim.bundle.min.js"></script>
+     Use when: celebrating a discount (confetti), premium feel (gold particles), winter mood (snow).
+     Init with \`tsParticles.load({ id: "particles", options: { ... } });\` targeting an absolute-positioned canvas.
+
+   • **Pixi.js** — GPU-accelerated 2D shader effects: glitch, displacement (water/heat), RGB split, chromatic aberration.
+     <script src="https://pixijs.download/v8.6.6/pixi.min.js"></script>
+     Use when: brand wants an edgy / tech / distortion feel. Heavy — ONLY when glitch/displacement is actually the hook.
+
+   • **Lottie Web** — pre-made vector animations from After Effects (check-marks, rockets, coin drops, loading spinners THAT ARE PART OF THE CONCEPT not decoration).
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+     Use when: user asks for a specific iconographic animation (fire, star, tick). Load JSON from lottiefiles.com URL — NEVER embed large JSON inline.
+
+   🟠 LIB BUDGET:
+   - 1-2 extra libs = sweet spot. 3+ = slow to render, often looks overwrought.
+   - For a simple product reveal: GSAP alone is plenty.
+   - For "wow" concepts: GSAP + (SplitType OR tsParticles OR Three).
+   - NEVER load both Three and Pixi in the same creative. NEVER load Matter AND tsParticles (pick one for motion).
+   - If you use a lib, actually USE it — don't load a script and never call its API.` : ''}
 4. STRICT BAN ON SOCIAL MEDIA UI & EXTERNAL BUTTONS:
    - Generate the ACTUAL promotional banner. DO NOT include fake Instagram UI (no comments, no avatars).
    - DO NOT generate external link buttons like "Подробнее", "Узнать подробнее", or "Перейти", because social media ad platforms natively overlay their own link buttons over the creative.
@@ -214,7 +255,47 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
      \`tl.from(".product",  { scale: 0.85, opacity: 0, duration: 1.3, ease: "expo.out" }, "-=0.9");\`
      \`tl.from(".cta",      { y: 20, opacity: 0, duration: 1.0 }, "-=0.5");\`
      \`tl.to(".product",    { y: "-=10", duration: 3, ease: "sine.inOut", yoyo: true, repeat: 1 }, "+=0.3");\`
-     \`tl.to({},            { duration: ${format === '9:16' ? '4' : '2'} }); // final hold\`` : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
+     \`tl.to({},            { duration: ${format === '9:16' ? '4' : '2'} }); // final hold\`
+
+   - IDIOMATIC PATTERNS per extra lib (use as reference when you opt in):
+
+     SplitType + GSAP (cinematic per-letter reveal of a headline):
+       \`const split = new SplitType(".hook", { types: "chars" });\`
+       \`gsap.from(".hook .char", { y: 60, opacity: 0, rotateX: -90, duration: 1, stagger: 0.025, ease: "power4.out" });\`
+
+     tsParticles (gold confetti burst behind the product):
+       \`<canvas id="particles" class="absolute inset-0 z-0 pointer-events-none"></canvas>\`
+       \`tsParticles.load({ id: "particles", options: { preset: "confetti", particles: { color: { value: ["#FFD700", "#F37021", "#fff"] }, number: { value: 40 } }, emitters: { position: { x: 50, y: 50 }, rate: { delay: 1.5, quantity: 10 } }, background: { color: "transparent" } } });\`
+
+     Matter.js (price tag swinging on a pin):
+       \`const { Engine, World, Bodies, Constraint, Render, Runner } = Matter;\`
+       \`const engine = Engine.create(); const render = Render.create({ element: document.getElementById("physics"), engine, options: { width: 400, height: 600, wireframes: false, background: "transparent" } });\`
+       \`const tag = Bodies.rectangle(200, 150, 120, 60, { render: { fillStyle: "#F37021" } });\`
+       \`const pin = Constraint.create({ pointA: { x: 200, y: 50 }, bodyB: tag, stiffness: 0.02 });\`
+       \`World.add(engine.world, [tag, pin]); Render.run(render); Runner.run(engine);\`
+
+     Three.js (product floating on a tilted plane with ambient light):
+       \`<canvas id="three"></canvas>\`
+       \`const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100); camera.position.z = 5;\`
+       \`const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("three"), alpha: true, antialias: true });\`
+       \`const tex = new THREE.TextureLoader().load("PRODUCT_IMG_0"); const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true });\`
+       \`const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), mat); scene.add(plane);\`
+       \`scene.add(new THREE.AmbientLight(0xffffff, 0.6)); const dir = new THREE.DirectionalLight(0xffffff, 1); dir.position.set(5, 5, 5); scene.add(dir);\`
+       \`function tick(t){ plane.rotation.y = Math.sin(t * 0.0008) * 0.3; plane.position.y = Math.sin(t * 0.001) * 0.1; renderer.render(scene, camera); requestAnimationFrame(tick); } requestAnimationFrame(tick);\`
+
+     Lottie (specific iconographic animation, e.g. check-mark on success):
+       \`<div id="lottie" class="w-24 h-24"></div>\`
+       \`lottie.loadAnimation({ container: document.getElementById("lottie"), renderer: "svg", loop: true, autoplay: true, path: "https://assets9.lottiefiles.com/packages/lf20_obhph3sh.json" });\`
+
+     Pixi.js (glitch / displacement on a product — use SPARINGLY):
+       \`const app = new PIXI.Application(); await app.init({ resizeTo: window, backgroundAlpha: 0 });\`
+       \`document.getElementById("pixi").appendChild(app.canvas);\`
+       \`const img = await PIXI.Assets.load("PRODUCT_IMG_0"); const sprite = new PIXI.Sprite(img);\`
+       \`app.stage.addChild(sprite);\`
+       \`// Attach PIXI.DisplacementFilter for a subtle ripple, NOT a heavy glitch every frame.\`
+
+   - 🔴 When an opt-in lib is loaded it MUST be used meaningfully in the final render.
+     Loading a 200 KB script and animating only \`<h1>\` with GSAP is waste — strip the script.` : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
 
 8. HIGHLIGHTS & PRODUCT INTEGRATION:
    - Highlight 3-5 power words in a vibrant color (like text-yellow-400 or a gradient).
