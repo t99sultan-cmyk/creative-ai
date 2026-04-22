@@ -182,13 +182,14 @@ export default function LandingPage() {
                  ИИ делает продающие креативы за{" "}
                  <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-hermes-600 to-amber-500 tabular-nums">
                    {/* One-shot countdown: starts at 120, ticks down every
-                       100ms, stops at 60 and stays. Visually demonstrates
-                       "we go from two minutes of human work down to 60
-                       seconds" — the result stays on screen so the viewer
-                       reads the final promise (which matches every other
-                       "за 60 секунд" claim on the landing), not a
-                       constantly-flashing ticker. */}
-                   <CountdownLoop from={120} to={60} tickMs={100} loop={false} suffix=" сек." />
+                       50ms, stops at 60 and stays. 50ms is fast enough
+                       that the whole 120→60 animation plays in ~3s —
+                       viewers notice the number moving but don't wait
+                       for it, which is what we want before they scroll
+                       to the social-proof row. Result stays on 60 so
+                       the headline matches every other "за 60 секунд"
+                       claim on the landing. */}
+                   <CountdownLoop from={120} to={60} tickMs={50} loop={false} suffix=" сек." />
                  </span>
                  <br/>
                  <span className="text-[1.6rem] sm:text-4xl md:text-5xl lg:text-6xl text-neutral-900">Без дизайнера. Без съёмок.</span>
@@ -313,7 +314,12 @@ export default function LandingPage() {
       </section>
 
       {/* BEFORE / AFTER INTERACTIVE SECTION */}
-      <section className="py-24 relative border-t border-neutral-100 bg-neutral-50/50 backdrop-blur-xl">
+      {/* pb is intentionally taller than pt: the creative cards are the
+          visual "climax" of this section and a deeper bottom gutter gives
+          them room to breathe before the next section starts, preventing
+          the CTR/Время/Формат stats from colliding with the next block's
+          heading on shorter viewports. */}
+      <section className="pt-24 pb-32 md:pb-40 relative border-t border-neutral-100 bg-neutral-50/50 backdrop-blur-xl">
          <div className="max-w-7xl mx-auto px-4">
             <Reveal>
                <div className="text-center mb-16">
