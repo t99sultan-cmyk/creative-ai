@@ -15,6 +15,9 @@ import clsx from "clsx";
 import { motion, AnimatePresence, useInView } from "framer-motion";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import { PRICING_TIERS } from "@/lib/pricing";
+import { GoldParticles } from "@/components/landing/GoldParticles";
+import { TiltCard } from "@/components/landing/TiltCard";
+import { CountUp } from "@/components/landing/CountUp";
 
 // --- DATA ---
 type Transformation = {
@@ -233,15 +236,21 @@ export default function LandingPage() {
                   className="grid grid-cols-3 gap-6 pt-8 mt-4 border-t border-neutral-100"
                >
                   <div>
-                     <div className="text-3xl font-black text-neutral-900">2400+</div>
+                     <div className="text-3xl font-black text-neutral-900 tabular-nums">
+                        <CountUp to={2400} suffix="+" />
+                     </div>
                      <div className="text-xs text-neutral-500 mt-1 uppercase tracking-wider">Креативов<br/>за неделю</div>
                   </div>
                   <div>
-                     <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-hermes-600">+47%</div>
+                     <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-hermes-600 tabular-nums">
+                        <CountUp to={47} prefix="+" suffix="%" />
+                     </div>
                      <div className="text-xs text-neutral-500 mt-1 uppercase tracking-wider">Рост CTR<br/>в среднем</div>
                   </div>
                   <div>
-                     <div className="text-3xl font-black text-neutral-900">58<span className="text-xl">с</span></div>
+                     <div className="text-3xl font-black text-neutral-900 tabular-nums">
+                        <CountUp to={58} /><span className="text-xl">с</span>
+                     </div>
                      <div className="text-xs text-neutral-500 mt-1 uppercase tracking-wider">Среднее время<br/>генерации</div>
                   </div>
                </motion.div>
@@ -496,8 +505,9 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
                {pricingTiers.map((tier, idx) => (
                   <Reveal key={idx} delay={idx * 0.1}>
+                    <TiltCard maxTiltDeg={5} className="h-full">
                      <div className={clsx(
-                        "relative bg-white shadow-xl rounded-3xl p-8 border flex flex-col h-full hover:-translate-y-2 hover:shadow-2xl transition-all duration-300",
+                        "relative bg-white shadow-xl rounded-3xl p-8 border flex flex-col h-full hover:shadow-2xl transition-shadow duration-300",
                         tier.isHit ? "border-hermes-500 shadow-[0_0_30px_rgba(243,112,33,0.2)]" : "border-neutral-200 hover:border-neutral-300"
                      )}>
                         {tier.isHit && (
@@ -523,17 +533,35 @@ export default function LandingPage() {
                            ))}
                         </ul>
 
-                        <SignInButton mode="modal">
-                           <button className={clsx(
-                              "w-full py-4 rounded-xl font-bold text-sm transition-all",
-                              tier.isHit
-                                 ? "bg-gradient-to-r from-hermes-500 to-amber-500 text-white shadow-[0_0_20px_rgba(243,112,33,0.35)] hover:opacity-90"
-                                 : "bg-neutral-100 text-neutral-900 border border-neutral-200 hover:bg-neutral-200 hover:border-neutral-300"
-                           )}>
+                        {/* Checkout URL carries tier name, price, impulses as
+                            query params. /checkout already reads searchParams.
+                            Signed-in users go straight there; unsigned users
+                            are bounced through Clerk sign-in and Clerk's
+                            `forceRedirectUrl` brings them back to the same
+                            checkout URL. */}
+                        {(() => {
+                          const checkoutHref =
+                            `/checkout?plan=${encodeURIComponent(tier.name)}` +
+                            `&price=${encodeURIComponent(tier.priceLabel.replace(/[^0-9]/g, ''))}` +
+                            `&impulses=${tier.impulses}`;
+                          const buttonClass = clsx(
+                            "w-full py-4 rounded-xl font-bold text-sm transition-all",
+                            tier.isHit
+                              ? "bg-gradient-to-r from-hermes-500 to-amber-500 text-white shadow-[0_0_20px_rgba(243,112,33,0.35)] hover:opacity-90 active:scale-[0.98]"
+                              : "bg-neutral-100 text-neutral-900 border border-neutral-200 hover:bg-neutral-200 hover:border-neutral-300 active:scale-[0.98]",
+                          );
+                          return isSignedIn ? (
+                            <Link href={checkoutHref} className={buttonClass + " inline-block text-center"}>
                               {tier.btn}
-                           </button>
-                        </SignInButton>
+                            </Link>
+                          ) : (
+                            <SignInButton mode="modal" forceRedirectUrl={checkoutHref}>
+                              <button className={buttonClass}>{tier.btn}</button>
+                            </SignInButton>
+                          );
+                        })()}
                      </div>
+                    </TiltCard>
                   </Reveal>
                ))}
             </div>
@@ -580,6 +608,8 @@ export default function LandingPage() {
       {/* FINAL CTA */}
       <section className="py-32 md:py-40 relative overflow-hidden bg-hermes-500">
          <div className="absolute inset-0 bg-gradient-to-tr from-amber-600/50 to-transparent" />
+         {/* Gold particles — lazy-loaded via IntersectionObserver */}
+         <GoldParticles />
          <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
             <Reveal>
                <h2 className="text-5xl md:text-7xl font-extrabold text-white mb-6 drop-shadow-sm">
