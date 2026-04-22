@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.5.3",
     "@clerk/nextjs": "^7.0.12",
     "@google-cloud/tasks": "^5.0.0",
     "@google/generative-ai": "^0.24.1",

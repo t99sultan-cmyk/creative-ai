@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
+import { ruRU } from '@clerk/localizations';
 import { MetaPixel } from '@/components/MetaPixel';
 import { RegistrationTracker } from '@/components/RegistrationTracker';
 import './globals.css';
@@ -82,7 +83,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
+    // Clerk modal/components are rendered in Russian. `ruRU` ships with
+    // Clerk's localizations package and covers every string the prebuilt
+    // SignIn/SignUp flows render — sign-in title, OAuth button labels,
+    // email/password fields, error messages, account portal, etc.
+    <ClerkProvider localization={ruRU}>
       <html lang="ru">
         <body className={`${inter.variable} font-sans antialiased`}>
           {/* Meta Pixel — global base script + SPA-aware PageView tracker */}

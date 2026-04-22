@@ -29,11 +29,11 @@ import { Suspense, useEffect, useRef } from "react";
  *    static generation, not the whole page.
  *
  * 5. Pixel ID is read from NEXT_PUBLIC_META_PIXEL_ID with a fallback to
- *    the production ID (942198525226321). Set it to an empty string in
+ *    the production ID (2396357890863084). Set it to an empty string in
  *    a preview env to silence tracking.
  */
 
-const DEFAULT_PIXEL_ID = "942198525226321";
+const DEFAULT_PIXEL_ID = "2396357890863084";
 const PIXEL_ID =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_META_PIXEL_ID) ||
   DEFAULT_PIXEL_ID;
