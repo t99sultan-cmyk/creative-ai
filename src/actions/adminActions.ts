@@ -755,10 +755,45 @@ export async function adminImpersonateUser(targetUserId: string) {
       return { success: false as const, error: "Clerk не вернул token." };
     }
 
-    // Clerk's sign-in-token consumption URL. We construct it to land on /editor
-    // right after the session swap so admin is immediately in the user's
-    // editor view.
-    const consumeUrl = `/sign-in?__clerk_ticket=${encodeURIComponent(data.token)}&redirect_url=${encodeURIComponent("/editor?impersonating=1")}`;
+    // Build the ticket-consumption URL Clerk expects:
+    //
+    //   https://<ACCOUNTS_PORTAL>/sign-in?__clerk_ticket=<TOKEN>&redirect_url=<RETURN_URL>
+    //
+    // The accounts portal is the public domain where Clerk hosts the
+    // sign-in UI. On dev it's `immense-leech-25.accounts.dev`, on prod it
+    // will be e.g. `accounts.aicreative.kz`. We derive the domain by
+    // decoding the publishable key (its payload is "<frontend-api>$"
+    // base64), then trim the leading "clerk." to get the accounts portal.
+    //
+    // `redirect_url` must be an ABSOLUTE URL because Clerk's portal lives
+    // on a different origin than our app.
+    const pubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    if (!pubKey) {
+      return { success: false as const, error: "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY не настроен." };
+    }
+
+    let accountsPortalOrigin = "";
+    try {
+      const payload = pubKey.replace(/^pk_(test|live)_/, "");
+      const frontendApi = Buffer.from(payload, "base64").toString("utf-8").replace(/\$+$/, "").trim();
+      // frontendApi like "immense-leech-25.clerk.accounts.dev"
+      //              or "clerk.aicreative.kz"
+      const accountsDomain = frontendApi.replace(/^clerk\./, "");
+      accountsPortalOrigin = `https://${accountsDomain}`;
+    } catch {
+      return { success: false as const, error: "Не удалось декодировать Clerk publishable key." };
+    }
+
+    // Absolute return URL back to our own app.
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "http://localhost:3000";
+    const returnUrl = `${siteUrl.replace(/\/$/, "")}/editor?impersonating=1`;
+
+    const consumeUrl =
+      `${accountsPortalOrigin}/sign-in?__clerk_ticket=${encodeURIComponent(data.token)}` +
+      `&redirect_url=${encodeURIComponent(returnUrl)}`;
 
     await recordAdminAction({
       action: "impersonate_user",
