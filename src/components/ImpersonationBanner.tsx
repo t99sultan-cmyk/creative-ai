@@ -1,31 +1,39 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import { ShieldAlert, LogOut } from "lucide-react";
 
 /**
  * Sticky banner that appears when an admin has impersonated another user
- * (via the "Войти как" button in /admin). Triggered by a `?impersonating=1`
- * query param on the first redirect-back after Clerk sign-in-token exchange;
+ * (via the "Войти как" button in /admin). First activated by a
+ * `?impersonating=1` query param on the Clerk sign-in-token redirect;
  * kept alive across navigations via sessionStorage.
  *
- * Clicking "Выйти из имперсонации" calls Clerk.signOut() and redirects the
- * admin back to /admin. The admin is expected to sign in again with their
- * own account — we don't cache their old session (too risky).
+ * Clicking "Выйти из имперсонации" calls Clerk.signOut() and lands the
+ * admin back on /admin. The admin is expected to sign in again with their
+ * own account — we don't cache their previous session (too risky).
+ *
+ * Implementation note: intentionally NOT using next/navigation's
+ * useSearchParams — that hook forces CSR bailout on the host page and
+ * breaks `next build` when /editor is prerendered. We read
+ * window.location.search manually inside a useEffect (client only), which
+ * does the same job without poisoning static generation.
  */
 export function ImpersonationBanner() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { signOut } = useClerk();
   const [active, setActive] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    // First-time detection — either the URL has the flag on it, or the
-    // sessionStorage marker set by /admin before redirect.
-    const fromUrl = searchParams?.get("impersonating") === "1";
+    if (typeof window === "undefined") return;
+
+    // Read the URL once on mount (no useSearchParams → no CSR bailout).
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("impersonating") === "1";
+
     let fromSession = false;
     let savedEmail: string | null = null;
     try {
@@ -43,7 +51,7 @@ export function ImpersonationBanner() {
     }
 
     if (savedEmail) setEmail(savedEmail);
-  }, [searchParams]);
+  }, []);
 
   const exit = async () => {
     try {
