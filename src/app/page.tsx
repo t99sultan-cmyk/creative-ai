@@ -340,25 +340,31 @@ export default function LandingPage() {
                            <span className="hidden sm:inline">Сделано в</span> AICreative
                         </div>
 
-                        {/* Video area */}
+                        {/* Video area — no more bottom gradient overlay. The
+                            creatives contain their own offer copy (prices,
+                            CTAs, countdowns) at the bottom third of the
+                            frame; covering that with a "Гипотеза" label was
+                            hiding the very thing this section tries to
+                            showcase. Hypothesis + niche name moved to their
+                            own row directly below the video. */}
                         <div className="p-3 sm:p-5 bg-neutral-100/50">
                            <div className="relative w-full aspect-[9/16] overflow-hidden rounded-2xl shadow-sm border border-neutral-200/60 bg-white">
                               <video src={t.videoGen} className="absolute inset-0 w-full h-full object-contain" autoPlay loop muted playsInline preload="metadata" />
+                           </div>
+                        </div>
 
-                              {/* Bottom label strip on video — hypothesis + niche.
-                                  Compact so it doesn't cover more than 1/4 of the
-                                  video. */}
-                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-3 px-4 pointer-events-none">
-                                 <div className="flex items-end justify-between gap-2">
-                                    <div className="min-w-0">
-                                       <div className="text-[9px] sm:text-[10px] text-hermes-300 font-bold mb-1 tracking-wide uppercase truncate">Гипотеза: {t.style}</div>
-                                       <div className="text-base sm:text-lg font-bold text-white drop-shadow-md truncate">{t.name}</div>
-                                    </div>
-                                    <div className="w-9 h-9 sm:w-10 sm:h-10 bg-hermes-500 text-white rounded-full flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-                                       <Play fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />
-                                    </div>
-                                 </div>
-                              </div>
+                        {/* Hypothesis + niche row — lives *outside* the video
+                            so the creative itself is never obscured. The
+                            play pill is purely decorative ("this is a video
+                            asset") since the <video> above is already
+                            autoplaying. */}
+                        <div className="px-4 sm:px-5 pb-3 pt-1 flex items-center justify-between gap-3">
+                           <div className="min-w-0">
+                              <div className="text-[10px] sm:text-xs text-hermes-600 font-bold mb-0.5 tracking-wide uppercase truncate">Гипотеза: {t.style}</div>
+                              <div className="text-base sm:text-lg font-bold text-neutral-900 truncate">{t.name}</div>
+                           </div>
+                           <div className="w-9 h-9 sm:w-10 sm:h-10 bg-hermes-500 text-white rounded-full flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-110 transition-transform">
+                              <Play fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />
                            </div>
                         </div>
 
