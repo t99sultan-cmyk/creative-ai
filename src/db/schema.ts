@@ -6,6 +6,7 @@ export const users = pgTable("user", {
   email: text("email").notNull(),
   impulses: integer("impulses").default(17), // The internal currency
   image: text("image"),
+  phone: text("phone"), // Phone number collected during onboarding
   isBanned: boolean("is_banned").default(false), // Administrative ban status
   createdAt: timestamp("created_at").defaultNow(),
 });

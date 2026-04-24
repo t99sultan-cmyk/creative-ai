@@ -34,7 +34,7 @@ export default function RegisterPage() {
              path="/register" 
              routing="path" 
              signInUrl="/login" 
-             fallbackRedirectUrl="/editor"
+             fallbackRedirectUrl="/onboarding"
              appearance={{
                elements: {
                  rootBox: "w-full",

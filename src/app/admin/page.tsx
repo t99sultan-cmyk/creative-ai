@@ -197,8 +197,17 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
             <span className="text-neutral-400 italic">Free Only</span>
          )}
       </td>
-      <td className="p-4 text-neutral-400 text-xs border-l border-neutral-100 text-center">
-         {u.createdAt ? new Date(u.createdAt).toLocaleDateString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
+      <td className="p-4 text-xs border-l border-neutral-100 text-center">
+         <div className="text-neutral-400">
+            {u.createdAt ? new Date(u.createdAt).toLocaleDateString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
+         </div>
+         {u.phone ? (
+            <a href={`tel:${u.phone}`} className="mt-1 inline-block font-mono text-neutral-700 hover:text-orange-600 transition-colors">
+               {u.phone}
+            </a>
+         ) : (
+            <div className="mt-1 text-neutral-300 italic">нет телефона</div>
+         )}
       </td>
       <td className="p-4 text-right">
         <div className="flex flex-col gap-2 items-end">

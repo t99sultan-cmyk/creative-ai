@@ -45,3 +45,7 @@ src/lib/agents/**/*.md
 .windsurfrules
 *.md
 scripts/test-output/
+
+# drizzle-kit generated artifacts (local only — prod schema changes
+# are applied via scripts/*.mjs one-offs)
+/drizzle/
