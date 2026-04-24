@@ -4,13 +4,14 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 export async function getUserBalance() {
   try {
     const { userId } = await auth();
 
     if (!userId) {
-      return { success: false, impulses: 17 }; // default fallback
+      return { success: false, impulses: SIGNUP_BONUS_IMPULSES }; // default fallback
     }
 
     const userRecord = await db.query.users.findFirst({
@@ -27,9 +28,9 @@ export async function getUserBalance() {
           email: email,
           name: clerkUser.firstName || "User",
           image: clerkUser.imageUrl || "",
-          impulses: 17,
+          impulses: SIGNUP_BONUS_IMPULSES,
         });
-        return { success: true, impulses: 17 };
+        return { success: true, impulses: SIGNUP_BONUS_IMPULSES };
       }
     }
 
@@ -39,6 +40,6 @@ export async function getUserBalance() {
     };
   } catch (error) {
     console.error("Error fetching user balance:", error);
-    return { success: false, impulses: 17 };
+    return { success: false, impulses: SIGNUP_BONUS_IMPULSES };
   }
 }

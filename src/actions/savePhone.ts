@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
+import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 export async function savePhone(phone: string) {
   const { userId } = await auth();
@@ -44,7 +45,7 @@ export async function savePhone(phone: string) {
           email,
           name,
           image: cu?.imageUrl ?? "",
-          impulses: 10,
+          impulses: SIGNUP_BONUS_IMPULSES,
           phone: cleaned,
         })
         .onConflictDoUpdate({

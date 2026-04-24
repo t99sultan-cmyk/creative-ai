@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users, promoCodes, creatives } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 /**
  * Data for the /account page: balance, profile, promo history, generation
@@ -31,7 +32,7 @@ export async function getAccountData() {
           email,
           name: clerkUser.firstName || "User",
           image: clerkUser.imageUrl || "",
-          impulses: 17,
+          impulses: SIGNUP_BONUS_IMPULSES,
         });
         userRecord = await db.query.users.findFirst({ where: eq(users.id, userId) });
       }

@@ -6,6 +6,7 @@ import { auth } from "@clerk/nextjs/server";
 import crypto from "crypto";
 import { checkGenerateRateLimit, rateLimitMessage } from "@/lib/rate-limit";
 import { isAdmin } from "@/lib/admin-guard";
+import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 export const maxDuration = 300;
 
@@ -121,7 +122,7 @@ export async function POST(req: Request) {
           id: userId,
           email: clerkUser.email_addresses[0].email_address,
           name: clerkUser.first_name || "Пользователь",
-          impulses: 17,
+          impulses: SIGNUP_BONUS_IMPULSES,
         });
       }
     }

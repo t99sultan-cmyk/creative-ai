@@ -8,6 +8,14 @@
  *   - Any future Kaspi/card checkout
  */
 
+/**
+ * Impulses every new user gets on first sign-up.
+ * Exactly enough for 1 static (3) + 1 animated (4) creative — the "try both
+ * modes" trial the landing page promises ("7 импульсов в подарок"). Keep
+ * this in sync with the landing copy.
+ */
+export const SIGNUP_BONUS_IMPULSES = 7;
+
 export type PricingTier = {
   name: string;
   desc: string;

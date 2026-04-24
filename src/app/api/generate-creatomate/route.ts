@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { creatives, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
+import { SIGNUP_BONUS_IMPULSES } from '@/lib/pricing';
 
 export const maxDuration = 60; 
 
@@ -35,9 +36,9 @@ export async function POST(request: Request) {
           email: email,
           name: clerkUser.firstName || "User",
           image: clerkUser.imageUrl || "",
-          impulses: 17,
+          impulses: SIGNUP_BONUS_IMPULSES,
         });
-        currentImpulses = 17;
+        currentImpulses = SIGNUP_BONUS_IMPULSES;
       }
     } else {
       currentImpulses = userRecords[0].impulses || 0;

@@ -4,6 +4,7 @@ import { WebhookEvent } from '@clerk/nextjs/server'
 import { db } from '@/db'
 import { users } from '@/db/schema'
 import { sendCapiEvent } from '@/lib/fb-capi'
+import { SIGNUP_BONUS_IMPULSES } from '@/lib/pricing'
 
 export async function POST(req: Request) {
   // You can find this in the Clerk Dashboard -> Webhooks -> choose the endpoint
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
           email,
           name,
           image: image_url || '',
-          impulses: 10, // 10 free impulses
+          impulses: SIGNUP_BONUS_IMPULSES,
         })
         console.log(`User ${id} created in database via webhook`);
       } catch (err) {

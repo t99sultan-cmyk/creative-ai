@@ -7,7 +7,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { sendCapiEvent } from "@/lib/fb-capi";
-import { estimateRevenueKztFromImpulses } from "@/lib/pricing";
+import { estimateRevenueKztFromImpulses, SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 /**
  * Redeem a promo code → add its impulses to the current user's balance.
@@ -61,7 +61,7 @@ export async function redeemPromoCode(code: string) {
         email: email,
         name: clerkUser?.firstName || "User",
         image: clerkUser?.imageUrl || "",
-        impulses: 17,
+        impulses: SIGNUP_BONUS_IMPULSES,
       });
     }
 
