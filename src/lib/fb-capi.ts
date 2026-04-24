@@ -38,9 +38,19 @@ const PIXEL_ID =
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN;
 // Optional — Meta lets you include a test_event_code to route the event
 // to the "Test Events" tab in Events Manager for debugging without
-// polluting production stats. Set META_CAPI_TEST_EVENT_CODE in Vercel
-// preview only.
-const TEST_EVENT_CODE = process.env.META_CAPI_TEST_EVENT_CODE;
+// polluting production stats. Set META_CAPI_TEST_EVENT_CODE in local
+// .env.local or in Vercel Preview env only.
+//
+// Safety guard: if the variable is ever set in the Production environment
+// by mistake, we still strip it. Test events in production break campaign
+// optimisation (real conversions land in the "Test Events" tab and don't
+// count), and the Events Manager → Diagnostics tab raises a warning.
+// `VERCEL_ENV` is set automatically by Vercel to "production" | "preview" |
+// "development"; outside Vercel it's undefined and the guard is a no-op.
+const TEST_EVENT_CODE =
+  process.env.VERCEL_ENV === "production"
+    ? undefined
+    : process.env.META_CAPI_TEST_EVENT_CODE;
 
 function sha256Normalized(raw: string): string {
   return crypto
