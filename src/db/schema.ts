@@ -4,9 +4,22 @@ export const users = pgTable("user", {
   id: text("id").primaryKey(), // Clerk User ID
   name: text("name"),
   email: text("email").notNull(),
-  impulses: integer("impulses").default(17), // The internal currency
+  // Internal currency. Default mirrors SIGNUP_BONUS_IMPULSES in @/lib/pricing;
+  // kept literal here because drizzle schema is evaluated at migration-gen
+  // time and can't import runtime constants. If the bonus changes, bump
+  // both values.
+  impulses: integer("impulses").default(7),
   image: text("image"),
-  phone: text("phone"), // Phone number collected during onboarding
+  phone: text("phone"), // Phone number collected during onboarding (also used as WhatsApp contact)
+  // Optional Telegram handle (without the @). Collected on the welcome
+  // screen so the team can reach out with onboarding material, tips, and
+  // support messages. Nullable — users who don't have or don't want to
+  // share Telegram skip it.
+  telegramUsername: text("telegram_username"),
+  // Flag: has the user seen the post-signup welcome screen yet? Lets us
+  // redirect returning users straight into /editor and show the intro
+  // + phone-capture form exactly once per account.
+  welcomeShown: boolean("welcome_shown").default(false).notNull(),
   isBanned: boolean("is_banned").default(false), // Administrative ban status
   createdAt: timestamp("created_at").defaultNow(),
 });
