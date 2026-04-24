@@ -19,9 +19,10 @@ import {
   Send,
   MessageCircle,
   Link as LinkIcon,
-  Flame,
 } from "lucide-react";
 import { savePhone } from "@/actions/savePhone";
+import { DeadlineBanner } from "@/components/DeadlineBanner";
+import { Confetti } from "@/components/Confetti";
 
 /**
  * One-shot post-signup welcome screen.
@@ -101,27 +102,51 @@ export function WelcomeOnboarding() {
 
       <main className="relative z-10 w-full max-w-xl mx-auto px-5 pb-12">
         {/* ---------------- HERO ---------------- */}
-        <section className="text-center pt-4 pb-10 animate-in fade-in slide-in-from-bottom-6 duration-700 fill-mode-both">
-          <div className="relative inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-hermes-500/20 to-amber-500/20 border border-hermes-500/40 text-hermes-200 text-xs font-semibold mb-5">
+        <section className="relative text-center pt-4 pb-10">
+          {/* celebratory confetti (auto-stops after ~4.5s) */}
+          <Confetti pieces={70} durationMs={5000} />
+
+          {/* radial glow behind the whole hero */}
+          <div className="absolute inset-x-0 top-0 h-[340px] bg-[radial-gradient(ellipse_at_center_top,rgba(243,112,33,0.35),transparent_70%)] pointer-events-none -z-10" />
+
+          <div className="relative inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-hermes-500/20 to-amber-500/20 border border-hermes-500/40 text-hermes-200 text-xs font-semibold mb-5 animate-in fade-in zoom-in-95 duration-500 fill-mode-both">
             <PartyPopper className="w-4 h-4" />
             Регистрация завершена
             <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-hermes-400 animate-ping" />
             <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-hermes-400" />
           </div>
 
-          <h1 className="text-[32px] md:text-5xl font-black text-white tracking-tight leading-[1.05] mb-4">
+          <h1 className="text-[30px] md:text-5xl font-black text-white tracking-tight leading-[1.05] mb-5 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
             Поздравляем!
-            <br />
-            Тебе начислено{" "}
-            <span className="relative inline-block">
-              <span className="relative z-10 bg-gradient-to-r from-hermes-300 to-amber-300 bg-clip-text text-transparent">
-                7 Импульсов
-              </span>
-              <span className="absolute inset-x-0 bottom-0 h-3 bg-hermes-500/30 rounded-md -z-0" />
-            </span>
           </h1>
 
-          <p className="text-neutral-300 text-base md:text-lg font-medium leading-relaxed max-w-md mx-auto">
+          {/* Giant "7" + label below — impossible to miss. Count-up + scale
+              entrance for extra celebration. */}
+          <div className="relative mb-5 flex flex-col items-center animate-in fade-in zoom-in-90 duration-700 delay-200 fill-mode-both">
+            <div className="relative">
+              {/* halo */}
+              <div className="absolute inset-0 bg-gradient-to-br from-hermes-400 to-amber-400 blur-3xl opacity-40 scale-110 pointer-events-none" />
+              <div className="relative flex items-baseline gap-0">
+                <span
+                  className="text-[120px] md:text-[160px] font-black leading-none bg-gradient-to-br from-hermes-300 via-amber-300 to-hermes-500 bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(255,168,110,0.35)]"
+                  style={{ WebkitTextStroke: "0.5px rgba(255,255,255,0.15)" }}
+                >
+                  <CountUp target={7} durationMs={1000} />
+                </span>
+                <span className="ml-2 text-2xl md:text-3xl">
+                  <Sparkles className="w-8 h-8 md:w-10 md:h-10 text-amber-300 animate-pulse" />
+                </span>
+              </div>
+            </div>
+            <p className="text-lg md:text-2xl font-extrabold text-white tracking-tight mt-1">
+              Импульсов в подарок
+            </p>
+            <p className="text-[13px] md:text-sm text-hermes-200 font-semibold mt-1">
+              Зачислены на баланс · действительны сегодня
+            </p>
+          </div>
+
+          <p className="relative text-neutral-300 text-base md:text-lg font-medium leading-relaxed max-w-md mx-auto animate-in fade-in duration-700 delay-500 fill-mode-both">
             Этого хватит, чтобы бесплатно сделать{" "}
             <strong className="text-white">1 статичный</strong> и{" "}
             <strong className="text-white">1 анимированный</strong> креатив.
@@ -129,7 +154,7 @@ export function WelcomeOnboarding() {
           </p>
 
           {/* quick stats chips */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+          <div className="relative flex flex-wrap items-center justify-center gap-2 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-700 fill-mode-both">
             <Chip icon={<Clock className="w-3.5 h-3.5" />} label="60 секунд" />
             <Chip icon={<Check className="w-3.5 h-3.5" />} label="Без дизайнера" />
             <Chip icon={<Zap className="w-3.5 h-3.5" />} label="Качество 4K" />
@@ -137,7 +162,9 @@ export function WelcomeOnboarding() {
         </section>
 
         {/* ---------------- DEADLINE BANNER ---------------- */}
-        <DeadlineBanner />
+        <section className="mb-10 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-[850ms] fill-mode-both">
+          <DeadlineBanner variant="hero-card" />
+        </section>
 
         {/* ---------------- EXAMPLES (live autoplay) ---------------- */}
         <section className="mb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150 fill-mode-both">
@@ -390,98 +417,26 @@ export function WelcomeOnboarding() {
   );
 }
 
-/**
- * Urgency banner: "Акция действует до сегодня, 25 апреля, 23:59" with a
- * live countdown. The deadline rolls over automatically every midnight
- * Almaty time, so every visitor sees the offer ending *today*.
- *
- * Client-only — we gate the first render on a mounted flag so SSR and
- * hydration don't disagree about what "now" is.
- */
-function DeadlineBanner() {
-  const [now, setNow] = useState<Date | null>(null);
-
+/** Animated integer count-up from 0 → target over durationMs with ease-out. */
+function CountUp({
+  target,
+  durationMs = 900,
+}: {
+  target: number;
+  durationMs?: number;
+}) {
+  const [value, setValue] = useState(0);
   useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
+    const start = Date.now();
+    const id = setInterval(() => {
+      const t = Math.min(1, (Date.now() - start) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(target * eased));
+      if (t >= 1) clearInterval(id);
+    }, 40);
     return () => clearInterval(id);
-  }, []);
-
-  if (!now) {
-    // Reserve the same height so the layout doesn't jump on hydration.
-    return <div className="h-[88px] mb-10" aria-hidden />;
-  }
-
-  // Day label in Russian, e.g. "25 апреля".
-  const dayLabel = new Intl.DateTimeFormat("ru-RU", {
-    timeZone: "Asia/Almaty",
-    day: "numeric",
-    month: "long",
-  }).format(now);
-
-  // Build today-23:59:59 in Almaty. en-CA gives ISO YYYY-MM-DD in parts.
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Almaty",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(now)
-      .map((p) => [p.type, p.value]),
-  ) as Record<string, string>;
-  // Almaty is UTC+5 year-round (no DST), so we anchor the deadline in
-  // that offset. This keeps the countdown correct regardless of the
-  // visitor's device timezone.
-  const deadline = new Date(
-    `${parts.year}-${parts.month}-${parts.day}T23:59:59+05:00`,
-  );
-  const msLeft = Math.max(0, deadline.getTime() - now.getTime());
-  const hours = Math.floor(msLeft / 3_600_000);
-  const minutes = Math.floor((msLeft % 3_600_000) / 60_000);
-  const seconds = Math.floor((msLeft % 60_000) / 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-
-  return (
-    <section className="mb-10 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-75 fill-mode-both">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-hermes-600/30 via-red-500/20 to-amber-500/30 border border-hermes-500/40 p-4 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="relative flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-hermes-500 to-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
-            <Flame className="w-5 h-5 text-white" />
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping" />
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-300" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-[13px] md:text-sm font-bold leading-tight">
-              Бонус 7 Импульсов — только сегодня
-            </p>
-            <p className="text-hermes-200 text-[11px] md:text-xs leading-tight mt-0.5">
-              Акция активна до <strong>{dayLabel}, 23:59</strong> · потом
-              только платно
-            </p>
-          </div>
-          <div className="flex-shrink-0 flex items-baseline gap-1 font-mono tabular-nums text-white">
-            <TimeBox value={pad(hours)} unit="ч" />
-            <TimeBox value={pad(minutes)} unit="м" />
-            <TimeBox value={pad(seconds)} unit="с" />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function TimeBox({ value, unit }: { value: string; unit: string }) {
-  return (
-    <span className="flex flex-col items-center">
-      <span className="text-sm md:text-base font-black leading-none bg-black/30 rounded-md px-1.5 py-1 min-w-[28px] text-center">
-        {value}
-      </span>
-      <span className="text-[9px] md:text-[10px] text-neutral-300 font-semibold mt-0.5">
-        {unit}
-      </span>
-    </span>
-  );
+  }, [target, durationMs]);
+  return <>{value}</>;
 }
 
 function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {

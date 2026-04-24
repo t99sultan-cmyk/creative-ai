@@ -20,6 +20,7 @@ import { TiltCard } from "@/components/landing/TiltCard";
 import { CountUp } from "@/components/landing/CountUp";
 import { CountdownLoop } from "@/components/landing/CountdownLoop";
 import { trackInitiateCheckout } from "@/lib/fb-pixel";
+import { DeadlineBanner } from "@/components/DeadlineBanner";
 
 // --- DATA ---
 type Transformation = {
@@ -228,8 +229,19 @@ export default function LandingPage() {
                      </SignInButton>
                   )}
                </motion.div>
-               
-               <motion.div 
+
+               {/* Rolling-deadline urgency badge, sits right under the
+                   primary CTA so the "ends today" signal is seen in the
+                   same glance as the button. */}
+               <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+               >
+                  <DeadlineBanner variant="hero-inline" />
+               </motion.div>
+
+               <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.4 }}
@@ -735,6 +747,37 @@ export default function LandingPage() {
                </div>
             </Reveal>
          </div>
+      </section>
+
+      {/* PRE-FOOTER DEADLINE — second urgency touchpoint: users who made
+          it to the bottom of the page have read the pitch and now see a
+          hard reminder that the free bonus expires tonight. */}
+      <section className="py-10 md:py-14 px-4 max-w-5xl mx-auto relative">
+        <DeadlineBanner
+          variant="inline"
+          cta={
+            isSignedIn ? (
+              <Link
+                href="/editor"
+                className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg"
+              >
+                Перейти в редактор
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+            ) : (
+              <SignInButton
+                mode="modal"
+                forceRedirectUrl="/editor"
+                signUpForceRedirectUrl="/onboarding"
+              >
+                <button className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg">
+                  Забрать 7 Импульсов
+                  <Sparkles className="w-5 h-5 text-amber-500" />
+                </button>
+              </SignInButton>
+            )
+          }
+        />
       </section>
 
       {/* FOOTER */}
