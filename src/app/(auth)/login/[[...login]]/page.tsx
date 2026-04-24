@@ -34,7 +34,11 @@ export default function LoginPage() {
              path="/login" 
              routing="path" 
              signUpUrl="/register" 
+             // Returning users go straight to the editor. If they switch
+             // to sign-up from this screen, Clerk routes via SignUpUrl
+             // (/register), where the welcome screen is forced.
              fallbackRedirectUrl="/editor"
+             signUpFallbackRedirectUrl="/onboarding"
              appearance={{
                elements: {
                  rootBox: "w-full",

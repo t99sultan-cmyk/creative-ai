@@ -34,7 +34,10 @@ export default function RegisterPage() {
              path="/register" 
              routing="path" 
              signInUrl="/login" 
-             fallbackRedirectUrl="/onboarding"
+             // Force — not fallback — so Clerk always lands new users on
+             // /onboarding for the welcome screen, even when a
+             // `redirect_url` query param is present from an inbound flow.
+             forceRedirectUrl="/onboarding"
              appearance={{
                elements: {
                  rootBox: "w-full",

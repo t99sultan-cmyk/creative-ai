@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -19,6 +19,7 @@ import {
   Send,
   MessageCircle,
   Link as LinkIcon,
+  Flame,
 } from "lucide-react";
 import { savePhone } from "@/actions/savePhone";
 
@@ -134,6 +135,9 @@ export function WelcomeOnboarding() {
             <Chip icon={<Zap className="w-3.5 h-3.5" />} label="Качество 4K" />
           </div>
         </section>
+
+        {/* ---------------- DEADLINE BANNER ---------------- */}
+        <DeadlineBanner />
 
         {/* ---------------- EXAMPLES (live autoplay) ---------------- */}
         <section className="mb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150 fill-mode-both">
@@ -383,6 +387,100 @@ export function WelcomeOnboarding() {
         </section>
       </main>
     </div>
+  );
+}
+
+/**
+ * Urgency banner: "Акция действует до сегодня, 25 апреля, 23:59" with a
+ * live countdown. The deadline rolls over automatically every midnight
+ * Almaty time, so every visitor sees the offer ending *today*.
+ *
+ * Client-only — we gate the first render on a mounted flag so SSR and
+ * hydration don't disagree about what "now" is.
+ */
+function DeadlineBanner() {
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!now) {
+    // Reserve the same height so the layout doesn't jump on hydration.
+    return <div className="h-[88px] mb-10" aria-hidden />;
+  }
+
+  // Day label in Russian, e.g. "25 апреля".
+  const dayLabel = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Asia/Almaty",
+    day: "numeric",
+    month: "long",
+  }).format(now);
+
+  // Build today-23:59:59 in Almaty. en-CA gives ISO YYYY-MM-DD in parts.
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Almaty",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  ) as Record<string, string>;
+  // Almaty is UTC+5 year-round (no DST), so we anchor the deadline in
+  // that offset. This keeps the countdown correct regardless of the
+  // visitor's device timezone.
+  const deadline = new Date(
+    `${parts.year}-${parts.month}-${parts.day}T23:59:59+05:00`,
+  );
+  const msLeft = Math.max(0, deadline.getTime() - now.getTime());
+  const hours = Math.floor(msLeft / 3_600_000);
+  const minutes = Math.floor((msLeft % 3_600_000) / 60_000);
+  const seconds = Math.floor((msLeft % 60_000) / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  return (
+    <section className="mb-10 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-75 fill-mode-both">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-hermes-600/30 via-red-500/20 to-amber-500/30 border border-hermes-500/40 p-4 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-hermes-500 to-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
+            <Flame className="w-5 h-5 text-white" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-[13px] md:text-sm font-bold leading-tight">
+              Бонус 7 Импульсов — только сегодня
+            </p>
+            <p className="text-hermes-200 text-[11px] md:text-xs leading-tight mt-0.5">
+              Акция активна до <strong>{dayLabel}, 23:59</strong> · потом
+              только платно
+            </p>
+          </div>
+          <div className="flex-shrink-0 flex items-baseline gap-1 font-mono tabular-nums text-white">
+            <TimeBox value={pad(hours)} unit="ч" />
+            <TimeBox value={pad(minutes)} unit="м" />
+            <TimeBox value={pad(seconds)} unit="с" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TimeBox({ value, unit }: { value: string; unit: string }) {
+  return (
+    <span className="flex flex-col items-center">
+      <span className="text-sm md:text-base font-black leading-none bg-black/30 rounded-md px-1.5 py-1 min-w-[28px] text-center">
+        {value}
+      </span>
+      <span className="text-[9px] md:text-[10px] text-neutral-300 font-semibold mt-0.5">
+        {unit}
+      </span>
+    </span>
   );
 }
 

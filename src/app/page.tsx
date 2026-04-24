@@ -120,10 +120,10 @@ export default function LandingPage() {
                </div>
             ) : (
                <>
-                 <SignInButton mode="modal" forceRedirectUrl="/editor">
+                 <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                    <button className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Войти</button>
                  </SignInButton>
-                 <SignInButton mode="modal" forceRedirectUrl="/editor">
+                 <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                    <button className="text-sm font-bold text-white bg-hermes-500 hover:bg-hermes-600 px-5 py-2 rounded-full shadow-[0_0_20px_rgba(243,112,33,0.35)] transition-all">
                      Начать бесплатно
                    </button>
@@ -152,7 +152,7 @@ export default function LandingPage() {
                {isSignedIn ? (
                  <Link href="/editor" className="mt-4 text-center text-sm font-bold text-neutral-900 bg-gradient-to-r from-hermes-500 to-amber-500 px-5 py-3 rounded-xl transition-all">Перейти в Студию</Link>
                ) : (
-                 <SignInButton mode="modal" forceRedirectUrl="/editor">
+                 <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                    <button className="mt-4 text-center text-sm font-bold text-white bg-hermes-500 px-5 py-3 rounded-xl transition-all w-full">Начать бесплатно</button>
                  </SignInButton>
                )}
@@ -219,7 +219,7 @@ export default function LandingPage() {
                         </button>
                      </Link>
                   ) : (
-                     <SignInButton mode="modal" forceRedirectUrl="/editor">
+                     <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                         <button className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/30">
                            Начать бесплатно
                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -725,7 +725,7 @@ export default function LandingPage() {
                         <Sparkles className="w-6 h-6 text-amber-500" />
                      </Link>
                   ) : (
-                     <SignInButton mode="modal" forceRedirectUrl="/editor">
+                     <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                         <button className="bg-white text-hermes-600 font-black text-xl px-12 py-6 rounded-2xl hover:scale-105 transition-transform flex items-center justify-center gap-3 shadow-2xl w-full sm:w-auto">
                            Начать бесплатно (7 импульсов)
                            <Sparkles className="w-6 h-6 text-amber-500" />
@@ -796,7 +796,7 @@ export default function LandingPage() {
       {/* STICKY MOBILE CTA */}
       {!isSignedIn && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-neutral-200 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
-          <SignInButton mode="modal" forceRedirectUrl="/editor">
+          <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
             <button className="w-full bg-hermes-500 hover:bg-hermes-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-hermes-500/30 transition-colors">
               Начать бесплатно
               <Sparkles className="w-4 h-4" />
