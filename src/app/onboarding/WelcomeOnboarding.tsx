@@ -229,7 +229,7 @@ export function WelcomeOnboarding() {
               num={4}
               icon={<Download className="w-5 h-5" />}
               title="Скачай и запусти в рекламу"
-              desc="Через 60 секунд — готовый файл PNG или MP4 в 4K без водяных знаков. Подходит для Meta Ads, TikTok, Яндекс.Директ и Kaspi-рекламы."
+              desc="PNG-постер или MP4 с motion-анимацией в 4K без водяных знаков. Это не видеосъёмка и не stock — это умный рекламный пост, готовый к запуску в Meta Ads, TikTok, Яндекс.Директ и Kaspi."
             />
           </div>
         </section>

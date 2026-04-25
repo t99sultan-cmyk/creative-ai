@@ -1386,7 +1386,7 @@ export default function Home() {
                   </span>
                 </span>
                 <span className={clsx("text-[10px] font-medium leading-tight", isAnimated ? "text-white/70" : "text-neutral-500")}>
-                  Удерживает взгляд в 2-3× дольше
+                  MP4 motion-постер
                 </span>
               </button>
               <button
@@ -1401,10 +1401,13 @@ export default function Home() {
               >
                 <span className="font-bold">Статичный</span>
                 <span className={clsx("text-[10px] font-medium leading-tight", !isAnimated ? "text-white/70" : "text-neutral-500")}>
-                  Идеально для Kaspi-каталога
+                  PNG-постер 4K
                 </span>
               </button>
             </div>
+            <p className="text-[10px] text-neutral-400 leading-tight">
+              Это рекламный креатив (постер или motion-анимация), не видеосъёмка с актёрами и не stock-видео.
+            </p>
           </div>
 
           {/* Variations Count */}
