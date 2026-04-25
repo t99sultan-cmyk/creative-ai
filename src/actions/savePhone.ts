@@ -3,7 +3,6 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 /**
@@ -51,48 +50,43 @@ export async function savePhone(
   }
 
   try {
-    const updated = await db
-      .update(users)
-      .set({
+    // Single upsert — combines the previous "update, fall back to insert"
+    // pattern into one atomic statement. Removes the race where the
+    // Clerk webhook could insert a row between our update (returning 0)
+    // and our follow-up insert.
+    //
+    // Need email/name for the insert path in case the row truly doesn't
+    // exist yet (webhook hasn't landed). On the update path Postgres
+    // ignores `email`/`name` because they're not in the `set` clause.
+    const cu = await currentUser();
+    const email = cu?.emailAddresses?.[0]?.emailAddress;
+    if (!email) {
+      return { success: false as const, error: "Не удалось сохранить контакты." };
+    }
+    const name =
+      [cu?.firstName, cu?.lastName].filter(Boolean).join(" ") ||
+      email.split("@")[0];
+
+    await db
+      .insert(users)
+      .values({
+        id: userId,
+        email,
+        name,
+        image: cu?.imageUrl ?? "",
+        impulses: SIGNUP_BONUS_IMPULSES,
         phone: cleanedPhone,
         telegramUsername: tgUsername,
         welcomeShown: true,
       })
-      .where(eq(users.id, userId))
-      .returning({ id: users.id });
-
-    // Race: Clerk's `user.created` webhook is async. If a user hits
-    // onboarding before it lands, there is no row to update. Create it.
-    if (updated.length === 0) {
-      const cu = await currentUser();
-      const email = cu?.emailAddresses?.[0]?.emailAddress;
-      if (!email) {
-        return { success: false as const, error: "Не удалось сохранить контакты." };
-      }
-      const name =
-        [cu?.firstName, cu?.lastName].filter(Boolean).join(" ") ||
-        email.split("@")[0];
-      await db
-        .insert(users)
-        .values({
-          id: userId,
-          email,
-          name,
-          image: cu?.imageUrl ?? "",
-          impulses: SIGNUP_BONUS_IMPULSES,
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
           phone: cleanedPhone,
           telegramUsername: tgUsername,
           welcomeShown: true,
-        })
-        .onConflictDoUpdate({
-          target: users.id,
-          set: {
-            phone: cleanedPhone,
-            telegramUsername: tgUsername,
-            welcomeShown: true,
-          },
-        });
-    }
+        },
+      });
 
     return { success: true as const };
   } catch (error: any) {
