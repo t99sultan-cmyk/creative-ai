@@ -6,6 +6,110 @@ import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
+export type TemplateScope = "all" | "mine" | "public";
+export type GalleryItem = {
+  id: string;
+  format: string | null;
+  cost: number | null;
+  htmlCode: string | null;
+  videoUrl: string | null;
+  prompt: string | null;
+  feedbackScore: number | null;
+  isMine: boolean;
+};
+
+/**
+ * Unified templates feed — user's own creatives + public ones from
+ * other users in a single list, with optional scope filter. Used by
+ * the editor's "Шаблоны" modal.
+ *
+ * Public set is filtered the same as `getPublicGallery`: published,
+ * not deleted, not disliked, author not banned. User's own set
+ * includes everything they haven't soft-deleted, regardless of
+ * isPublic — it's their own bin.
+ */
+export async function getAllTemplates(scope: TemplateScope = "all", limit = 24) {
+  const safeLimit = Math.min(Math.max(1, limit), 60);
+  try {
+    const { userId } = await auth();
+
+    const items: GalleryItem[] = [];
+
+    // 1) User's own (always included unless scope === "public")
+    if (scope !== "public" && userId) {
+      const mine = await db
+        .select({
+          id: creatives.id,
+          format: creatives.format,
+          cost: creatives.cost,
+          htmlCode: creatives.htmlCode,
+          videoUrl: creatives.videoUrl,
+          prompt: creatives.prompt,
+          feedbackScore: creatives.feedbackScore,
+        })
+        .from(creatives)
+        .where(and(eq(creatives.userId, userId), isNull(creatives.deletedAt)))
+        .orderBy(desc(creatives.createdAt))
+        .limit(safeLimit);
+      for (const m of mine) items.push({ ...m, isMine: true });
+    }
+
+    // 2) Public from other users
+    if (scope !== "mine") {
+      const pub = await db
+        .select({
+          id: creatives.id,
+          format: creatives.format,
+          cost: creatives.cost,
+          htmlCode: creatives.htmlCode,
+          videoUrl: creatives.videoUrl,
+          prompt: creatives.prompt,
+          feedbackScore: creatives.feedbackScore,
+          authorId: creatives.userId,
+        })
+        .from(creatives)
+        .innerJoin(users, eq(users.id, creatives.userId))
+        .where(
+          and(
+            eq(creatives.isPublic, true),
+            isNull(creatives.deletedAt),
+            or(
+              isNull(creatives.feedbackScore),
+              ne(creatives.feedbackScore, -1),
+            ),
+            or(eq(users.isBanned, false), isNull(users.isBanned)),
+            or(ne(creatives.htmlCode, ""), ne(creatives.videoUrl, "")),
+            // Exclude my own from the public bucket — they're already in
+            // the "mine" set when scope === "all".
+            userId ? ne(creatives.userId, userId) : sql`true`,
+          ),
+        )
+        .orderBy(
+          sql`(${creatives.feedbackScore} = 1) desc nulls last`,
+          desc(creatives.createdAt),
+        )
+        .limit(safeLimit);
+      for (const p of pub) {
+        items.push({
+          id: p.id,
+          format: p.format,
+          cost: p.cost,
+          htmlCode: p.htmlCode,
+          videoUrl: p.videoUrl,
+          prompt: p.prompt,
+          feedbackScore: p.feedbackScore,
+          isMine: false,
+        });
+      }
+    }
+
+    return { success: true as const, items };
+  } catch (e: any) {
+    console.error("getAllTemplates error", e);
+    return { success: false as const, error: e?.message ?? "load failed", items: [] as GalleryItem[] };
+  }
+}
+
 /**
  * Public gallery — последние не-скрытые, не-удалённые, не-дизлайкнутые
  * креативы от не-забаненных юзеров. Сортировка: лайкнутые первыми,

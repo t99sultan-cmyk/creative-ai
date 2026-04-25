@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag, Eye, EyeOff, LayoutGrid } from "lucide-react";
 import { NICHE_LIST } from "@/lib/niche-packs";
 import { toggleCreativePublic } from "@/actions/galleryActions";
-import { PublicGallery } from "@/components/PublicGallery";
+import { TemplatesModal } from "@/components/TemplatesModal";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -35,6 +35,8 @@ export default function Home() {
   // AI model choice. Default Claude — best for design work. Gemini is
   // available as a faster, cheaper alternative.
   const [modelChoice, setModelChoice] = useState<"claude" | "gemini">("claude");
+  // Templates modal — opens via the "Шаблоны" button on the canvas.
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   // All plans cost 3 for static and 4 for animated
   const currentCost = (isAnimated ? 4 : 3) * generationsCount;
@@ -1773,7 +1775,21 @@ export default function Home() {
         "flex-1 relative flex-col items-center justify-start md:justify-center p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-[300px] md:pb-12 pt-8 md:pt-8 w-full min-h-screen",
         mobileTab === 'canvas' ? "flex" : "hidden md:flex"
       )}>
-        
+
+        {/* Templates entry — sits in the canvas top-left corner. Opens
+            the unified templates modal (mine + public from clients).
+            Visible on desktop always; on mobile only when the canvas
+            tab is showing (sticky header would clutter controls). */}
+        <button
+          onClick={() => setTemplatesOpen(true)}
+          className="absolute top-4 left-4 md:top-6 md:left-6 z-30 flex items-center gap-2 bg-white hover:bg-neutral-50 text-neutral-800 border border-neutral-200 rounded-xl px-3 py-2 shadow-sm hover:shadow-md transition-all font-bold text-xs md:text-sm"
+          title="Открыть шаблоны (мои и от клиентов)"
+        >
+          <LayoutGrid className="w-4 h-4 text-hermes-500" />
+          Шаблоны
+        </button>
+
+
         {code && (
            <div className="absolute top-4 left-4 right-4 md:top-8 md:auto md:left-auto md:right-8 z-20 flex flex-wrap items-center justify-end gap-2 md:gap-3">
              <button
@@ -1842,26 +1858,17 @@ export default function Home() {
             />
           </div>
         ) : (
-          <div className="z-10 flex flex-col items-center w-full max-w-[1100px]">
-            <div
-               className="flex flex-col items-center justify-center text-neutral-400 p-8 border-2 border-dashed border-neutral-300 rounded-[32px] bg-white/50 backdrop-blur-md transition-all duration-300 ease-out shadow-sm"
-               style={getCanvasStyle()}
-            >
-              <div className="w-24 h-24 rounded-full border border-neutral-200 bg-white flex items-center justify-center shadow-lg shadow-black/5 mb-6">
-                <Frame className="w-10 h-10 text-neutral-300" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-neutral-800 tracking-tight">Холст пуст</h3>
-                <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500 text-center px-4">Заполните ТЗ в настройках слева и нажмите сгенерировать. Создадим для вас идеальную картинку.</p>
-              </div>
+          <div
+             className="z-10 flex flex-col items-center justify-center text-neutral-400 p-8 border-2 border-dashed border-neutral-300 rounded-[32px] bg-white/50 backdrop-blur-md transition-all duration-300 ease-out shadow-sm"
+             style={getCanvasStyle()}
+          >
+            <div className="w-24 h-24 rounded-full border border-neutral-200 bg-white flex items-center justify-center shadow-lg shadow-black/5 mb-6">
+              <Frame className="w-10 h-10 text-neutral-300" />
             </div>
-
-            <PublicGallery onPickAsTemplate={(item) => {
-              setRemixSourceCode(item.htmlCode || "");
-              setFormat(item.format === "1:1" ? "1:1" : "9:16");
-              setIsAnimated((item.cost ?? 0) > 3);
-              setMobileTab("controls");
-            }} />
+            <div className="text-center">
+              <h3 className="text-2xl font-bold text-neutral-800 tracking-tight">Холст пуст</h3>
+              <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500 text-center px-4">Заполните ТЗ в настройках слева и нажмите сгенерировать. Или откройте Шаблоны — там есть твои прошлые работы и креативы клиентов.</p>
+            </div>
           </div>
         )}
 
@@ -1988,6 +1995,18 @@ export default function Home() {
         </button>
       </div>
       
+      {/* Templates modal — mounts unconditionally, controls own visibility */}
+      <TemplatesModal
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onPickTemplate={(item) => {
+          if (item.htmlCode) setRemixSourceCode(item.htmlCode);
+          setFormat(item.format === "1:1" ? "1:1" : "9:16");
+          setIsAnimated((item.cost ?? 0) > 3);
+          setMobileTab("controls");
+        }}
+      />
+
       {/* Background Dots Pattern Definition */}
       <style dangerouslySetInnerHTML={{__html: `
         .custom-grid-pattern {
