@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag, Eye, EyeOff } from "lucide-react";
 import { NICHE_LIST } from "@/lib/niche-packs";
+import { toggleCreativePublic } from "@/actions/galleryActions";
+import { PublicGallery } from "@/components/PublicGallery";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -742,6 +744,39 @@ export default function Home() {
     }
   };
 
+  /** Optimistic toggle for the eye/eye-off icon on each creative tile.
+   *  Flip in state immediately so the icon swap feels instant; revert
+   *  if the server action fails. */
+  const handleTogglePublic = async (
+    id: string,
+    nextValue: boolean,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    setHistoryItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, isPublic: nextValue } : it)),
+    );
+    try {
+      const res = await toggleCreativePublic(id, nextValue);
+      if (!res.success) {
+        // Roll back if the server rejected.
+        setHistoryItems((prev) =>
+          prev.map((it) =>
+            it.id === id ? { ...it, isPublic: !nextValue } : it,
+          ),
+        );
+        console.error("toggleCreativePublic failed:", res.error);
+      }
+    } catch (err) {
+      setHistoryItems((prev) =>
+        prev.map((it) =>
+          it.id === id ? { ...it, isPublic: !nextValue } : it,
+        ),
+      );
+      console.error(err);
+    }
+  };
+
   const handleDownloadClick = async () => {
     if (!iframeRef.current) return;
 
@@ -1012,14 +1047,29 @@ export default function Home() {
                                     </span>
                                   )}
                                </div>
-                               <button
-                                  onClick={(e) => handleDeleteCreative(item.id, e)}
-                                  className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-neutral-400 hover:text-red-500 active:bg-red-100 transition-colors rounded-md hover:bg-red-50 shrink-0"
-                                  title="Удалить"
-                                  aria-label="Удалить креатив"
-                               >
-                                  <Trash2 className="w-4 h-4" />
-                               </button>
+                               <div className="flex items-center gap-0.5 shrink-0">
+                                 <button
+                                    onClick={(e) => handleTogglePublic(item.id, !item.isPublic, e)}
+                                    className={clsx(
+                                      "w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center transition-colors rounded-md",
+                                      item.isPublic
+                                        ? "text-green-600 hover:bg-green-50"
+                                        : "text-neutral-400 hover:bg-neutral-100"
+                                    )}
+                                    title={item.isPublic ? "Виден в общей галерее — нажми чтобы скрыть" : "Скрыт из галереи — нажми чтобы опубликовать"}
+                                    aria-label={item.isPublic ? "Скрыть из галереи" : "Опубликовать в галерею"}
+                                 >
+                                    {item.isPublic ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                 </button>
+                                 <button
+                                    onClick={(e) => handleDeleteCreative(item.id, e)}
+                                    className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-neutral-400 hover:text-red-500 active:bg-red-100 transition-colors rounded-md hover:bg-red-50"
+                                    title="Удалить"
+                                    aria-label="Удалить креатив"
+                                 >
+                                    <Trash2 className="w-4 h-4" />
+                                 </button>
+                               </div>
                             </div>
 
                             {/* Creative Preview */}
@@ -1318,25 +1368,39 @@ export default function Home() {
                 disabled={isLoading}
                 onClick={() => setIsAnimated(true)}
                 className={clsx(
-                  "py-3 rounded-xl border text-sm font-medium transition-all duration-200",
+                  "py-3 px-2 rounded-xl border text-sm font-medium transition-all duration-200 flex flex-col items-center gap-0.5 relative",
                   isAnimated ? "bg-neutral-900 border-neutral-900 text-white" : "bg-white border-neutral-200 text-neutral-600",
                   !isLoading && !isAnimated && "hover:border-neutral-300",
                   isLoading && "opacity-50 cursor-not-allowed"
                 )}
               >
-                Анимированный
+                <span className="flex items-center gap-1 font-bold">
+                  Анимированный
+                  <span className={clsx(
+                    "text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider",
+                    isAnimated ? "bg-amber-400 text-neutral-900" : "bg-amber-100 text-amber-700"
+                  )}>
+                    +CTR
+                  </span>
+                </span>
+                <span className={clsx("text-[10px] font-medium leading-tight", isAnimated ? "text-white/70" : "text-neutral-500")}>
+                  Удерживает взгляд в 2-3× дольше
+                </span>
               </button>
               <button
                 disabled={isLoading}
                 onClick={() => setIsAnimated(false)}
                 className={clsx(
-                  "py-3 rounded-xl border text-sm font-medium transition-all duration-200",
+                  "py-3 px-2 rounded-xl border text-sm font-medium transition-all duration-200 flex flex-col items-center gap-0.5",
                   !isAnimated ? "bg-neutral-900 border-neutral-900 text-white" : "bg-white border-neutral-200 text-neutral-600",
                   !isLoading && isAnimated && "hover:border-neutral-300",
                   isLoading && "opacity-50 cursor-not-allowed"
                 )}
               >
-                Статичный
+                <span className="font-bold">Статичный</span>
+                <span className={clsx("text-[10px] font-medium leading-tight", !isAnimated ? "text-white/70" : "text-neutral-500")}>
+                  Идеально для Kaspi-каталога
+                </span>
               </button>
             </div>
           </div>
@@ -1778,17 +1842,26 @@ export default function Home() {
             />
           </div>
         ) : (
-          <div 
-             className="z-10 flex flex-col items-center justify-center text-neutral-400 p-8 border-2 border-dashed border-neutral-300 rounded-[32px] bg-white/50 backdrop-blur-md transition-all duration-300 ease-out shadow-sm"
-             style={getCanvasStyle()}
-          >
-            <div className="w-24 h-24 rounded-full border border-neutral-200 bg-white flex items-center justify-center shadow-lg shadow-black/5 mb-6">
-              <Frame className="w-10 h-10 text-neutral-300" />
+          <div className="z-10 flex flex-col items-center w-full max-w-[1100px]">
+            <div
+               className="flex flex-col items-center justify-center text-neutral-400 p-8 border-2 border-dashed border-neutral-300 rounded-[32px] bg-white/50 backdrop-blur-md transition-all duration-300 ease-out shadow-sm"
+               style={getCanvasStyle()}
+            >
+              <div className="w-24 h-24 rounded-full border border-neutral-200 bg-white flex items-center justify-center shadow-lg shadow-black/5 mb-6">
+                <Frame className="w-10 h-10 text-neutral-300" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-neutral-800 tracking-tight">Холст пуст</h3>
+                <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500 text-center px-4">Заполните ТЗ в настройках слева и нажмите сгенерировать. Создадим для вас идеальную картинку.</p>
+              </div>
             </div>
-            <div className="text-center">
-              <h3 className="text-2xl font-bold text-neutral-800 tracking-tight">Холст пуст</h3>
-              <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500 text-center px-4">Заполните ТЗ в настройках слева и нажмите сгенерировать. Создадим для вас идеальную картинку.</p>
-            </div>
+
+            <PublicGallery onPickAsTemplate={(item) => {
+              setRemixSourceCode(item.htmlCode || "");
+              setFormat(item.format === "1:1" ? "1:1" : "9:16");
+              setIsAnimated((item.cost ?? 0) > 3);
+              setMobileTab("controls");
+            }} />
           </div>
         )}
 

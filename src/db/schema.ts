@@ -36,6 +36,11 @@ export const creatives = pgTable("creative", {
   htmlCode: text("htmlCode"),
   feedbackScore: integer("feedback_score"), // 1 for Like, -1 for Dislike, null for unrated
   feedbackText: text("feedback_text"), // Text comment from user telling the AI what went wrong/right
+  // Public-by-default. When true the creative shows up in the public
+  // inspiration gallery in the editor; when false it stays in the
+  // author's history only. The user toggles this from /account.
+  // Disliked creatives are excluded from the gallery regardless.
+  isPublic: boolean("is_public").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   /** Soft-delete timestamp. When set, the user can no longer see this
    *  creative in their editor history, but it stays in the DB and is

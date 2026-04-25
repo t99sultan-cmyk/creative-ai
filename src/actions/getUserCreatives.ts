@@ -44,6 +44,7 @@ export async function getUserCreatives() {
         cost: creatives.cost,
         videoUrl: creatives.videoUrl,
         feedbackScore: creatives.feedbackScore,
+        isPublic: creatives.isPublic,
         createdAt: creatives.createdAt,
       })
       .from(creatives)
