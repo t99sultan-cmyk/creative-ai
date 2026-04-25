@@ -1268,68 +1268,43 @@ export default function Home() {
             </div>
           </div>
 
-          {/* AI model choice. Two options: Claude Opus 4.7 (default,
-              recommended for HTML/CSS design) and Gemini 3.1 Pro (faster
-              and cheaper, lower visual fidelity on complex layouts). */}
+          {/* AI model choice — neutral framing. The user picks which
+              engine generates this run; both cost the same in
+              impulses. We don't editorialize which is "better" because
+              it depends on the brief. */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-hermes-500" />
-              Модель ИИ
-              <span className="text-[10px] text-neutral-400 font-medium ml-1">(можно сравнить)</span>
+              Модель
             </h2>
             <div className="grid grid-cols-2 gap-2">
               <button
                 disabled={isLoading}
                 onClick={() => setModelChoice("claude")}
                 className={clsx(
-                  "p-3 rounded-xl border text-left transition-all duration-200",
+                  "py-3 rounded-xl border text-sm font-bold transition-all duration-200",
                   modelChoice === "claude"
                     ? "bg-neutral-900 border-neutral-900 text-white shadow-md"
                     : "bg-white border-neutral-200 text-neutral-700 hover:border-neutral-300",
                   isLoading && "opacity-50 cursor-not-allowed"
                 )}
               >
-                <div className="flex items-center gap-1.5 text-[13px] font-bold">
-                  Claude Opus 4.7
-                  <span className={clsx(
-                    "text-[9px] px-1.5 py-0.5 rounded font-black uppercase",
-                    modelChoice === "claude" ? "bg-hermes-500 text-white" : "bg-hermes-50 text-hermes-600"
-                  )}>
-                    рекоменд.
-                  </span>
-                </div>
-                <p className={clsx("text-[10px] mt-1 leading-tight", modelChoice === "claude" ? "text-white/70" : "text-neutral-500")}>
-                  Лучшее качество дизайна и вёрстки
-                </p>
+                Claude Opus 4.7
               </button>
               <button
                 disabled={isLoading}
                 onClick={() => setModelChoice("gemini")}
                 className={clsx(
-                  "p-3 rounded-xl border text-left transition-all duration-200",
+                  "py-3 rounded-xl border text-sm font-bold transition-all duration-200",
                   modelChoice === "gemini"
                     ? "bg-neutral-900 border-neutral-900 text-white shadow-md"
                     : "bg-white border-neutral-200 text-neutral-700 hover:border-neutral-300",
                   isLoading && "opacity-50 cursor-not-allowed"
                 )}
               >
-                <div className="flex items-center gap-1.5 text-[13px] font-bold">
-                  Gemini 3.1 Pro
-                  <span className={clsx(
-                    "text-[9px] px-1.5 py-0.5 rounded font-black uppercase",
-                    modelChoice === "gemini" ? "bg-blue-400 text-white" : "bg-blue-50 text-blue-600"
-                  )}>
-                    дешевле
-                  </span>
-                </div>
-                <p className={clsx("text-[10px] mt-1 leading-tight", modelChoice === "gemini" ? "text-white/70" : "text-neutral-500")}>
-                  Быстрее и в ~5× экономнее
-                </p>
+                Gemini 3.1 Pro
               </button>
             </div>
-            <p className="text-[10px] text-neutral-400 leading-tight">
-              Сгенерь один и тот же бриф в обеих моделях — увидишь разницу. Стоимость в импульсах одинаковая.
-            </p>
           </div>
 
           {/* Animation Toggle */}
