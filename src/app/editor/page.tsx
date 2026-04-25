@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2 } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb } from "lucide-react";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -1328,7 +1328,28 @@ export default function Home() {
                 </span>
                 <span className="text-xs text-neutral-400 font-medium">{referenceImages.length}/{MAX_IMAGES}</span>
               </h2>
-              
+
+              {/* Recommendation banner when no reference uploaded yet.
+                  Without a reference the model has no style anchor and the
+                  output rarely matches user expectations — this is the
+                  single biggest cause of "не то, что я ожидал". */}
+              {referenceImages.length === 0 && !isLoading && (
+                <div className="flex gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                  <Lightbulb className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs leading-snug">
+                    <p className="font-bold text-amber-900">
+                      Рекомендуем загрузить референс
+                    </p>
+                    <p className="text-amber-800 mt-0.5">
+                      Покажи ИИ пример стиля — скриншот рекламы, рендер,
+                      любую картинку, на которую хочешь быть похожим. Без
+                      референса результат может выйти не таким, как ты
+                      ожидаешь.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 {referenceImages.map((img, i) => (
                   <div key={i} className={clsx("relative group w-16 h-16 rounded-lg border border-neutral-200 overflow-hidden shadow-sm flex items-center justify-center", isLoading && "opacity-50")}>
