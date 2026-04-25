@@ -171,9 +171,10 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    🔴 ALWAYS LOAD (these are mandatory):
    - Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
    - Modern Google Fonts (e.g. Inter, Manrope, Unbounded, Space Grotesk, Bricolage Grotesque)
-   - ${isAnimated ? 'GSAP (baseline animation engine): <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>' : 'No animation libs — OFF mode.'}
+   - **ANIMATED mode only** (check user message for "Mode: ANIMATED"): GSAP (baseline animation engine): <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+   - **STATIC mode** (check user message for "Mode: STATIC"): do NOT load any animation libs.
 
-   ${isAnimated ? `🟢 OPT-IN LIBS (load ONLY when the concept needs them, max 2-3 extras per creative to keep render time reasonable):
+   🟢 OPT-IN LIBS (ANIMATED mode only — load when the concept needs them, max 2-3 extras per creative to keep render time reasonable):
 
    • **SplitType** — per-letter / per-word text reveal (for cinematic headline entrances).
      <script src="https://cdn.jsdelivr.net/npm/split-type@0.3.4/umd/index.min.js"></script>
@@ -237,7 +238,8 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - Prompt "ценник качается на пружине" → MUST load Matter.js + GSAP. Real constraint-based swing.
    - Prompt "взрыв конфетти" → MUST load tsParticles + GSAP. Particle burst with gold/amber colors.
    - Prompt "RGB glitch" → MUST load Pixi.js + GSAP. DisplacementFilter or RGB split filter.
-   - Prompt "минималистичный продуктовый постер" (no trigger) → GSAP alone, clean & fast.` : ''}
+   - Prompt "минималистичный продуктовый постер" (no trigger) → GSAP alone, clean & fast.
+
 4. STRICT BAN ON SOCIAL MEDIA UI & EXTERNAL BUTTONS:
    - Generate the ACTUAL promotional banner. DO NOT include fake Instagram UI (no comments, no avatars).
    - DO NOT generate external link buttons like "Подробнее", "Узнать подробнее", or "Перейти", because social media ad platforms natively overlay their own link buttons over the creative.
@@ -298,13 +300,15 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
    - Inject these global CSS rules into your \`<style>\` to lock the viewport: \`html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; background-position: center; background-size: cover; }\`. Your main container wrapper inside body MUST naturally expand or flex without pushing items out of bounds.
 
 6. FORMAT SPECIFICS:
-   - The user requested aspect ratio: ${format}.
+   - The user message will specify the requested aspect ratio (look for a "Format required: ..." line). Common formats: 9:16 (vertical story) and 1:1 (square).
    - If 9:16: Make it vertical like a story. Keep the hook/title at the top, center empty for visuals/product, and heavily stylized captions at the bottom.
    - If 1:1: Make it a perfect square.
 
-7. ANIMATIONS (${isAnimated ? 'ON' : 'OFF'}):
-   ${isAnimated ? `- You MUST animate typography and elements beautifully using CSS keyframes or GSAP.
-   - 🔴 TARGET PLAYBACK — THE FINAL VIDEO IS ${format === '9:16' ? '15 SECONDS' : '10 SECONDS'} LONG, rendered at **30 FPS**.
+7. ANIMATIONS — read the user message for "Mode: ANIMATED" or "Mode: STATIC" and apply ONE of the two sections below:
+
+   === ANIMATED MODE (only when user message says "Mode: ANIMATED") ===
+   - You MUST animate typography and elements beautifully using CSS keyframes or GSAP.
+   - 🔴 TARGET PLAYBACK — THE FINAL VIDEO IS 15 seconds for 9:16 / 10 seconds for 1:1, rendered at **30 FPS** (look at the user's "Format required:" line to know which).
      Design for cinematic ad pacing, NOT a busy UI with spinning loaders.
 
    - 🔴 TIMING RULES:
@@ -379,19 +383,26 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
        \`// Attach PIXI.DisplacementFilter for a subtle ripple, NOT a heavy glitch every frame.\`
 
    - 🔴 When an opt-in lib is loaded it MUST be used meaningfully in the final render.
-     Loading a 200 KB script and animating only \`<h1>\` with GSAP is waste — strip the script.` : 'NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.'}
+     Loading a 200 KB script and animating only \`<h1>\` with GSAP is waste — strip the script.
+
+   === STATIC MODE (only when user message says "Mode: STATIC") ===
+   - NO animations. Output must be ONE perfectly static visual poster/picture. DO NOT USE ANY ANIMATIONS, GSAP, or KEYFRAMES. You are designing a flat graphic image.
 
 8. HIGHLIGHTS & PRODUCT INTEGRATION:
    - Highlight 3-5 power words in a vibrant color (like text-yellow-400 or a gradient).
-   ${productImagesBase64 && productImagesBase64.length > 0 ? `- PRODUCT IMAGES: You MUST visually integrate these EXACT cut-out images. Use placeholders \`PRODUCT_IMG_0\`, \`PRODUCT_IMG_1\`. Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="...">\`` : '- NO PRODUCTS PROVIDED. Focus 100% on beautiful typography and background.'}
+   - PRODUCT IMAGES: when the user message attaches PRODUCT IMAGES, you MUST visually integrate them. Use placeholders \`PRODUCT_IMG_0\`, \`PRODUCT_IMG_1\`. Example: \`<img src="PRODUCT_IMG_0" alt="Product" class="...">\`. When NO products are attached, focus 100% on beautiful typography and background.
 
-${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
-- EXACT ALIGNMENT & SPACING: You MUST copy the exact spatial layout, padding, and proportions of the reference image. The spacing (breathing room) around the visual and text must be identical to the reference.
-- OVERLAPPING ELEMENTS: If the reference has elements (like floating badges, pills, or buttons) that overlap the boundary between an image and the background, you MUST perfectly replicate this overlap using CSS (e.g., absolute positioning, 'translate-y-[-50%]', 'z-index'). Do NOT let 'overflow-hidden' clip them off. Do not cramp them.
-- EXACT COLORS & TYPOGRAPHY: You MUST strictly use the exact color palette (backgrounds, fonts, accents) and font weights seen in the reference image. DO NOT hallucinate new colors based on the product.
-- Your job is to output HTML/CSS that produces a 1:1 structural copy of the reference with only the product and text swapped out.` : `9. CREATIVE FREEDOM:
-- REPLICATE STRUCTURE: Carefully look at how elements (images, text, buttons) are positioned in the reference image and replicate that structural layout. DO NOT randomly scatter products.
-- CHANGE CONTEXT & VIBE: You have full freedom to modify the color palette, typography style, and background decorations to perfectly match the theme/brand requested by the user, while keeping the structural skeleton of the reference.`}
+9. CLONE vs CREATIVE-FREEDOM — read the user message for "STRICT-CLONE: yes/no" and apply ONE:
+
+   === If "STRICT-CLONE: yes" (CRITICAL) ===
+   - EXACT ALIGNMENT & SPACING: You MUST copy the exact spatial layout, padding, and proportions of the reference image. The spacing (breathing room) around the visual and text must be identical to the reference.
+   - OVERLAPPING ELEMENTS: If the reference has elements (like floating badges, pills, or buttons) that overlap the boundary between an image and the background, you MUST perfectly replicate this overlap using CSS (e.g., absolute positioning, 'translate-y-[-50%]', 'z-index'). Do NOT let 'overflow-hidden' clip them off. Do not cramp them.
+   - EXACT COLORS & TYPOGRAPHY: You MUST strictly use the exact color palette (backgrounds, fonts, accents) and font weights seen in the reference image. DO NOT hallucinate new colors based on the product.
+   - Your job is to output HTML/CSS that produces a 1:1 structural copy of the reference with only the product and text swapped out.
+
+   === If "STRICT-CLONE: no" (default — creative freedom) ===
+   - REPLICATE STRUCTURE: Carefully look at how elements (images, text, buttons) are positioned in the reference image and replicate that structural layout. DO NOT randomly scatter products.
+   - CHANGE CONTEXT & VIBE: You have full freedom to modify the color palette, typography style, and background decorations to perfectly match the theme/brand requested by the user, while keeping the structural skeleton of the reference.
 `;
 
     const claudeContent: any[] = [];
@@ -410,9 +421,9 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
         return `REMIX_PRESERVED_IMG_${id}`;
       });
       
-      claudeContent.push({ 
-        type: "text", 
-        text: `Format required: ${format}.\n\nOriginal Task (ТЗ): ${prompt}\n\nIMPORTANT: THIS IS A REMIX REQUEST! The user wants to modify an existing creative.\nBelow is the previous HTML code. RE-USE this structure completely. Keep the layout, core vibe, and animations identical, but make the changes requested by the user. Return the fully updated HTML code:\n\n\`\`\`html\n${cleanedRemixHtmlCode}\n\`\`\`` 
+      claudeContent.push({
+        type: "text",
+        text: `Format required: ${format}.\nMode: ${isAnimated ? "ANIMATED" : "STATIC"}\nSTRICT-CLONE: ${strictClone ? "yes" : "no"}\n\nOriginal Task (ТЗ): ${prompt}\n\nIMPORTANT: THIS IS A REMIX REQUEST! The user wants to modify an existing creative.\nBelow is the previous HTML code. RE-USE this structure completely. Keep the layout, core vibe, and animations identical, but make the changes requested by the user. Return the fully updated HTML code:\n\n\`\`\`html\n${cleanedRemixHtmlCode}\n\`\`\``
       });
 
       if (remixScreenshotBase64) {
@@ -496,7 +507,10 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
          });
        }
 
-       claudeContent.push({ type: "text", text: `Format required: ${format}.\n\nTask (ТЗ): ${effectivePrompt}` });
+       claudeContent.push({
+         type: "text",
+         text: `Format required: ${format}.\nMode: ${isAnimated ? "ANIMATED" : "STATIC"}\nSTRICT-CLONE: ${strictClone ? "yes" : "no"}\n\nTask (ТЗ): ${effectivePrompt}`,
+       });
     }
 
     // Handle references
@@ -556,25 +570,45 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
         }
       }
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${geminiApiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ role: "user", parts: geminiParts }],
-            generationConfig: {
-              maxOutputTokens: 8192,
-              temperature: 0.7,
-            },
-          }),
-        },
-      );
+      // Retry-on-429 loop, mirrors the Claude path. Gemini also rate-
+      // limits aggressively at peak — without retry the user just sees
+      // a 500 and we burn the refund path. 3 attempts with 15s pause
+      // is enough for a quota window to roll.
+      let geminiRes: Response | null = null;
+      let geminiRetries = 0;
+      let geminiErrText = "";
+      while (geminiRetries < 3) {
+        geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${geminiApiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: "user", parts: geminiParts }],
+              generationConfig: {
+                maxOutputTokens: 8192,
+                temperature: 0.7,
+              },
+            }),
+          },
+        );
 
-      if (!geminiRes.ok) {
-        const text = await geminiRes.text();
-        throw new Error(`Gemini API error: ${text}`);
+        if (geminiRes.status === 429) {
+          geminiRetries++;
+          console.warn(`[Gemini Rate Limit] Hit quota (429). Retrying ${geminiRetries}/3 in 15 seconds...`);
+          await new Promise((r) => setTimeout(r, 15000));
+          continue;
+        }
+        if (!geminiRes.ok) {
+          geminiErrText = await geminiRes.text();
+          throw new Error(`Gemini API error: ${geminiErrText}`);
+        }
+        break;
+      }
+
+      if (!geminiRes || !geminiRes.ok) {
+        throw new Error(`Gemini API error (max retries exceeded): ${geminiErrText}`);
       }
 
       const geminiData = await geminiRes.json();
@@ -717,50 +751,53 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
     // Success — do NOT refund.
     deductedCost = 0;
 
-    // ----- Admin Telegram pings (fire-and-forget) -----
-    // First creative ever for this user — counts include the row we
-    // just inserted. Tied to the moment of "user is now activated".
-    try {
-      const creativeCount = await db
-        .select({ c: sql<number>`count(*)::int` })
-        .from(creatives)
-        .where(eq(creatives.userId, userId));
-      const totalCreatives = creativeCount[0]?.c ?? 0;
-      if (totalCreatives === 1) {
-        const u = await db
-          .select({ email: users.email, name: users.name })
-          .from(users)
-          .where(eq(users.id, userId));
-        notifyAdmin(
-          `✨ *Первый креатив у юзера*\n\n` +
-          `*Email:* ${fmt.esc(u[0]?.email ?? userId)}\n` +
-          (u[0]?.name ? `*Имя:* ${fmt.esc(u[0].name)}\n` : '') +
-          `*Модель:* ${useGemini ? 'Gemini 3.1 Pro' : 'Claude Opus 4.7'}\n` +
-          `*Формат:* ${format} ${isAnimated ? '(анимация)' : '(статика)'}\n` +
-          `*ТЗ:* ${fmt.esc(fmt.short(prompt, 200))}`,
-        );
-      }
+    // ----- Admin Telegram pings — async fire-and-forget IIFE -----
+    // We previously awaited db.select() inside this block, which on a
+    // slow Neon round-trip would add 200-2000ms to every successful
+    // generation's response time. The user doesn't care about admin
+    // notifications — they care about getting their creative. Move
+    // the whole notification flow into an unawaited IIFE so the
+    // response returns immediately.
+    const remainingAfter = deducted[0]?.impulses ?? -1;
+    void (async () => {
+      try {
+        const creativeCount = await db
+          .select({ c: sql<number>`count(*)::int` })
+          .from(creatives)
+          .where(eq(creatives.userId, userId));
+        const totalCreatives = creativeCount[0]?.c ?? 0;
+        if (totalCreatives === 1) {
+          const u = await db
+            .select({ email: users.email, name: users.name })
+            .from(users)
+            .where(eq(users.id, userId));
+          notifyAdmin(
+            `✨ *Первый креатив у юзера*\n\n` +
+            `*Email:* ${fmt.esc(u[0]?.email ?? userId)}\n` +
+            (u[0]?.name ? `*Имя:* ${fmt.esc(u[0].name)}\n` : '') +
+            `*Модель:* ${useGemini ? 'Gemini 3.1 Pro' : 'Claude Opus 4.7'}\n` +
+            `*Формат:* ${format} ${isAnimated ? '(анимация)' : '(статика)'}\n` +
+            `*ТЗ:* ${fmt.esc(fmt.short(prompt, 200))}`,
+          );
+        }
 
-      // User just spent their last impulse — high-intent signal that
-      // they may be ready to top up. `deducted[0].impulses` was the
-      // post-deduction balance returned by the atomic UPDATE.
-      const remainingAfter = deducted[0]?.impulses ?? -1;
-      if (remainingAfter === 0) {
-        const u = await db
-          .select({ email: users.email, name: users.name })
-          .from(users)
-          .where(eq(users.id, userId));
-        notifyAdmin(
-          `⚡ *Юзер потратил последний импульс*\n\n` +
-          `*Email:* ${fmt.esc(u[0]?.email ?? userId)}\n` +
-          (u[0]?.name ? `*Имя:* ${fmt.esc(u[0].name)}\n` : '') +
-          `*Всего креативов:* ${totalCreatives}\n\n` +
-          `Самый горячий момент — можно написать ему предложение по тарифу.`,
-        );
+        if (remainingAfter === 0) {
+          const u = await db
+            .select({ email: users.email, name: users.name })
+            .from(users)
+            .where(eq(users.id, userId));
+          notifyAdmin(
+            `⚡ *Юзер потратил последний импульс*\n\n` +
+            `*Email:* ${fmt.esc(u[0]?.email ?? userId)}\n` +
+            (u[0]?.name ? `*Имя:* ${fmt.esc(u[0].name)}\n` : '') +
+            `*Всего креативов:* ${totalCreatives}\n\n` +
+            `Самый горячий момент — можно написать ему предложение по тарифу.`,
+          );
+        }
+      } catch (e) {
+        console.warn('[notifyAdmin] post-success notification failed:', e);
       }
-    } catch (e) {
-      console.warn('[notifyAdmin] post-success notification failed:', e);
-    }
+    })().catch(() => undefined);
 
     return new Response(
       JSON.stringify({ code, creativeId }),
