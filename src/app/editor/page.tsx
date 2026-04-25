@@ -1332,21 +1332,43 @@ export default function Home() {
               {/* Recommendation banner when no reference uploaded yet.
                   Without a reference the model has no style anchor and the
                   output rarely matches user expectations — this is the
-                  single biggest cause of "не то, что я ожидал". */}
+                  single biggest cause of "не то, что я ожидал". The
+                  Behance link is a curated firehose of well-shot ad
+                  creatives — one click and the user has 50 candidates
+                  to screenshot. */}
               {referenceImages.length === 0 && !isLoading && (
-                <div className="flex gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                  <Lightbulb className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <div className="text-xs leading-snug">
-                    <p className="font-bold text-amber-900">
-                      Рекомендуем загрузить референс
-                    </p>
-                    <p className="text-amber-800 mt-0.5">
-                      Покажи ИИ пример стиля — скриншот рекламы, рендер,
-                      любую картинку, на которую хочешь быть похожим. Без
-                      референса результат может выйти не таким, как ты
-                      ожидаешь.
-                    </p>
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-2.5">
+                  <div className="flex gap-2.5">
+                    <Lightbulb className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs leading-snug flex-1">
+                      <p className="font-bold text-amber-900">
+                        Рекомендуем загрузить референс
+                      </p>
+                      <p className="text-amber-800 mt-0.5">
+                        Покажи ИИ пример стиля — скриншот рекламы, рендер,
+                        любую картинку, на которую хочешь быть похожим. Без
+                        референса результат может выйти не таким, как ты
+                        ожидаешь.
+                      </p>
+                    </div>
                   </div>
+
+                  {/* tiny how-to */}
+                  <ol className="text-[11px] text-amber-900/80 leading-snug pl-1 space-y-0.5 list-decimal list-inside marker:text-amber-500 marker:font-bold">
+                    <li>Открой Behance и найди дизайн в стиле, который тебе нравится</li>
+                    <li>Сделай скриншот понравившегося креатива</li>
+                    <li>Загрузи его кнопкой «↑» ниже — ИИ повторит стиль</li>
+                  </ol>
+
+                  <a
+                    href="https://www.behance.net/search/projects/%D0%BA%D1%80%D0%B5%D0%B0%D1%82%D0%B8%D0%B2%D1%8B?tracking_source=typeahead_search_recent_suggestion"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-2.5 py-1.5 transition-colors shadow-sm"
+                  >
+                    Открыть галерею референсов
+                    <Upload className="w-3 h-3 rotate-45" />
+                  </a>
                 </div>
               )}
 
