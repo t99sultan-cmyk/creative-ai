@@ -46,7 +46,13 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode, remixScreenshotBase64, strictClone, niche } = body;
+    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode, remixScreenshotBase64, strictClone, niche, modelChoice } = body;
+    // modelChoice: 'claude' (default) | 'gemini'. Claude Opus 4.7 is the
+    // recommended path — best quality on HTML/CSS generation. Gemini
+    // 3.1 Pro is the alternative — ~5× cheaper, faster, but lower
+    // visual fidelity on complex layouts. We expose both so the user
+    // can compare.
+    const useGemini = modelChoice === "gemini";
 
     // ---- Input validation ----
     if (typeof prompt !== "string" || prompt.trim().length === 0) {
@@ -526,82 +532,129 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
       }
     }
 
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY is missing");
-
-    let claudeResponse: Response | null = null;
-    let retries = 0;
-    let errPayload = "";
-
-    while (retries < 3) {
-      claudeResponse = await fetch(`https://api.anthropic.com/v1/messages`, {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json",
-           "x-api-key": anthropicApiKey,
-           "anthropic-version": "2023-06-01",
-           // Required to opt into 1-hour cache TTL. Anthropic silently
-           // changed the default to 5m in March 2026 — without this
-           // header our system prompt would re-bill input tokens on
-           // every request that comes >5 min after the last one.
-           "anthropic-beta": "extended-cache-ttl-2025-04-11",
-         },
-         body: JSON.stringify({
-            model: "claude-opus-4-7",
-            // System as a typed array with cache_control: marks the
-            // ~5K-token system prompt as cacheable for 1h. Steady-state
-            // hit rate ~80% → 90% discount on cached input tokens.
-            // The systemPrompt string is referentially stable across
-            // requests (no per-user data baked in), which is the
-            // requirement for caching.
-            system: [
-              {
-                type: "text",
-                text: systemPrompt,
-                cache_control: { type: "ephemeral", ttl: "1h" },
-              },
-            ],
-            /* Bumped from 4000 → 8192. Claude was hitting the 4000 ceiling on
-               every generation, which forced it to pick minimal-code libs
-               (GSAP+SplitType) and skip Three/Matter/Pixi setups that need
-               more boilerplate. With 8192 the model has room to actually
-               wire up the opt-in libs. Opus 4 supports up to 32K output
-               if we ever need more. */
-            max_tokens: 8192,
-            messages: [{ role: "user", content: claudeContent }]
-         })
-      });
-
-      if (claudeResponse.status === 429) {
-          retries++;
-          console.warn(`[Claude Rate Limit] Hit TPM limit (429). Retrying ${retries}/3 in 15 seconds...`);
-          await new Promise(r => setTimeout(r, 15000));
-          continue;
-      }
-      
-      if (!claudeResponse.ok) {
-          errPayload = await claudeResponse.text();
-          throw new Error(`Claude API error: ${errPayload}`);
-      }
-      
-      break;
-    }
-
-    if (!claudeResponse || !claudeResponse.ok) {
-        throw new Error(`Claude API error (max retries exceeded): ${errPayload}`);
-    }
-
-    const result = await claudeResponse.json();
-    const rawText = result.content?.[0]?.text || "";
-    
-    // Calculate API Cost (Placeholder for Claude 3.7 Sonnet: 3$ in / 15$ out per MTok. 1 USD = 480 KZT)
+    let rawText = "";
     let apiCostKzt = 0;
-    if (result.usage) {
-       const inTokens = result.usage.input_tokens || 0;
-       const outTokens = result.usage.output_tokens || 0;
-       const usdCost = (inTokens / 1_000_000) * 3.00 + (outTokens / 1_000_000) * 15.00;
-       apiCostKzt = usdCost * 480;
-       console.log(`[API Cost] Claude Usage: ${inTokens} in, ${outTokens} out = $${usdCost.toFixed(4)} (~${apiCostKzt.toFixed(2)} KZT)`);
+
+    if (useGemini) {
+      // ====== GEMINI 3.1 PRO PATH ======
+      // Convert Anthropic-style claudeContent[] into Gemini parts[].
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (!geminiApiKey) throw new Error("GEMINI_API_KEY is missing");
+
+      const geminiParts: any[] = [];
+      for (const item of claudeContent) {
+        if (item.type === "text") {
+          geminiParts.push({ text: item.text });
+        } else if (item.type === "image" && item.source?.data) {
+          geminiParts.push({
+            inlineData: {
+              mimeType: item.source.media_type,
+              data: item.source.data,
+            },
+          });
+        }
+      }
+
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: "user", parts: geminiParts }],
+            generationConfig: {
+              maxOutputTokens: 8192,
+              temperature: 0.7,
+            },
+          }),
+        },
+      );
+
+      if (!geminiRes.ok) {
+        const text = await geminiRes.text();
+        throw new Error(`Gemini API error: ${text}`);
+      }
+
+      const geminiData = await geminiRes.json();
+      rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+      // Gemini 3.1 Pro pricing (April 2026 public): $1.25/M input,
+      // $5/M output. Same KZT rate as Claude path for consistency.
+      const usage = geminiData?.usageMetadata;
+      if (usage) {
+        const inT = usage.promptTokenCount || 0;
+        const outT = usage.candidatesTokenCount || 0;
+        const usd = (inT / 1_000_000) * 1.25 + (outT / 1_000_000) * 5.0;
+        apiCostKzt = usd * 480;
+        console.log(`[API Cost] Gemini: ${inT} in, ${outT} out = $${usd.toFixed(4)} (~${apiCostKzt.toFixed(2)} KZT)`);
+      }
+    } else {
+      // ====== CLAUDE OPUS 4.7 PATH (default) ======
+      const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+      if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY is missing");
+
+      let claudeResponse: Response | null = null;
+      let retries = 0;
+      let errPayload = "";
+
+      while (retries < 3) {
+        claudeResponse = await fetch(`https://api.anthropic.com/v1/messages`, {
+           method: "POST",
+           headers: {
+             "Content-Type": "application/json",
+             "x-api-key": anthropicApiKey,
+             "anthropic-version": "2023-06-01",
+             "anthropic-beta": "extended-cache-ttl-2025-04-11",
+           },
+           body: JSON.stringify({
+              model: "claude-opus-4-7",
+              system: [
+                {
+                  type: "text",
+                  text: systemPrompt,
+                  cache_control: { type: "ephemeral", ttl: "1h" },
+                },
+              ],
+              max_tokens: 8192,
+              messages: [{ role: "user", content: claudeContent }]
+           })
+        });
+
+        if (claudeResponse.status === 429) {
+            retries++;
+            console.warn(`[Claude Rate Limit] Hit TPM limit (429). Retrying ${retries}/3 in 15 seconds...`);
+            await new Promise(r => setTimeout(r, 15000));
+            continue;
+        }
+
+        if (!claudeResponse.ok) {
+            errPayload = await claudeResponse.text();
+            throw new Error(`Claude API error: ${errPayload}`);
+        }
+
+        break;
+      }
+
+      if (!claudeResponse || !claudeResponse.ok) {
+          throw new Error(`Claude API error (max retries exceeded): ${errPayload}`);
+      }
+
+      const result = await claudeResponse.json();
+      rawText = result.content?.[0]?.text || "";
+
+      // Claude pricing comment is historical — Opus 4.7 is $15 input
+      // / $75 output per 1M tokens. Cached input tokens are billed at
+      // 10% of base rate, but the usage object below reports them
+      // separately as cache_read_input_tokens; we treat them as
+      // input here for an approximate cost.
+      if (result.usage) {
+         const inTokens = result.usage.input_tokens || 0;
+         const outTokens = result.usage.output_tokens || 0;
+         const usdCost = (inTokens / 1_000_000) * 15.0 + (outTokens / 1_000_000) * 75.0;
+         apiCostKzt = usdCost * 480;
+         console.log(`[API Cost] Claude Opus 4.7: ${inTokens} in, ${outTokens} out = $${usdCost.toFixed(4)} (~${apiCostKzt.toFixed(2)} KZT)`);
+      }
     }
 
     // Clean up if the model magically returns markdown
