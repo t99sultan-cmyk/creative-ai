@@ -85,13 +85,18 @@ export function WelcomeOnboarding() {
     }
   }
 
+  // Both CTAs ("Создать первый креатив" and "Позже, зайду с ноутбука")
+  // route to /editor — that's where the user can actually do something.
+  // The "later" copy is a marketing nudge for desktop, not a different
+  // destination. `target` is kept only so the spinner shows on the
+  // pressed button, not both.
   function submit(target: "editor" | "account") {
     setError("");
     setDestination(target);
     startTransition(async () => {
       const result = await savePhone(phone, telegram);
       if (result.success) {
-        router.push(target === "editor" ? "/editor" : "/account");
+        router.push("/editor");
       } else {
         setError(result.error);
       }
