@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -19,6 +19,9 @@ import {
   Send,
   MessageCircle,
   Link as LinkIcon,
+  AlertCircle,
+  Gift,
+  ChevronDown,
 } from "lucide-react";
 import { savePhone } from "@/actions/savePhone";
 import { DeadlineBanner } from "@/components/DeadlineBanner";
@@ -46,6 +49,20 @@ export function WelcomeOnboarding() {
   const [isPending, startTransition] = useTransition();
   const [destination, setDestination] = useState<"editor" | "account">("editor");
   const [copied, setCopied] = useState(false);
+  const [phoneFlash, setPhoneFlash] = useState(false);
+  const phoneRef = useRef<HTMLInputElement | null>(null);
+  const formRef = useRef<HTMLDivElement | null>(null);
+
+  const isPhoneFilled = phone.trim().length > 0;
+
+  function focusPhoneAndScroll() {
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => {
+      phoneRef.current?.focus({ preventScroll: true });
+      setPhoneFlash(true);
+      setTimeout(() => setPhoneFlash(false), 1500);
+    }, 350);
+  }
 
   const siteUrl = "https://aicreative.kz";
   // Our public support contacts. Same values as /checkout — when we move
@@ -82,7 +99,7 @@ export function WelcomeOnboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 relative overflow-x-hidden">
+    <div className="min-h-[100dvh] bg-neutral-950 relative overflow-x-hidden pb-24 md:pb-0">
       {/* ambient background glows */}
       <div className="absolute top-[-10%] left-[-15%] w-[600px] h-[600px] bg-hermes-600/25 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute top-[30%] right-[-15%] w-[500px] h-[500px] bg-amber-500/15 rounded-full blur-[120px] pointer-events-none" />
@@ -252,18 +269,27 @@ export function WelcomeOnboarding() {
         </section>
 
         {/* ---------------- PHONE + CTA ---------------- */}
-        <section className="animate-in fade-in slide-in-from-bottom-10 duration-700 delay-[650ms] fill-mode-both">
-          <div className="bg-white rounded-3xl p-6 md:p-8 shadow-2xl shadow-black/40">
+        <section
+          ref={formRef}
+          id="welcome-form"
+          className="animate-in fade-in slide-in-from-bottom-10 duration-700 delay-[650ms] fill-mode-both scroll-mt-6"
+        >
+          <div className="relative bg-white rounded-3xl p-6 md:p-8 shadow-2xl shadow-black/40 ring-2 ring-hermes-500/30">
+            {/* "почти готово" progress strip */}
+            <div className="absolute -top-px left-6 right-6 h-1 rounded-full bg-gradient-to-r from-hermes-500 via-amber-400 to-hermes-500" />
+
             <div className="text-center mb-5">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 text-[11px] font-semibold mb-2">
-                <Phone className="w-3 h-3" />
-                Последний шаг
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-hermes-500/10 text-hermes-700 text-[11px] font-black uppercase tracking-wider mb-3">
+                <Gift className="w-3.5 h-3.5" />
+                Шаг 1 из 1 — почти готово
               </div>
-              <h3 className="text-neutral-900 text-lg font-extrabold">
-                Оставь контакты
+              <h3 className="text-neutral-900 text-xl md:text-2xl font-black leading-tight">
+                Последний шаг — забери бонус
               </h3>
-              <p className="text-neutral-500 text-xs mt-1">
-                Чтобы мы могли присылать материалы и подсказки по работе с сервисом
+              <p className="text-neutral-600 text-sm font-medium mt-2 max-w-sm mx-auto">
+                Введи номер, чтобы{" "}
+                <strong className="text-hermes-600">7 Импульсов</strong>{" "}
+                появились на балансе. Без номера кнопка не сработает.
               </p>
             </div>
 
@@ -272,19 +298,30 @@ export function WelcomeOnboarding() {
               className="flex items-center justify-between text-[11px] font-bold text-neutral-700 mb-1.5 px-1"
             >
               <span>Телефон / WhatsApp</span>
-              <span className="text-neutral-400 font-semibold">обязательно</span>
+              <span className="text-red-500 font-black uppercase tracking-wider">
+                обязательно
+              </span>
             </label>
-            <div className="relative mb-3">
+            <div
+              className={`relative mb-3 transition-all ${
+                phoneFlash ? "animate-[ping_0.7s_ease-out_2]" : ""
+              }`}
+            >
               <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
               <input
                 id="phone"
+                ref={phoneRef}
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
                 placeholder="+7 (777) 123-45-67"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-2xl border border-neutral-200 focus:border-hermes-500 focus:ring-4 focus:ring-hermes-500/15 py-3.5 pl-12 pr-4 bg-neutral-50 text-neutral-900 outline-none transition-all font-medium"
+                className={`w-full rounded-2xl border-2 py-3.5 pl-12 pr-4 bg-neutral-50 text-neutral-900 outline-none transition-all font-medium ${
+                  phoneFlash
+                    ? "border-red-500 ring-4 ring-red-500/20"
+                    : "border-neutral-200 focus:border-hermes-500 focus:ring-4 focus:ring-hermes-500/15"
+                }`}
                 required
               />
             </div>
@@ -318,26 +355,50 @@ export function WelcomeOnboarding() {
               </p>
             )}
 
+            {!isPhoneFilled && (
+              <div className="mb-3 flex items-start gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[12px] font-semibold animate-in fade-in slide-in-from-top-1 duration-300">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  Заполни номер выше — без него кнопки заблокированы и бонус
+                  не зачислится.
+                </span>
+              </div>
+            )}
+
             <button
               type="button"
-              onClick={() => submit("editor")}
-              disabled={isPending || !phone.trim()}
-              className="w-full bg-gradient-to-r from-hermes-500 to-hermes-600 hover:from-hermes-600 hover:to-hermes-700 disabled:opacity-50 disabled:saturate-50 text-white rounded-2xl py-4 font-bold text-base md:text-lg transition-all shadow-lg shadow-hermes-500/30 flex items-center justify-center gap-2 mb-2.5 active:scale-[0.99]"
+              onClick={() =>
+                isPhoneFilled ? submit("editor") : focusPhoneAndScroll()
+              }
+              disabled={isPending}
+              aria-disabled={!isPhoneFilled || isPending}
+              className={`w-full rounded-2xl py-4 font-bold text-base md:text-lg transition-all flex items-center justify-center gap-2 mb-2.5 active:scale-[0.99] ${
+                isPhoneFilled
+                  ? "bg-gradient-to-r from-hermes-500 to-hermes-600 hover:from-hermes-600 hover:to-hermes-700 text-white shadow-lg shadow-hermes-500/30"
+                  : "bg-neutral-200 text-neutral-500 cursor-pointer"
+              }`}
             >
               {isPending && destination === "editor" ? (
                 <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
+              ) : isPhoneFilled ? (
                 <>
                   Создать первый креатив
                   <ArrowRight className="w-5 h-5" />
+                </>
+              ) : (
+                <>
+                  Сначала заполни номер
+                  <ChevronDown className="w-5 h-5 animate-bounce" />
                 </>
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => submit("account")}
-              disabled={isPending || !phone.trim()}
+              onClick={() =>
+                isPhoneFilled ? submit("account") : focusPhoneAndScroll()
+              }
+              disabled={isPending}
               className="w-full bg-white hover:bg-neutral-50 disabled:opacity-50 text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded-2xl py-3 font-semibold text-sm transition-all flex items-center justify-center gap-2"
             >
               {isPending && destination === "account" ? (
@@ -413,6 +474,42 @@ export function WelcomeOnboarding() {
           </p>
         </section>
       </main>
+
+      {/* Mobile-only sticky CTA. While the phone field is empty, tapping
+          this scrolls + flashes the input so the user understands the
+          form is the gate. Once filled, the same button submits and
+          routes to /editor — same destination as the primary CTA. */}
+      <div
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pt-3 bg-gradient-to-t from-neutral-950 via-neutral-950/95 to-transparent"
+        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            isPhoneFilled ? submit("editor") : focusPhoneAndScroll()
+          }
+          disabled={isPending}
+          className={`w-full rounded-2xl py-3.5 font-bold text-base transition-all flex items-center justify-center gap-2 active:scale-[0.99] shadow-2xl ${
+            isPhoneFilled
+              ? "bg-gradient-to-r from-hermes-500 to-hermes-600 text-white shadow-hermes-500/40"
+              : "bg-white text-neutral-800 ring-2 ring-hermes-500 shadow-black/40"
+          }`}
+        >
+          {isPending && destination === "editor" ? (
+            <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : isPhoneFilled ? (
+            <>
+              Создать первый креатив
+              <ArrowRight className="w-5 h-5" />
+            </>
+          ) : (
+            <>
+              <Gift className="w-5 h-5 text-hermes-500" />
+              Заполни номер и забери 7 Импульсов
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
