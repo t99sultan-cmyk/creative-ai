@@ -10,7 +10,8 @@ export type AdminAction =
   | "delete_promo"
   | "delete_user"
   | "admin_download_creative"
-  | "impersonate_user";
+  | "impersonate_user"
+  | "sync_clerk_users";
 
 export type AdminAuditMeta = Record<string, unknown>;
 

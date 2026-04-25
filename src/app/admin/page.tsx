@@ -12,6 +12,7 @@ import {
   getAdminAuditLog,
   adminDownloadCreative,
   adminImpersonateUser,
+  adminSyncClerkUsers,
   type UserStatusFilter,
 } from "@/actions/adminActions";
 import { useRouter } from "next/navigation";
@@ -41,6 +42,44 @@ import {
 function formatKzt(n: number): string {
   if (!Number.isFinite(n)) return "0 ₸";
   return `${Math.round(n).toLocaleString("ru-RU")} ₸`;
+}
+
+/**
+ * One-shot button: pulls every Clerk user into our DB. Use after a
+ * webhook outage or when migrating from a setup that didn't have one.
+ */
+function SyncClerkButton({ onSynced }: { onSynced: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        if (busy) return;
+        if (!confirm("Подтянуть всех пользователей из Clerk в БД? Существующие записи не изменятся.")) return;
+        setBusy(true);
+        try {
+          const res = await adminSyncClerkUsers();
+          if (res.success) {
+            alert(
+              `Готово.\n\nВ Clerk: ${res.totalClerk}\nДобавлено: ${res.inserted}\n` +
+                (res.inserted > 0
+                  ? `Новые:\n${res.list.map(u => `• ${u.email} — ${u.name}`).join("\n")}`
+                  : "Все уже были в БД."),
+            );
+            onSynced();
+          } else {
+            alert("Ошибка: " + res.error);
+          }
+        } finally {
+          setBusy(false);
+        }
+      }}
+      disabled={busy}
+      className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
+      title="Подтянуть всех Clerk-юзеров в локальную БД"
+    >
+      {busy ? "Синхронизация…" : "↻ Подтянуть из Clerk"}
+    </button>
+  );
 }
 
 function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => void, onViewHistory: (userId: string) => void }) {
@@ -131,8 +170,9 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
   return (
     <tr className={`hover:bg-neutral-100 transition-colors text-sm ${u.isBanned ? 'bg-red-50/50 opacity-60 grayscale' : 'bg-white'}`}>
       <td className="p-4 font-medium text-neutral-800 break-all">
-         {u.email}
-         {u.isBanned && <span className="ml-2 text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">BANNED</span>}
+         <div>{u.email}</div>
+         {u.name && <div className="text-xs text-neutral-500 font-normal mt-0.5">{u.name}</div>}
+         {u.isBanned && <span className="mt-1 inline-block text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">BANNED</span>}
       </td>
       <td className="p-4">
         {editing ? (
@@ -198,8 +238,8 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
          )}
       </td>
       <td className="p-4 text-xs border-l border-neutral-100 text-center">
-         <div className="text-neutral-400">
-            {u.createdAt ? new Date(u.createdAt).toLocaleDateString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
+         <div className="text-neutral-500 font-medium">
+            {u.createdAt ? new Date(u.createdAt).toLocaleString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
          </div>
          {u.phone ? (
             <a href={`tel:${u.phone}`} className="mt-1 inline-block font-mono text-neutral-700 hover:text-orange-600 transition-colors">
@@ -207,6 +247,16 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
             </a>
          ) : (
             <div className="mt-1 text-neutral-300 italic">нет телефона</div>
+         )}
+         {u.telegramUsername && (
+            <a
+               href={`https://t.me/${u.telegramUsername}`}
+               target="_blank"
+               rel="noreferrer"
+               className="mt-1 block text-[#2AABEE] hover:underline font-medium"
+            >
+               @{u.telegramUsername}
+            </a>
          )}
       </td>
       <td className="p-4 text-right">
@@ -744,6 +794,7 @@ export default function AdminPage() {
                     👥 База Пользователей CRM
                     <span className="ml-2 text-sm font-mono text-neutral-400 font-normal">({totalCount})</span>
                   </h2>
+                  <SyncClerkButton onSynced={fetchData} />
                 </div>
 
                 {/* Search + filters */}

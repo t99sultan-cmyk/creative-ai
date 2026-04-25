@@ -6,7 +6,7 @@ import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { isAdmin } from "@/lib/admin-guard";
 import { recordAdminAction, getRecentAuditLog, getAuditLogForUser } from "@/lib/audit-log";
-import { estimateRevenueKztFromImpulses, avgKztPerImpulse } from "@/lib/pricing";
+import { estimateRevenueKztFromImpulses, avgKztPerImpulse, SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 // ---- Validation limits ----
 const MIN_BALANCE = 0;
@@ -809,6 +809,92 @@ export async function adminImpersonateUser(targetUserId: string) {
     };
   } catch (e: any) {
     console.error("adminImpersonateUser error:", e);
+    return { success: false as const, error: e.message };
+  }
+}
+
+/**
+ * Pull every Clerk user into our DB. Idempotent — uses ON CONFLICT DO
+ * NOTHING so existing rows are left alone. Useful when the webhook was
+ * misconfigured for a window of time and signups landed in Clerk but
+ * not in our DB.
+ *
+ * Runs against whatever Clerk instance the deployment is bound to (so
+ * on prod it pulls prod users, on preview it pulls test users — both
+ * via the env's CLERK_SECRET_KEY).
+ */
+export async function adminSyncClerkUsers() {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!secret) {
+    return { success: false as const, error: "CLERK_SECRET_KEY is not set" };
+  }
+
+  try {
+    // Page through Clerk's /v1/users — limit 100 is the max they allow.
+    const all: any[] = [];
+    let offset = 0;
+    while (true) {
+      const r = await fetch(
+        `https://api.clerk.com/v1/users?limit=100&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${secret}` } },
+      );
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        return {
+          success: false as const,
+          error: `Clerk API ${r.status}: ${text.slice(0, 300)}`,
+        };
+      }
+      const arr = await r.json();
+      if (!Array.isArray(arr) || arr.length === 0) break;
+      all.push(...arr);
+      if (arr.length < 100) break;
+      offset += 100;
+    }
+
+    const insertedList: { id: string; email: string; name: string }[] = [];
+    for (const cu of all) {
+      const email = cu?.email_addresses?.[0]?.email_address;
+      if (!email) continue;
+      const name =
+        [cu.first_name, cu.last_name].filter(Boolean).join(" ") ||
+        cu.username ||
+        email.split("@")[0];
+      const created = cu.created_at
+        ? new Date(cu.created_at)
+        : new Date();
+      const result = await db
+        .insert(users)
+        .values({
+          id: cu.id,
+          email,
+          name,
+          image: cu.image_url || "",
+          impulses: SIGNUP_BONUS_IMPULSES,
+          welcomeShown: false,
+          createdAt: created,
+        })
+        .onConflictDoNothing({ target: users.id })
+        .returning({ id: users.id });
+      if (result.length > 0) insertedList.push({ id: cu.id, email, name });
+    }
+
+    await recordAdminAction({
+      action: "sync_clerk_users",
+      meta: { totalClerk: all.length, inserted: insertedList.length },
+    }).catch(() => undefined);
+
+    return {
+      success: true as const,
+      totalClerk: all.length,
+      inserted: insertedList.length,
+      list: insertedList,
+    };
+  } catch (e: any) {
+    console.error("adminSyncClerkUsers error:", e);
     return { success: false as const, error: e.message };
   }
 }
