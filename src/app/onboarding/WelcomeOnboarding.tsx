@@ -26,6 +26,7 @@ import {
 import { savePhone } from "@/actions/savePhone";
 import { DeadlineBanner } from "@/components/DeadlineBanner";
 import { Confetti } from "@/components/Confetti";
+import { SUPPORT_CONTACTS } from "@/lib/constants";
 
 /**
  * One-shot post-signup welcome screen.
@@ -65,10 +66,7 @@ export function WelcomeOnboarding() {
   }
 
   const siteUrl = "https://aicreative.kz";
-  // Our public support contacts. Same values as /checkout — when we move
-  // them into env vars, update both in one go.
-  const WA_NUMBER_E164 = "77765282788"; // +7 776 528 27 88
-  const TG_USERNAME = "ai_creativekz"; // t.me/ai_creativekz
+  const { WA_NUMBER_E164, TG_USERNAME } = SUPPORT_CONTACTS;
   const greeting = "Привет! Я только что зарегистрировался на AICreative 🎉";
   const waHref = `https://wa.me/${WA_NUMBER_E164}?text=${encodeURIComponent(greeting)}`;
   const tgHref = `https://t.me/${TG_USERNAME}?text=${encodeURIComponent(greeting)}`;

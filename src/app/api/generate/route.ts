@@ -699,26 +699,6 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
       code = match[1];
     }
 
-    // Deterministic post-generation linter — purely observational for
-    // now. Issues are logged so we can see how often each defect class
-    // fires across the userbase; once we have telemetry over a week or
-    // two we can decide whether the cost of an auto-retry on HIGH
-    // issues is worth paying. No blocking, no extra Claude calls.
-    try {
-      const lintIssues = lintCreativeHtml(code);
-      if (lintIssues.length > 0) {
-        const high = lintIssues.filter((i) => i.severity === "high").length;
-        const low = lintIssues.filter((i) => i.severity === "low").length;
-        console.log(
-          `[lint] ${lintIssues.length} issue(s) (${high} high, ${low} low):`,
-          lintIssues.map((i) => i.code).join(", "),
-        );
-      }
-    } catch (e) {
-      // Linter must never break a generation — swallow.
-      console.warn("[lint] linter crashed:", e);
-    }
-
     // Replace placeholders with real Base64 data (From original generation)
     if (productImagesBase64 && Array.isArray(productImagesBase64)) {
       productImagesBase64.forEach((imgBase64: string, index: number) => {
@@ -733,6 +713,26 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
         const searchPattern = new RegExp(`REMIX_PRESERVED_IMG_${index}`, 'g');
         code = code.replace(searchPattern, imgBase64);
       });
+    }
+
+    // Deterministic post-generation linter — runs AFTER all base64
+    // placeholders have been swapped in, so it sees exactly what gets
+    // saved to DB and rendered to the user. Currently log-only; once
+    // we accumulate enough telemetry we can decide whether to spend
+    // an extra Claude call on auto-retry for HIGH severity issues.
+    try {
+      const lintIssues = lintCreativeHtml(code);
+      if (lintIssues.length > 0) {
+        const high = lintIssues.filter((i) => i.severity === "high").length;
+        const low = lintIssues.filter((i) => i.severity === "low").length;
+        console.log(
+          `[lint] ${lintIssues.length} issue(s) (${high} high, ${low} low):`,
+          lintIssues.map((i) => i.code).join(", "),
+        );
+      }
+    } catch (e) {
+      // Linter must never break a generation — swallow.
+      console.warn("[lint] linter crashed:", e);
     }
 
     // Balance was deducted up-front; now just record the creative.

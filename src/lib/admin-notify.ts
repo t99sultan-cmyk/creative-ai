@@ -37,11 +37,17 @@ export async function notifyAdmin(text: string): Promise<void> {
   }
 }
 
-/** Helpers for safe Markdown formatting. */
+/** Helpers for safe legacy-Markdown formatting. */
 export const fmt = {
-  /** Escape Telegram-Markdown reserved chars in user-provided strings. */
+  /**
+   * Escape only the chars Telegram's legacy "Markdown" parser actually
+   * treats as syntax: `_`, `*`, `` ` ``, `[`. Previously we escaped the
+   * full MarkdownV2 set, which caused literal backslashes to render in
+   * front of `.`, `!`, `(`, `)`, `+`, `=`, `-` etc — those aren't
+   * reserved in legacy Markdown so escaping them is just visual noise.
+   */
   esc(s: unknown): string {
-    return String(s ?? "").replace(/([_*[\]()`~>#+=|{}.!-])/g, "\\$1");
+    return String(s ?? "").replace(/([_*`\[])/g, "\\$1");
   },
   /** Truncate to n chars with ellipsis. */
   short(s: unknown, n = 100): string {

@@ -7,6 +7,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Suspense, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { notifyPaymentIntent } from "@/actions/notifyPaymentIntent";
+import { SUPPORT_CONTACTS } from "@/lib/constants";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -34,8 +35,7 @@ function CheckoutContent() {
   // Contact channels for the "send receipt" step. User chooses WhatsApp or
   // Telegram on step 3 depending on preference.
   const KASPI_PAY_LINK = "https://pay.kaspi.kz/pay/0p9drfes";
-  const WA_NUMBER_E164 = "77765282788"; // +7 776 528 27 88
-  const TG_USERNAME = "ai_creativekz"; // t.me/ai_creativekz
+  const { WA_NUMBER_E164, TG_USERNAME } = SUPPORT_CONTACTS;
   const MESSAGE_TEXT = `Здравствуйте! Я оплатил пакет "${plan}" в AICreative.kz. Моя квитанция:`;
   const ENCODED_MSG = encodeURIComponent(MESSAGE_TEXT);
   const WHATSAPP_LINK = `https://wa.me/${WA_NUMBER_E164}?text=${ENCODED_MSG}`;
