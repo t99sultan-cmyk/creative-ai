@@ -1779,10 +1779,14 @@ export default function Home() {
         mobileTab === 'canvas' ? "flex" : "hidden md:flex"
       )}>
 
-        {/* Templates entry — sits in the canvas top-left corner. Opens
-            the unified templates modal (mine + public from clients).
-            Visible on desktop always; on mobile only when the canvas
-            tab is showing (sticky header would clutter controls). */}
+        {/* Templates entry — temporarily disabled in prod while we
+            fix the preview layout. The modal is mounted below as
+            null-output until templatesOpen is wired back.
+
+            See TemplatesModal.tsx — preview tiles weren't rendering
+            cleanly on the user's screen (canvas placeholder bleeding
+            through the modal). Reverting visibility while we iterate
+            locally.
         <button
           onClick={() => setTemplatesOpen(true)}
           className="absolute top-4 left-4 md:top-6 md:left-6 z-30 flex items-center gap-2 bg-white hover:bg-neutral-50 text-neutral-800 border border-neutral-200 rounded-xl px-3 py-2 shadow-sm hover:shadow-md transition-all font-bold text-xs md:text-sm"
@@ -1791,6 +1795,7 @@ export default function Home() {
           <LayoutGrid className="w-4 h-4 text-hermes-500" />
           Шаблоны
         </button>
+        */}
 
 
         {code && (
@@ -1998,17 +2003,20 @@ export default function Home() {
         </button>
       </div>
       
-      {/* Templates modal — mounts unconditionally, controls own visibility */}
-      <TemplatesModal
-        open={templatesOpen}
-        onClose={() => setTemplatesOpen(false)}
-        onPickTemplate={(item) => {
-          if (item.htmlCode) setRemixSourceCode(item.htmlCode);
-          setFormat(item.format === "1:1" ? "1:1" : "9:16");
-          setIsAnimated((item.cost ?? 0) > 3);
-          setMobileTab("controls");
-        }}
-      />
+      {/* Templates modal — disabled in prod (preview rendering bleed
+          through). Wiring kept in code for the local-only rework. */}
+      {false && (
+        <TemplatesModal
+          open={templatesOpen}
+          onClose={() => setTemplatesOpen(false)}
+          onPickTemplate={(item) => {
+            if (item.htmlCode) setRemixSourceCode(item.htmlCode);
+            setFormat(item.format === "1:1" ? "1:1" : "9:16");
+            setIsAnimated((item.cost ?? 0) > 3);
+            setMobileTab("controls");
+          }}
+        />
+      )}
 
       {/* Background Dots Pattern Definition */}
       <style dangerouslySetInnerHTML={{__html: `
