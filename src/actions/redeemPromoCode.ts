@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { sendCapiEvent } from "@/lib/fb-capi";
 import { estimateRevenueKztFromImpulses, SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
+import { notifyAdmin, fmt } from "@/lib/admin-notify";
 
 /**
  * Redeem a promo code → add its impulses to the current user's balance.
@@ -132,6 +133,37 @@ export async function redeemPromoCode(code: string) {
     } catch (capiErr) {
       // Never fail a real redemption because of a Meta call. Log and move on.
       console.error("[redeemPromoCode] CAPI Purchase failed:", capiErr);
+    }
+
+    // Telegram pings for redemption + first-redemption-ever (= first
+    // paid promo activation in user's lifetime).
+    try {
+      const userRow = await db
+        .select({ email: users.email, name: users.name, impulses: users.impulses })
+        .from(users)
+        .where(eq(users.id, userId));
+      const usedCount = await db
+        .select({ c: sql<number>`count(*)::int` })
+        .from(promoCodes)
+        .where(and(eq(promoCodes.isUsed, true), eq(promoCodes.usedBy, userId)));
+      const totalRedeemed = usedCount[0]?.c ?? 0;
+
+      const isFirstEver = totalRedeemed === 1;
+      const revenueKzt = estimateRevenueKztFromImpulses(added);
+
+      notifyAdmin(
+        `${isFirstEver ? "🆕💰 *ПЕРВЫЙ ПЛАТЁЖ В ЖИЗНИ ЮЗЕРА*" : "🎁 *Активация промокода*"}\n\n` +
+        `*Email:* ${fmt.esc(userRow[0]?.email ?? userId)}\n` +
+        (userRow[0]?.name ? `*Имя:* ${fmt.esc(userRow[0].name)}\n` : "") +
+        `*Промокод:* \`${fmt.esc(cleanCode)}\`\n` +
+        `*Начислено:* +${added} ⚡\n` +
+        `*Новый баланс:* ${userRow[0]?.impulses ?? "?"} ⚡\n` +
+        `*Оценка выручки:* ~${revenueKzt.toLocaleString("ru-RU")} ₸\n` +
+        `*Всего активаций у юзера:* ${totalRedeemed}` +
+        (isFirstEver ? `\n\n🎉 _Это его первый раз. Закрепи отношения._` : ""),
+      );
+    } catch (notifyErr) {
+      console.warn("[redeemPromoCode] notifyAdmin failed:", notifyErr);
     }
 
     return { success: true, impulsesAdded: added };

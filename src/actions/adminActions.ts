@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { isAdmin } from "@/lib/admin-guard";
 import { recordAdminAction, getRecentAuditLog, getAuditLogForUser } from "@/lib/audit-log";
 import { estimateRevenueKztFromImpulses, avgKztPerImpulse, SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
+import { notifyAdmin, fmt } from "@/lib/admin-notify";
 
 // ---- Validation limits ----
 const MIN_BALANCE = 0;
@@ -497,6 +498,24 @@ export async function toggleUserBan(userId: string, isBanned: boolean) {
       targetId: userId,
       meta: { isBanned },
     });
+
+    // Notify admin Telegram for audit visibility (bans are rare and
+    // important — easy to confuse who banned whom across multiple
+    // devices/sessions).
+    try {
+      const u = await db
+        .select({ email: users.email, name: users.name })
+        .from(users)
+        .where(eq(users.id, userId));
+      notifyAdmin(
+        `${isBanned ? "🚫 *Юзер забанен*" : "✅ *Юзер разбанен*"}\n\n` +
+        `*Email:* ${fmt.esc(u[0]?.email ?? userId)}\n` +
+        (u[0]?.name ? `*Имя:* ${fmt.esc(u[0].name)}\n` : "") +
+        `*Действие:* через админку`,
+      );
+    } catch (notifyErr) {
+      console.warn("[toggleUserBan] notifyAdmin failed:", notifyErr);
+    }
 
     return { success: true };
   } catch (e: any) {

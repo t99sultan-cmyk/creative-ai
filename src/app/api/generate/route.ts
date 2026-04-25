@@ -9,6 +9,7 @@ import { isAdmin } from "@/lib/admin-guard";
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 import { getNichePack } from "@/lib/niche-packs";
 import { lintCreativeHtml } from "@/lib/html-linter";
+import { notifyAdmin, fmt } from "@/lib/admin-notify";
 
 export const maxDuration = 300;
 
@@ -716,6 +717,51 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
     // Success — do NOT refund.
     deductedCost = 0;
 
+    // ----- Admin Telegram pings (fire-and-forget) -----
+    // First creative ever for this user — counts include the row we
+    // just inserted. Tied to the moment of "user is now activated".
+    try {
+      const creativeCount = await db
+        .select({ c: sql<number>`count(*)::int` })
+        .from(creatives)
+        .where(eq(creatives.userId, userId));
+      const totalCreatives = creativeCount[0]?.c ?? 0;
+      if (totalCreatives === 1) {
+        const u = await db
+          .select({ email: users.email, name: users.name })
+          .from(users)
+          .where(eq(users.id, userId));
+        notifyAdmin(
+          `✨ *Первый креатив у юзера*\n\n` +
+          `*Email:* ${fmt.esc(u[0]?.email ?? userId)}\n` +
+          (u[0]?.name ? `*Имя:* ${fmt.esc(u[0].name)}\n` : '') +
+          `*Модель:* ${useGemini ? 'Gemini 3.1 Pro' : 'Claude Opus 4.7'}\n` +
+          `*Формат:* ${format} ${isAnimated ? '(анимация)' : '(статика)'}\n` +
+          `*ТЗ:* ${fmt.esc(fmt.short(prompt, 200))}`,
+        );
+      }
+
+      // User just spent their last impulse — high-intent signal that
+      // they may be ready to top up. `deducted[0].impulses` was the
+      // post-deduction balance returned by the atomic UPDATE.
+      const remainingAfter = deducted[0]?.impulses ?? -1;
+      if (remainingAfter === 0) {
+        const u = await db
+          .select({ email: users.email, name: users.name })
+          .from(users)
+          .where(eq(users.id, userId));
+        notifyAdmin(
+          `⚡ *Юзер потратил последний импульс*\n\n` +
+          `*Email:* ${fmt.esc(u[0]?.email ?? userId)}\n` +
+          (u[0]?.name ? `*Имя:* ${fmt.esc(u[0].name)}\n` : '') +
+          `*Всего креативов:* ${totalCreatives}\n\n` +
+          `Самый горячий момент — можно написать ему предложение по тарифу.`,
+        );
+      }
+    } catch (e) {
+      console.warn('[notifyAdmin] post-success notification failed:', e);
+    }
+
     return new Response(
       JSON.stringify({ code, creativeId }),
       {
@@ -739,6 +785,29 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
       }
     }
     console.error('Claude API Error:', error);
+
+    // Page admin on every generation failure — covers Anthropic 5xx,
+    // Gemini errors, network glitches, refund-required cases. Includes
+    // user email if we got far enough to identify them.
+    try {
+      let errEmail = "(не идентифицирован)";
+      if (deductedUserId) {
+        const u = await db
+          .select({ email: users.email })
+          .from(users)
+          .where(eq(users.id, deductedUserId));
+        if (u[0]?.email) errEmail = u[0].email;
+      }
+      notifyAdmin(
+        `🔴 *Ошибка генерации*\n\n` +
+        `*Юзер:* ${fmt.esc(errEmail)}\n` +
+        `*Ошибка:* ${fmt.esc(fmt.short(error?.message || String(error), 250))}\n` +
+        (deductedCost > 0 ? `\n_Импульсы (${deductedCost}) возвращены юзеру._` : ''),
+      );
+    } catch (notifyErr) {
+      console.warn('[notifyAdmin] error-path notify failed:', notifyErr);
+    }
+
     return Response.json({ error: error.message || 'Error generating content via Claude' }, { status: 500 });
   }
 }

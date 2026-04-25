@@ -6,6 +6,7 @@ import { Sparkles, CheckCircle2, ArrowLeft, Send, Receipt, CreditCard, ChevronRi
 import { useAuth } from "@clerk/nextjs";
 import { Suspense, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { notifyPaymentIntent } from "@/actions/notifyPaymentIntent";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -19,6 +20,16 @@ function CheckoutContent() {
   // who scan it with their phone. "link" is the default because ~70% of
   // traffic is mobile.
   const [payMethod, setPayMethod] = useState<"link" | "qr">("link");
+  const [intentPinged, setIntentPinged] = useState(false);
+
+  /** Best-effort signal to admin Telegram when the user starts the
+   *  payment flow. Once per session (state guard). */
+  function pingPaymentIntent(method: "link" | "qr") {
+    if (intentPinged) return;
+    setIntentPinged(true);
+    const priceKzt = parseInt(price.replace(/\s/g, ""), 10) || 0;
+    notifyPaymentIntent({ tier: plan, priceKzt, method }).catch(() => {});
+  }
 
   // Contact channels for the "send receipt" step. User chooses WhatsApp or
   // Telegram on step 3 depending on preference.
@@ -98,7 +109,7 @@ function CheckoutContent() {
                        <button
                          role="tab"
                          aria-selected={payMethod === "qr"}
-                         onClick={() => setPayMethod("qr")}
+                         onClick={() => { setPayMethod("qr"); pingPaymentIntent("qr"); }}
                          className={`px-4 py-2 text-sm font-bold rounded-lg inline-flex items-center gap-2 transition-colors ${
                            payMethod === "qr"
                              ? "bg-white shadow-sm text-neutral-900"
@@ -114,6 +125,7 @@ function CheckoutContent() {
                         href={KASPI_PAY_LINK}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={() => pingPaymentIntent("link")}
                         className="inline-flex items-center justify-between px-6 py-3 bg-[#f14635] text-white font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-red-500/20 w-full sm:w-auto"
                       >
                         <span className="flex items-center gap-2"><CreditCard className="w-5 h-5"/> Оплатить на Kaspi</span>

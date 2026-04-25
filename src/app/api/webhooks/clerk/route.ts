@@ -5,8 +5,10 @@ import { db } from '@/db'
 import { users } from '@/db/schema'
 import { sendCapiEvent } from '@/lib/fb-capi'
 import { SIGNUP_BONUS_IMPULSES } from '@/lib/pricing'
+import { notifyAdmin, fmt } from '@/lib/admin-notify'
 
 export async function POST(req: Request) {
+  try {
   // You can find this in the Clerk Dashboard -> Webhooks -> choose the endpoint
   const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
 
@@ -94,8 +96,28 @@ export async function POST(req: Request) {
           status: 'completed',
         },
       })
+
+      // Push to Telegram on each new sign-up.
+      notifyAdmin(
+        `🎉 *Новая регистрация*\n\n` +
+        `*Email:* ${fmt.esc(email)}\n` +
+        (name ? `*Имя:* ${fmt.esc(name)}\n` : '') +
+        `*ID:* \`${fmt.esc(id)}\`\n` +
+        `*Бонус:* ${SIGNUP_BONUS_IMPULSES} ⚡`,
+      );
     }
   }
 
   return new Response('', { status: 200 })
+  } catch (err: any) {
+    // Top-level safety net — page admin if our webhook handler itself
+    // crashes, since silent failure here means lost signups.
+    console.error('[clerk-webhook] crashed:', err);
+    notifyAdmin(
+      `🛑 *Clerk webhook упал*\n\n` +
+      `*Ошибка:* ${fmt.esc(fmt.short(err?.message || String(err), 300))}\n\n` +
+      `Регистрация юзера могла не сохраниться в БД. Проверь Vercel logs.`,
+    );
+    return new Response('Webhook handler crashed', { status: 500 });
+  }
 }
