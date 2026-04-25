@@ -7,6 +7,8 @@ import crypto from "crypto";
 import { checkGenerateRateLimit, rateLimitMessage } from "@/lib/rate-limit";
 import { isAdmin } from "@/lib/admin-guard";
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
+import { getNichePack } from "@/lib/niche-packs";
+import { lintCreativeHtml } from "@/lib/html-linter";
 
 export const maxDuration = 300;
 
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode, remixScreenshotBase64, strictClone } = body;
+    const { prompt, isAnimated, format, referenceImagesBase64, productImagesBase64, remixHtmlCode, remixScreenshotBase64, strictClone, niche } = body;
 
     // ---- Input validation ----
     if (typeof prompt !== "string" || prompt.trim().length === 0) {
@@ -235,6 +237,50 @@ CRITICAL INSTRUCTIONS (FAILURE IS NOT AN OPTION):
 
 5. BEAUTIFUL LAYOUT & BRANDING AWARENESS (CRITICAL):
    - You have FULL CREATIVE FREEDOM to make it look stunning.
+
+   🎨 ANTI-AI-SLOP MANIFESTO (read this every time):
+   You have a strong tendency to converge toward generic, "on distribution"
+   ad creatives — purple-to-blue gradients, Inter or Roboto everywhere,
+   pastel mush, centered headline + CTA stacked below, soft rounded
+   gradient cards, sparkle/shimmer overlays. This is "AI slop" and it
+   does NOT sell. The user's brand will look like every other AI-output.
+   Avoid this aggressively.
+
+   ❌ BANNED defaults (do NOT reach for these):
+   - Fonts: Inter, Roboto, Arial, system-ui, Helvetica, Open Sans,
+     Montserrat, Poppins. These are the "AI defaults" and signal cheap.
+   - Color: purple→blue gradients, pastel rainbows, neon mint/lavender
+     combinations without commitment. No "Stripe gradient" rainbows.
+   - Layout: centered logo on top + headline center + CTA below pattern.
+     Stock-feel rounded card with soft shadow as the dominant element.
+   - Decoration: sparkle ✨ overlays, circular dotted patterns,
+     floating geometric pastels, generic "tech-y" mesh gradients.
+   - Texture: same flat fill everywhere; no shadows, no noise, no depth.
+
+   ✅ AIM HIGHER:
+   - Typography: pick a DISTINCTIVE pair — display + body with clear
+     contrast in personality. Good pairs: Söhne + IBM Plex Mono,
+     Editorial New + ABC Diatype, Migra + Suisse Int'l, Tobias +
+     Inter Display, Bricolage Grotesque + Söhne Mono, Unbounded +
+     Manrope, Space Grotesk + JetBrains Mono. Use Google Fonts CDN
+     to load them. Display font should have personality (slab,
+     condensed, expanded, editorial, monospace).
+   - Color: COMMIT to a palette via CSS custom properties. ONE dominant
+     hue + ONE sharp accent + neutrals. Reference real-world editorial
+     palettes (Aesop, Hermès, Nike SB, Loewe, Patagonia, Off-White).
+     Use OKLCH or hand-picked HEX. NO generic "tailwind blue-500".
+   - Layout: pick a defined ARCHETYPE — split-screen, asymmetric grid,
+     bento, vertical stack with offset, magazine spread, full-bleed
+     image with corner caption. Avoid "centered everything".
+   - Depth: layered backgrounds (gradient + grain texture + soft blur
+     blob OR solid + sharp geometric primitive). Real shadows
+     (drop-shadow, not box-shadow on rectangles). Subtle noise
+     overlay via SVG turbulence or repeating-radial-gradient.
+   - Hierarchy: ONE focal element wins. Typography scale ratio 1.5-1.8
+     between hero and body. No four-equal-weights.
+   - Variation: alternate light/dark backgrounds and font families
+     across generations of the same brief — don't fall into one mold.
+
    - 🔴 NO UNREQUESTED CLIP ART: DO NOT hallucinate or generate literal SVG/emoji representations of brand names! If the brand is "Золотое Яблоко", do NOT draw literal apples. If it's "Tiger", do not draw a tiger. Your visual decorations should be abstract, geometric, elegant, CSS gradients, or typography-focused. The user's provided PRODUCT IMAGES are the ONLY real-world objects you should display.
    - 🔴 BUILD ROBUST LAYOUTS: DO NOT rely on haphazard absolute positioning that causes text to overlap with other elements. USE modern CSS Flexbox and CSS Grid. Create structured layouts where elements flow naturally.
    - 🔴 PREVENT OVERLAPS & TIGHT SPACING (CRITICAL): Never let text, badges, checkmarks, or list items overlap with or tightly hug the central graphics/products! Always use generous padding (\`p-4\`), margins (\`m-4\`), and rich flex/grid gaps (\`gap-6\` or \`gap-8\`). Elements placed around a central visual MUST be pushed outwards so they maintain clean, breathable white space around the visual.
@@ -430,7 +476,20 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
         }
       }
 
-      claudeContent.push({ type: "text", text: `Format required: ${format}.\n\nTask (ТЗ): ${effectivePrompt}` });
+      // Inject niche-specific style guidance when the user picked a
+       // niche from the editor dropdown. Goes into the user message
+       // (not system) so it doesn't break system-prompt caching, and
+       // so different users with different niche choices each get a
+       // tailored default without us maintaining N system prompts.
+       const nichePack = getNichePack(niche);
+       if (nichePack.systemHint) {
+         claudeContent.push({
+           type: "text",
+           text: `STYLE GUIDE (apply unless overridden by reference image): ${nichePack.systemHint}`,
+         });
+       }
+
+       claudeContent.push({ type: "text", text: `Format required: ${format}.\n\nTask (ТЗ): ${effectivePrompt}` });
     }
 
     // Handle references
@@ -477,14 +536,31 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
     while (retries < 3) {
       claudeResponse = await fetch(`https://api.anthropic.com/v1/messages`, {
          method: "POST",
-         headers: { 
+         headers: {
            "Content-Type": "application/json",
            "x-api-key": anthropicApiKey,
-           "anthropic-version": "2023-06-01"
+           "anthropic-version": "2023-06-01",
+           // Required to opt into 1-hour cache TTL. Anthropic silently
+           // changed the default to 5m in March 2026 — without this
+           // header our system prompt would re-bill input tokens on
+           // every request that comes >5 min after the last one.
+           "anthropic-beta": "extended-cache-ttl-2025-04-11",
          },
          body: JSON.stringify({
             model: "claude-opus-4-7",
-            system: systemPrompt,
+            // System as a typed array with cache_control: marks the
+            // ~5K-token system prompt as cacheable for 1h. Steady-state
+            // hit rate ~80% → 90% discount on cached input tokens.
+            // The systemPrompt string is referentially stable across
+            // requests (no per-user data baked in), which is the
+            // requirement for caching.
+            system: [
+              {
+                type: "text",
+                text: systemPrompt,
+                cache_control: { type: "ephemeral", ttl: "1h" },
+              },
+            ],
             /* Bumped from 4000 → 8192. Claude was hitting the 4000 ceiling on
                every generation, which forced it to pick minimal-code libs
                (GSAP+SplitType) and skip Three/Matter/Pixi setups that need
@@ -533,6 +609,26 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
     const match = code.match(/```(?:html)?\s*([\s\S]*?)```/);
     if (match) {
       code = match[1];
+    }
+
+    // Deterministic post-generation linter — purely observational for
+    // now. Issues are logged so we can see how often each defect class
+    // fires across the userbase; once we have telemetry over a week or
+    // two we can decide whether the cost of an auto-retry on HIGH
+    // issues is worth paying. No blocking, no extra Claude calls.
+    try {
+      const lintIssues = lintCreativeHtml(code);
+      if (lintIssues.length > 0) {
+        const high = lintIssues.filter((i) => i.severity === "high").length;
+        const low = lintIssues.filter((i) => i.severity === "low").length;
+        console.log(
+          `[lint] ${lintIssues.length} issue(s) (${high} high, ${low} low):`,
+          lintIssues.map((i) => i.code).join(", "),
+        );
+      }
+    } catch (e) {
+      // Linter must never break a generation — swallow.
+      console.warn("[lint] linter crashed:", e);
     }
 
     // Replace placeholders with real Base64 data (From original generation)

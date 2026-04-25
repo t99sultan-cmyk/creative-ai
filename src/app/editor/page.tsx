@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag } from "lucide-react";
+import { NICHE_LIST } from "@/lib/niche-packs";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { toPng } from "html-to-image";
@@ -26,7 +27,10 @@ export default function Home() {
   const [format, setFormat] = useState<Format>("9:16");
   const [isAnimated, setIsAnimated] = useState<boolean>(true);
   const [generationsCount, setGenerationsCount] = useState<number>(1);
-  
+  // Niche selector — gives the model a sensible default style when the
+  // user has no reference image. Empty string = no niche chosen.
+  const [niche, setNiche] = useState<string>("");
+
   // All plans cost 3 for static and 4 for animated
   const currentCost = (isAnimated ? 4 : 3) * generationsCount;
   
@@ -632,7 +636,8 @@ export default function Home() {
               productImagesBase64: prodBase64,
               remixHtmlCode: htmlCodeToRemix,
               remixScreenshotBase64,
-              strictClone
+              strictClone,
+              niche: niche || undefined,
             }),
             signal: controller.signal
           });
@@ -1318,6 +1323,30 @@ export default function Home() {
                 ))}
              </div>
              <p className="text-[10px] text-neutral-400 leading-tight">Система сгенерирует {generationsCount} {generationsCount === 1 ? 'вариант' : 'варианта'} одновременно. Первый откроется сразу, остальные сохранятся в Банк Креативов.</p>
+          </div>
+
+          {/* Niche selector — gives the model a default style guide
+              when the user has no reference image. */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Tag className="w-4 h-4 text-neutral-400" />
+              Ниша / категория
+              <span className="text-[10px] text-neutral-400 font-medium ml-1">(если без референса)</span>
+            </h2>
+            <select
+              value={niche}
+              onChange={(e) => setNiche(e.target.value)}
+              disabled={isLoading}
+              className="w-full rounded-xl border border-neutral-200 bg-white text-neutral-800 px-3 py-2.5 text-sm font-medium outline-none focus:border-hermes-500 focus:ring-2 focus:ring-hermes-500/15 transition-colors disabled:opacity-50"
+            >
+              <option value="">— Не указывать —</option>
+              {NICHE_LIST.filter(n => n.id !== "general").map(n => (
+                <option key={n.id} value={n.id}>{n.label}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-neutral-400 leading-tight">
+              ИИ подберёт цвета, шрифты и тон сообщения под нишу. Не нужно если уже есть референс-картинка.
+            </p>
           </div>
 
           {/* Reference and Product Image Uploads */}
