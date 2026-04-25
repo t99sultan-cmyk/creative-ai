@@ -696,8 +696,12 @@ export default function Home() {
     }
   };
 
-  const submitFeedback = async () => {
+  const submitFeedback = async (reasonOverride?: string) => {
     if (!activeCreativeId) return;
+    // reasonOverride lets the chip handlers send their value directly,
+    // bypassing the async setState delay that would otherwise leave
+    // feedbackComment empty on the first chip-click.
+    const comment = reasonOverride ?? feedbackComment;
     try {
       await fetch('/api/feedback', {
         method: 'POST',
@@ -705,7 +709,7 @@ export default function Home() {
         body: JSON.stringify({
           creativeId: activeCreativeId,
           score: feedback === 'like' ? 1 : -1,
-          comment: feedbackComment
+          comment,
         })
       });
       setFeedbackSubmitted(true);
@@ -1568,6 +1572,29 @@ export default function Home() {
               </button>
             </div>
           ) : (
+            <>
+            {/* Pre-flight quality warning. The biggest predictor of a
+                disappointing result is a thin prompt with no reference
+                images, so we surface a soft yellow nudge BEFORE the user
+                spends impulses. Doesn't block — they can still proceed. */}
+            {!isLoading && !remixSourceCode && (() => {
+              const wc = prompt.trim().split(/\s+/).filter(Boolean).length;
+              const cc = prompt.trim().length;
+              const noImg = referenceImages.length === 0 && productImages.length === 0;
+              if (cc >= 30 && wc >= 5) return null;
+              if (!noImg && cc >= 15) return null;
+              if (cc === 0) return null;
+              return (
+                <div className="flex gap-2 p-2.5 mb-2 rounded-lg bg-yellow-50 border border-yellow-200 text-[11px] leading-snug text-yellow-900">
+                  <Lightbulb className="w-3.5 h-3.5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong>ТЗ слишком общее.</strong> Добавь нишу, аудиторию,
+                    оффер и стиль — иначе ИИ будет угадывать. Загрузи референс,
+                    если можешь.
+                  </span>
+                </div>
+              );
+            })()}
             <button
               onClick={() => handleGenerate()}
               disabled={isLoading || isRemovingBg || !prompt.trim()}
@@ -1600,6 +1627,7 @@ export default function Home() {
                 </span>
               )}
             </button>
+            </>
           )}
         </div>
       </aside>
@@ -1707,13 +1735,41 @@ export default function Home() {
                 <p className="text-xs font-bold text-green-600 text-center w-full my-1">Обновляем нейросеть... Спасибо! ❤️</p>
              )}
              {feedback === 'dislike' && !feedbackSubmitted && (
-               <div className="w-full flex gap-2 animate-in fade-in slide-in-from-top-2">
-                 <input type="text" value={feedbackComment} onChange={e => setFeedbackComment(e.target.value)} placeholder="Что ИИ исправить в будущем?" className="flex-1 text-xs border border-neutral-200 rounded-lg px-3 py-2 outline-none focus:border-hermes-500" />
-                 <button onClick={submitFeedback} className="bg-neutral-900 hover:bg-hermes-500 transition-colors text-white px-3 py-2 text-xs rounded-lg font-bold">Ок</button>
+               <div className="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
+                 <p className="text-[11px] font-semibold text-neutral-600">Что испортило результат?</p>
+                 <div className="flex flex-wrap gap-1.5">
+                   {[
+                     "Текст налазит",
+                     "Не тот стиль",
+                     "Не моя ниша",
+                     "Слишком плоско",
+                     "Эмодзи мешают",
+                     "Не читается",
+                     "Слабый CTA",
+                   ].map(reason => (
+                     <button
+                       key={reason}
+                       onClick={() => {
+                         setFeedbackComment(reason);
+                         // Submit immediately with this reason — one click
+                         // is the whole point. Pass reason directly because
+                         // setState is async.
+                         setTimeout(() => submitFeedback(reason), 0);
+                       }}
+                       className="text-[11px] bg-neutral-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-neutral-200 text-neutral-700 px-2.5 py-1 rounded-full font-semibold transition-colors"
+                     >
+                       {reason}
+                     </button>
+                   ))}
+                 </div>
+                 <div className="flex gap-2 mt-1">
+                   <input type="text" value={feedbackComment} onChange={e => setFeedbackComment(e.target.value)} placeholder="Или опиши своими словами…" className="flex-1 text-xs border border-neutral-200 rounded-lg px-3 py-2 outline-none focus:border-hermes-500" />
+                   <button onClick={() => submitFeedback()} className="bg-neutral-900 hover:bg-hermes-500 transition-colors text-white px-3 py-2 text-xs rounded-lg font-bold">Ок</button>
+                 </div>
                </div>
              )}
              {feedback === 'like' && !feedbackSubmitted && (
-                <button onClick={submitFeedback} className="w-full mt-2 bg-neutral-900 hover:bg-hermes-500 transition-colors text-white px-3 py-2 text-xs rounded-lg font-bold">Отправить и обучить ИИ на этом</button>
+                <button onClick={() => submitFeedback()} className="w-full mt-2 bg-neutral-900 hover:bg-hermes-500 transition-colors text-white px-3 py-2 text-xs rounded-lg font-bold">Отправить и обучить ИИ на этом</button>
              )}
           </div>
         )}

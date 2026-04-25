@@ -380,7 +380,57 @@ ${strictClone ? `9. STRICT CLONE MODE [CRITICAL]:
          });
       }
     } else {
-      claudeContent.push({ type: "text", text: `Format required: ${format}.\n\nTask (ТЗ): ${prompt}` });
+      // Auto-prompt enhancer: when the user typed a short, vague brief
+      // and uploaded no images, we burn ~$0.005 on a Haiku call to
+      // expand it into a proper creative brief before feeding the main
+      // generation. This is the single biggest quality lever for
+      // low-effort prompts ("сделай для стоматологии 990тг") that
+      // otherwise produce generic, disappointing creatives. Falls
+      // through to the original prompt on any error.
+      const wordCount = (prompt || "").trim().split(/\s+/).filter(Boolean).length;
+      const charCount = (prompt || "").trim().length;
+      const hasRefs = Array.isArray(referenceImagesBase64) && referenceImagesBase64.length > 0;
+      const hasProds = Array.isArray(productImagesBase64) && productImagesBase64.length > 0;
+      const isThin = (charCount < 60 || wordCount < 8) && !hasRefs && !hasProds;
+
+      let effectivePrompt = prompt;
+      if (isThin && process.env.ANTHROPIC_API_KEY) {
+        try {
+          const enhanceRes = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": process.env.ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 600,
+              system:
+                "Ты эксперт-копирайтер казахстанского рекламного агентства. Юзеру лень писать ТЗ — он шлёт одну короткую фразу. Расширь её в полноценный бриф для рекламного креатива на 4-7 строк. Покрой: визуальный стиль и настроение, цветовая гамма (если уместно), главный заголовок (хук), подзаголовок-уточнение, призыв к действию (CTA). НИЧЕГО не выдумывай чего нет в брифе — никаких фейковых цен, дат, скидок, гарантий. Если юзер указал тариф «990 тг» — это ровно «990 тг», не перевирай. Отвечай ТОЛЬКО на русском, ТОЛЬКО самим текстом брифа, без вступлений и комментариев. Сохрани оригинальное намерение юзера.",
+              messages: [
+                {
+                  role: "user",
+                  content: `Краткое ТЗ юзера:\n\n"${prompt}"\n\nФормат итогового креатива: ${format}.`,
+                },
+              ],
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+          if (enhanceRes.ok) {
+            const enhanceData = await enhanceRes.json();
+            const expanded = enhanceData?.content?.[0]?.text?.trim();
+            if (expanded && expanded.length > charCount) {
+              effectivePrompt = `Оригинальное ТЗ юзера: "${prompt}"\n\nРасшифрованный бриф (используй его как основу, но не выдумывай деталей сверх него):\n${expanded}`;
+              console.log(`[generate] enhanced thin prompt (${charCount}→${expanded.length} chars)`);
+            }
+          }
+        } catch (e) {
+          console.warn("[generate] prompt enhance failed, using original", e);
+        }
+      }
+
+      claudeContent.push({ type: "text", text: `Format required: ${format}.\n\nTask (ТЗ): ${effectivePrompt}` });
     }
 
     // Handle references
