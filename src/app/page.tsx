@@ -658,7 +658,17 @@ export default function LandingPage() {
                               {tier.btn}
                             </Link>
                           ) : (
-                            <SignInButton mode="modal" forceRedirectUrl={checkoutHref}>
+                            // For NEW users (sign-up path) we still route them
+                            // through /onboarding to collect phone + welcome —
+                            // skipping it leaves the user with no contact in
+                            // the DB and no welcome flag, which we found in
+                            // the audit. Existing users (sign-in path) go
+                            // straight to /checkout to keep their flow intact.
+                            <SignInButton
+                              mode="modal"
+                              forceRedirectUrl={checkoutHref}
+                              signUpForceRedirectUrl="/onboarding"
+                            >
                               <button onClick={handlePricingClick} className={buttonClass}>
                                 {tier.btn}
                               </button>
