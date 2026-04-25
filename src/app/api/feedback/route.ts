@@ -4,7 +4,12 @@ import { creatives, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { fmt } from '@/lib/admin-notify';
 
+// Cloud Run renderer's /screenshot endpoint, used to grab a static
+// PNG of any HTML for the admin TG ping. URL is configurable via env
+// so a renderer migration / region move doesn't require a code deploy.
+// Falls back to the current production URL when the env isn't set.
 const SCREENSHOT_URL =
+  process.env.SCREENSHOT_SERVICE_URL ||
   'https://creative-cloud-renderer-694906438875.europe-west4.run.app/screenshot';
 
 export async function POST(request: Request) {

@@ -30,11 +30,16 @@ const BANNED_FONTS = [
   "Lato",
 ];
 
-// Emoji codepoint ranges — covers most decorative emoji we want to
-// catch (fire, sparkle, hearts, generic symbols). Doesn't catch every
-// codepoint, but covers the slop offenders.
+// Emoji codepoint ranges — narrowed to the actual decorative-slop
+// offenders. Previous version covered \u{1F000}-\u{1F02F} which
+// includes Mahjong tiles and other archaic symbols (almost never a
+// legitimate ad creative use), but also \u{2600}-\u{27BF} which is
+// huge and contains weather symbols + dingbat arrows that legit
+// Russian ad copy might use intentionally. Stick to the four blocks
+// where 99% of "AI slop" emoji actually live: emoticons, misc
+// symbols & pictographs, transport, supplemental symbols.
 const EMOJI_REGEX =
-  /[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}]/u;
+  /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/u;
 
 export function lintCreativeHtml(html: string): LintIssue[] {
   const issues: LintIssue[] = [];
@@ -111,17 +116,23 @@ export function lintCreativeHtml(html: string): LintIssue[] {
     }
   }
 
-  // 5. Inline SVG of a "person" / "human figure". We don't have a real
-  //    classifier — but a strong indicator is an SVG with both a
-  //    "head circle" (<circle r=…>) and "body/limb path" patterns
-  //    inside the same <svg>. Cheap heuristic, doesn't catch every
-  //    case but flags the common Corporate Memphis output.
+  // 5. Inline SVG of a "person" / "human figure". Stricter heuristic
+  //    than before — common Heroicons / Feather icons can have a
+  //    single long <path d="M..."/> over 120 chars (rounded
+  //    rectangles, complex glyphs) and were getting false-flagged.
+  //    Now require: large SVG (>1200 chars), AT LEAST ONE head-sized
+  //    circle, AND a path with multiple curve/line segments
+  //    (indicating limbs/torso, not a single icon outline).
   const svgBlocks = html.match(/<svg[\s\S]*?<\/svg>/gi) || [];
   for (const svg of svgBlocks) {
-    if (svg.length < 800) continue; // tiny svgs are icons, not figures
+    if (svg.length < 1200) continue;
     const hasHead = /<circle\b[^>]*\br\s*=\s*["']?\s*(1[5-9]|[2-9]\d|1\d{2})/i.test(svg);
-    const hasBody = /<path\s+[^>]*\bd\s*=\s*"[Mm][^"]{120,}"/.test(svg);
-    if (hasHead && hasBody) {
+    // path with multiple bezier/line/quadratic segments (a single
+    // L/Q/C operator inside d="..." with at least 50 chars before it
+    // is good signal — icons rarely have a body+limb shape with
+    // multiple segments after a long initial move).
+    const hasMultiSegmentPath = /<path[^>]*\bd\s*=\s*"[^"]{20,}[LlQqCc][^"]{50,}"/.test(svg);
+    if (hasHead && hasMultiSegmentPath) {
       issues.push({
         code: "vector_human",
         severity: "high",

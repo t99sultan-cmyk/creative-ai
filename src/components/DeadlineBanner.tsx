@@ -8,15 +8,13 @@ import { Flame } from "lucide-react";
  * time" every single day — at midnight local time the label rolls over
  * to the next day, so marketing copy never needs editing.
  *
- * Three visual variants so the same logic can drive the small sticky
- * top bar on the landing, the chunky hero card on /onboarding, and the
- * inline pre-footer block. Pick with `variant`.
+ * Three visual variants. Pick with `variant`:
  *
- *   sticky-top  — thin strip that sits above the site header, always
- *                 visible on scroll. No CTA (the whole page is the CTA).
- *   hero-card   — compact card with a flame badge, countdown, and the
- *                 "only today · then paid" subtitle. Used inside the
- *                 /onboarding welcome screen.
+ *   hero-card   — dark, compact card with a flame badge, countdown, and
+ *                 the "only today · then paid" subtitle. Used inside
+ *                 the /onboarding welcome screen.
+ *   hero-inline — light theme, large card with explicit countdown
+ *                 boxes. Used in the landing hero, under the CTA.
  *   inline      — full-bleed section with a headline + countdown + CTA
  *                 slot. Used on the landing just before the footer.
  *
@@ -27,7 +25,7 @@ export function DeadlineBanner({
   variant = "hero-card",
   cta,
 }: {
-  variant?: "top-bar" | "hero-card" | "hero-inline" | "inline";
+  variant?: "hero-card" | "hero-inline" | "inline";
   /** Optional CTA shown in the `inline` variant. */
   cta?: React.ReactNode;
 }) {
@@ -41,13 +39,11 @@ export function DeadlineBanner({
 
   if (!now) {
     const h =
-      variant === "top-bar"
-        ? "h-10"
-        : variant === "inline"
-          ? "h-[140px] md:h-[160px]"
-          : variant === "hero-inline"
-            ? "h-[54px]"
-            : "h-[88px]";
+      variant === "inline"
+        ? "h-[140px] md:h-[160px]"
+        : variant === "hero-inline"
+          ? "h-[54px]"
+          : "h-[88px]";
     return <div className={h} aria-hidden />;
   }
 
@@ -75,33 +71,6 @@ export function DeadlineBanner({
   const m = Math.floor((msLeft % 3_600_000) / 60_000);
   const s = Math.floor((msLeft % 60_000) / 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
-
-  if (variant === "top-bar") {
-    // Fixed at top so it stays visible above the nav bar. Caller is
-    // expected to pad the page below by 40px (h-10) to compensate.
-    return (
-      <div className="fixed top-0 left-0 right-0 w-full bg-gradient-to-r from-hermes-600 via-red-500 to-amber-500 text-white shadow-md z-[60] h-10 flex items-center">
-        <div className="w-full max-w-6xl mx-auto px-4 flex items-center justify-center gap-2 md:gap-3 text-[12px] md:text-sm font-semibold">
-          <span className="relative flex items-center">
-            <Flame className="w-4 h-4" />
-            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-200 animate-ping" />
-          </span>
-          <span className="hidden sm:inline">
-            Бонус 7 Импульсов — только до{" "}
-            <strong className="font-black">
-              {dayLabel}, 23:59
-            </strong>
-          </span>
-          <span className="sm:hidden">
-            До <strong className="font-black">{dayLabel}, 23:59</strong>
-          </span>
-          <span className="font-mono tabular-nums font-black bg-black/25 rounded px-2 py-0.5 text-[11px] md:text-xs">
-            {pad(h)}:{pad(m)}:{pad(s)}
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   if (variant === "inline") {
     return (
