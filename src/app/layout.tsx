@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: 'AICreative — ИИ-генератор рекламных креативов для Instagram, TikTok и Kaspi',
     template: '%s | AICreative',
   },
-  description: 'ИИ создаёт продающие видео и статичные креативы для таргета за 60 секунд. Без дизайнера, без съёмок. +47% CTR в среднем. 7 импульсов бесплатно.',
+  description: 'ИИ создаёт продающие видео и статичные креативы для таргета за 60 секунд. Без дизайнера, без съёмок. +47% CTR в среднем. 12 импульсов бесплатно.',
   keywords: [
     'генератор креативов',
     'AI реклама',
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     url: SITE_URL,
     siteName: 'AICreative',
     title: 'AICreative — ИИ-генератор продающих креативов',
-    description: 'За 60 секунд ИИ собирает видео/статику с CTR до 47%. Без дизайнера и съёмок. 7 импульсов бесплатно.',
+    description: 'За 60 секунд ИИ собирает видео/статику с CTR до 47%. Без дизайнера и съёмок. 12 импульсов бесплатно.',
     images: [
       {
         url: '/hero_visual_light.png',
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AICreative — ИИ-генератор креативов',
-    description: 'ИИ собирает конверсионные креативы за 60 секунд. 7 импульсов бесплатно.',
+    description: 'ИИ собирает конверсионные креативы за 60 секунд. 12 импульсов бесплатно.',
     images: ['/hero_visual_light.png'],
   },
   robots: {

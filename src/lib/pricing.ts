@@ -10,11 +10,69 @@
 
 /**
  * Impulses every new user gets on first sign-up.
- * Exactly enough for 1 static (3) + 1 animated (4) creative — the "try both
- * modes" trial the landing page promises ("7 импульсов в подарок"). Keep
- * this in sync with the landing copy.
+ * 12 = enough for either:
+ *   • 2 dual-model static generations (2 × 6 = 12), or
+ *   • 1 dual-model static + 1 refine (6 + 2 = 8, with leftover), or
+ *   • 1 dual-model animated + 1 refine (8 + 2 = 10, with leftover).
+ * Keep in sync with landing copy ("12 импульсов в подарок").
  */
-export const SIGNUP_BONUS_IMPULSES = 7;
+export const SIGNUP_BONUS_IMPULSES = 12;
+
+/**
+ * Per-generation impulse cost. Each click on "Сгенерировать" runs THREE
+ * outputs in parallel so the user can compare:
+ *   • Claude Opus 4.7   → HTML (motion or static)
+ *   • Gemini 3.1 Pro    → HTML
+ *   • Imagen 4 (Google) → PNG image (static rendered creative)
+ *
+ * Combined API cost ≈ $0.39 for static (~187 ₸), $0.65 for animated.
+ *
+ * Static: 8 impulses ≈ 420 ₸ → ~55% margin.
+ * Animated: 10 impulses ≈ 525 ₸ → ~20% margin (animated HTML is more
+ *   expensive at Anthropic; Imagen still adds nominal cost).
+ *
+ * Legacy values (6 / 8) stay valid for any pre-existing creatives in
+ * the DB; the cost column on each row records what was actually charged
+ * at the time, not the current default.
+ */
+export const STATIC_DUAL_COST = 8;
+export const ANIMATED_DUAL_COST = 10;
+
+/**
+ * Imagen 4 image generation cost (Google). $0.04 per image ≈ 19 ₸.
+ * Included in the bundled STATIC_DUAL_COST — no separate charge for the
+ * 3rd "image" card. We raised STATIC_DUAL_COST from 6 to 8 to absorb it.
+ */
+export const IMAGE_GEN_API_USD = 0.04;
+
+/**
+ * Veo 3 video generation cost (Google) — separate, opt-in via the
+ * "Сделать видео" button under the winner.
+ * Veo 3 charges ~$0.50-0.75 per second of generated video. An 8-second
+ * clip ≈ $4-6 ≈ 2400 ₸ at our KZT rate. We charge 50 impulses ≈ 2625 ₸
+ * → ~9% margin. Tight but acceptable; can raise later.
+ */
+export const VIDEO_GEN_COST = 50;
+
+/**
+ * "Улучшить" (vision-loop refine) — sends the generated render back to the
+ * model for self-critique. +1 API call ≈ $0.30. Charged separately so the
+ * user only pays when they actually want a fix.
+ */
+export const VISION_REFINE_COST = 2;
+
+/**
+ * Canvas mode (full agentic loop with tool_use) — Claude Sonnet 4.6
+ * iterates up to 5 times, using a `render_creative` tool to see its
+ * own work and fix layout issues in-loop. This is what gemini.google.com
+ * Canvas does internally. With Sonnet 4.6 (5× cheaper than Opus, but
+ * #1 on WebDev Arena for HTML/UI aesthetics) the API cost is ~$0.40-0.80
+ * per generation (5 iterations).
+ *
+ * Single output (no dual). Users get one polished creative.
+ * Quality vs gemini.google.com Canvas is targeted at ~85-90% parity.
+ */
+export const CANVAS_GENERATE_COST = 10;
 
 export type PricingTier = {
   name: string;
@@ -29,16 +87,18 @@ export type PricingTier = {
 };
 
 // Sanity math — why these numbers:
-// 1 статика = 3 импульса · 1 анимация = 4 импульса (/api/generate:cost).
-// Implied per-impulse price at tier:
-//   Старт:   2 490 / 45   = 55.3 ₸ / импульс
-//   Креатор: 7 980 / 150  = 53.2 ₸ / импульс
-//   Студия: 24 700 / 520  = 47.5 ₸ / импульс  (~14% scale discount)
-//   Бизнес: 49 980 / 1200 = 41.7 ₸ / импульс  (~25% scale discount)
-// Unit cost per creative reveals a clear "volume pays less" story.
-// Real API cost (Claude Opus + Cloud Run) is ~20-35 ₸ per static, ~25-45 ₸
-// per animated (render is the expensive part). Tier margins above cover
-// infra, support, and leave ~30-50% gross profit.
+// 1 dual-static = 6 импульсов (Claude+Gemini параллельно).
+// 1 dual-animated = 8 импульсов.
+// 1 refine ("Улучшить") = 2 импульса доплатой.
+// Implied per-impulse price at tier (unchanged):
+//   Старт:   2 490 / 45   = 55.3 ₸ / импульс  → ~7 dual-static в месяц
+//   Креатор: 7 980 / 150  = 53.2 ₸ / импульс  → ~25 dual-static в месяц
+//   Студия: 24 700 / 520  = 47.5 ₸ / импульс  (~14% scale discount) → ~86 dual-static
+//   Бизнес: 49 980 / 1200 = 41.7 ₸ / импульс  (~25% scale discount) → ~200 dual-static
+// Real API cost (Claude Opus + Gemini 3.1 + Cloud Run) is ~280-360 ₸ per
+// dual-static, ~340-420 ₸ per dual-animated. Tier margins still cover
+// infra+support but margin сжимается с ~40% до ~20% — компенсируем
+// объёмом и тем что dual-сравнение продаёт качество.
 export const PRICING_TIERS: PricingTier[] = [
   {
     name: "Старт",
@@ -47,10 +107,10 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~2 490 ₸ / месяц",
     impulses: 45,
     features: [
-      "~15 статичных креативов",
-      "ИЛИ ~11 анимированных",
-      "Качество 4K",
-      "Без водяных знаков",
+      "~7 dual-сравнений (Claude vs Gemini)",
+      "ИЛИ ~5 анимированных dual",
+      "Кнопка «Улучшить» (vision-loop)",
+      "Качество 4K, без водяных знаков",
       "Обновление каждый месяц",
     ],
     btn: "Начать со Старта",
@@ -63,9 +123,9 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~7 980 ₸ / месяц",
     impulses: 150,
     features: [
-      "~50 статичных или ~38 анимированных",
+      "~25 dual-сравнений (Claude+Gemini)",
+      "ИЛИ ~18 анимированных dual",
       "Всё из Старта",
-      "Удаление фона",
       "Все форматы (9:16, 1:1, 16:9)",
       "Библиотека шаблонов",
     ],
@@ -80,11 +140,11 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~24 700 ₸ / месяц",
     impulses: 520,
     features: [
-      "~173 статичных или ~130 анимированных",
+      "~86 dual-сравнений или ~65 анимированных",
       "Всё из Креатора",
-      "A/B тесты: до 4 вариантов на 1 бриф",
       "Приоритет в очереди (в 3× быстрее)",
       "Согласованность стиля между креативами",
+      "Расширенная статистика по моделям",
     ],
     btn: "Купить Студию",
     action: "buy",
@@ -96,7 +156,7 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~49 980 ₸ / месяц",
     impulses: 1200,
     features: [
-      "~400 статичных или ~300 анимированных",
+      "~200 dual-сравнений или ~150 анимированных",
       "Всё из Студии",
       "Управление командой (до 5 пользователей)",
       "Бренд-кит: единый стиль для всей команды",

@@ -250,7 +250,7 @@ export default function LandingPage() {
                >
                   <span className="flex items-center gap-1"><Check className="w-4 h-4 text-hermes-500" /> Без карты</span>
                   <span>•</span>
-                  <span className="flex items-center gap-1"><Gift className="w-4 h-4 text-amber-500" /> 7 импульсов в подарок</span>
+                  <span className="flex items-center gap-1"><Gift className="w-4 h-4 text-amber-500" /> 12 импульсов в подарок</span>
                   <span className="hidden sm:inline">•</span>
                   <span className="hidden sm:flex items-center gap-1"><RefreshCw className="w-4 h-4 text-neutral-600" /> Отмена в 1 клик</span>
                </motion.div>
@@ -584,9 +584,11 @@ export default function LandingPage() {
                   <h2 className="text-4xl md:text-5xl font-extrabold text-neutral-900 mb-4">Выберите свой формат</h2>
                   <p className="text-base sm:text-lg text-neutral-600 leading-relaxed">
                      Импульсы обновляются каждый месяц. Неиспользованные не переносятся.<br className="hidden sm:inline"/>
-                     <span className="font-semibold text-neutral-800">1 статика = 3 импульса</span>
+                     <span className="font-semibold text-neutral-800">1 dual-сравнение = 6 импульсов</span>
                      <span className="mx-2 text-neutral-300">·</span>
-                     <span className="font-semibold text-neutral-800">1 анимация = 4 импульса</span>
+                     <span className="font-semibold text-neutral-800">анимация = 8</span>
+                     <span className="mx-2 text-neutral-300">·</span>
+                     <span className="font-semibold text-neutral-800">«Улучшить» = +2</span>
                   </p>
                </div>
             </Reveal>
@@ -750,7 +752,7 @@ export default function LandingPage() {
                   ) : (
                      <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                         <button className="bg-white text-hermes-600 font-black text-xl px-12 py-6 rounded-2xl hover:scale-105 transition-transform flex items-center justify-center gap-3 shadow-2xl w-full sm:w-auto">
-                           Начать бесплатно (7 импульсов)
+                           Начать бесплатно (12 импульсов)
                            <Sparkles className="w-6 h-6 text-amber-500" />
                         </button>
                      </SignInButton>

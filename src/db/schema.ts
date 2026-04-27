@@ -8,7 +8,7 @@ export const users = pgTable("user", {
   // kept literal here because drizzle schema is evaluated at migration-gen
   // time and can't import runtime constants. If the bonus changes, bump
   // both values.
-  impulses: integer("impulses").default(7),
+  impulses: integer("impulses").default(12),
   image: text("image"),
   phone: text("phone"), // Phone number collected during onboarding (also used as WhatsApp contact)
   // Optional Telegram handle (without the @). Collected on the welcome
@@ -31,7 +31,7 @@ export const creatives = pgTable("creative", {
   imageUrl: text("imageUrl"), // Result image/thumbnail
   videoUrl: text("videoUrl"), // Result video (if applicable)
   format: text("format"), // Format of the asset (e.g. 9:16)
-  cost: integer("cost").default(3), // How many impulses it cost (3 static, 4 animated)
+  cost: integer("cost").default(6), // Импульсы за генерацию. Pair = одна dual-генерация: 6 static / 8 animated. Stored on EACH row of the pair, total user-paid = cost (not 2×cost).
   apiCostKzt: real("api_cost_kzt").default(0), // Actual API cost tracked in KZT
   htmlCode: text("htmlCode"),
   feedbackScore: integer("feedback_score"), // 1 for Like, -1 for Dislike, null for unrated
@@ -41,6 +41,23 @@ export const creatives = pgTable("creative", {
   // author's history only. The user toggles this from /account.
   // Disliked creatives are excluded from the gallery regardless.
   isPublic: boolean("is_public").default(true).notNull(),
+  /** Какая модель породила этот HTML — 'claude' (Claude Opus 4.7) или
+   *  'gemini' (Gemini 3.1 Pro). Default = 'claude' для legacy строк где
+   *  колонка появилась после факта. Используется для:
+   *    1. Показать юзеру badge модели в превью
+   *    2. Vision-refine — отправить запрос той же модели что породила
+   *    3. Аналитика winrate Claude vs Gemini по нишам. */
+  model: text("model").default("claude").notNull(),
+  /** UUID, общий для двух sibling-creative'ов одной dual-генерации.
+   *  null = legacy одиночный creative или refine. */
+  pairId: text("pair_id"),
+  /** FK self → creative.id. Если this creative — refined версия (vision-
+   *  loop "Улучшить"), указывает на источник. null для оригиналов. */
+  parentCreativeId: text("parent_creative_id"),
+  /** Pair-vote результат. null = юзер ещё не выбрал, true = победитель,
+   *  false = проигравший. Только победители показываются в публичной
+   *  галерее. Аггрегация по (model, niche) даёт winrate-телеметрию. */
+  selectedAsBest: boolean("selected_as_best"),
   createdAt: timestamp("created_at").defaultNow(),
   /** Soft-delete timestamp. When set, the user can no longer see this
    *  creative in their editor history, but it stays in the DB and is

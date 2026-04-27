@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag, Eye, EyeOff, LayoutGrid } from "lucide-react";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag, Eye, EyeOff, LayoutGrid, Trophy } from "lucide-react";
 import { NICHE_LIST } from "@/lib/niche-packs";
 import { toggleCreativePublic } from "@/actions/galleryActions";
 import { TemplatesModal } from "@/components/TemplatesModal";
+import { STATIC_DUAL_COST, ANIMATED_DUAL_COST, VIDEO_GEN_COST } from "@/lib/pricing";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
-import { toPng } from "html-to-image";
 import { useUser } from "@clerk/nextjs";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
@@ -28,23 +28,24 @@ export default function Home() {
   const [remixSourceCode, setRemixSourceCode] = useState<string | null>(null);
   const [format, setFormat] = useState<Format>("9:16");
   const [isAnimated, setIsAnimated] = useState<boolean>(true);
-  const [generationsCount, setGenerationsCount] = useState<number>(1);
   // Niche selector — gives the model a sensible default style when the
   // user has no reference image. Empty string = no niche chosen.
   const [niche, setNiche] = useState<string>("");
-  // AI model choice. Default Claude — best for design work. Gemini is
-  // available as a faster, cheaper alternative.
-  const [modelChoice, setModelChoice] = useState<"claude" | "gemini">("claude");
-  // Templates modal — opens via the "Шаблоны" button on the canvas.
+  // Dual-model: every generate click runs Claude + Gemini in parallel.
+  // The user picks the winner from side-by-side previews.
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
-  // All plans cost 3 for static and 4 for animated
-  const currentCost = (isAnimated ? 4 : 3) * generationsCount;
+  // Per-click cost: 6 imp. static / 8 animated.
+  const currentCost = isAnimated ? ANIMATED_DUAL_COST : STATIC_DUAL_COST;
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [pendingProductFile, setPendingProductFile] = useState<{ file: File; dataUrl: string } | null>(null);
-  const [strictClone, setStrictClone] = useState(false);
+  // strictClone is no longer a user choice — when there's a reference
+  // image, we ALWAYS pass strict-clone=true to /api/generate. Without
+  // it the model treats the reference as soft inspiration and makes
+  // wildly off-style outputs. This was the single biggest source of
+  // "не похоже на то, что я загрузил" complaints.
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0); 
@@ -55,6 +56,34 @@ export default function Home() {
   
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  // ---- Multi-model triplet state ----
+  // After /api/generate returns, `pair` holds 2 HTML siblings + 1 image
+  // sibling (in static mode). In animated mode, no image — just HTML×2.
+  // UI renders cards side-by-side; user picks a winner via "Этот лучше".
+  type DualGen = { creativeId: string; code: string };
+  type ImageGen = { creativeId: string; imageUrl: string };
+  const [pair, setPair] = useState<{
+    pairId: string;
+    claude: DualGen | null;
+    gemini: DualGen | null;
+    imagen: ImageGen | null;
+    claudeError?: string;
+    geminiError?: string;
+    imagenError?: string;
+  } | null>(null);
+
+  // Veo 3 video state — kicked from "Сделать видео" button under winner.
+  // `videoJob` holds the in-flight job; client polls /api/check-video
+  // every ~5 sec until state=ready or state=failed.
+  type VideoState = "kicking" | "polling" | "ready" | "failed";
+  const [videoJob, setVideoJob] = useState<{
+    creativeId: string;
+    sourceCreativeId: string;
+    state: VideoState;
+    videoUrl?: string;
+    error?: string;
+  } | null>(null);
 
   const [mobileTab, setMobileTab] = useState<'controls' | 'canvas'>('controls');
   const [feedback, setFeedback] = useState<'like'|'dislike'|null>(null);
@@ -493,7 +522,8 @@ export default function Home() {
     setActiveCreativeId(null);
     setRemixSourceCode(null);
     setError("");
-    setGenerationsCount(1);
+    setPair(null);
+    setVideoJob(null);
     localStorage.removeItem("creative_prompt");
   };
 
@@ -617,86 +647,86 @@ export default function Home() {
     }
 
     try {
-      const results = [];
-      
-      for (let i = 0; i < generationsCount; i++) {
-        // Show iteration in loading state if multiple
-        if (generationsCount > 1) {
-           // We safely override the loading text
-           setLoadingText(`Генерация ${i + 1} из ${generationsCount}...`);
-        }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 360_000);
 
-        const iterationPrompt = prompt + (i > 0 && generationsCount > 1 ? ` [Сделай альтернативную версию ${i + 1}, немного поменяй композицию]` : '');
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 360000); // 360s local timeout
-
-        try {
-          const res = await fetch("/api/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              prompt: iterationPrompt,
-              format,
-              isAnimated,
-              referenceImagesBase64: refBase64,
-              productImagesBase64: prodBase64,
-              remixHtmlCode: htmlCodeToRemix,
-              remixScreenshotBase64,
-              strictClone,
-              niche: niche || undefined,
-              modelChoice,
-            }),
-            signal: controller.signal
-          });
-          
-          const data = await res.json();
-          clearTimeout(timeoutId);
-          
-          if (data.error) {
-             const errMsg = data.error.toLowerCase();
-             if (errMsg.includes("503") || errMsg.includes("high demand")) {
-               throw new Error(`Сервера перегружены из-за высокого спроса! Ошибка на варианте ${i+1}. Подождите.`);
-             }
-             throw new Error(data.error);
+      let data: any;
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            format,
+            isAnimated,
+            referenceImagesBase64: refBase64,
+            productImagesBase64: prodBase64,
+            remixHtmlCode: htmlCodeToRemix,
+            remixScreenshotBase64,
+            strictClone: referenceImages.length > 0,
+          }),
+          signal: controller.signal,
+        });
+        data = await res.json();
+        clearTimeout(timeoutId);
+        if (data.error) {
+          const errMsg = String(data.error).toLowerCase();
+          if (errMsg.includes("503") || errMsg.includes("high demand")) {
+            throw new Error("Сервера перегружены. Подожди и попробуй снова.");
           }
-          
-          results.push(data);
-          
-          // Optionally, immediately load the first one while others render in bg
-          if (i === 0) {
-            setCode(data.code);
-            if (data.creativeId) setActiveCreativeId(data.creativeId);
-          }
-          
-        } catch (err: any) {
-          clearTimeout(timeoutId);
-          if (err.name === 'AbortError') throw new Error(`Таймаут (превышено время ожидания) на ${i+1} варианте.`);
-          throw err; // Re-throw to be caught by outer catch
+          throw new Error(data.error);
         }
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === "AbortError") throw new Error("Таймаут (превышено время ожидания).");
+        throw err;
       }
 
-      if (results.length > 0) {
-        // Automatically load the FIRST generated variation into the main canvas
-        setCode(results[0].code);
-        if (results[0].creativeId) {
-          setActiveCreativeId(results[0].creativeId);
-        }
-        setRemixSourceCode(null); // Clear remix source after successful generation
+      // ---- Triplet response: { pairId, claude, gemini, imagen } ----
+      const claudeOk = data.claude && data.claude.code && !data.claude.error;
+      const geminiOk = data.gemini && data.gemini.code && !data.gemini.error;
+      const imagenOk = data.imagen && data.imagen.imageUrl && !data.imagen.error;
+
+      if (!claudeOk && !geminiOk && !imagenOk) {
+        throw new Error("Все модели вернули ошибку. Импульсы возвращены.");
       }
 
-      // Update History Bank
+      setPair({
+        pairId: data.pairId,
+        claude: claudeOk
+          ? { creativeId: data.claude.creativeId, code: data.claude.code }
+          : null,
+        gemini: geminiOk
+          ? { creativeId: data.gemini.creativeId, code: data.gemini.code }
+          : null,
+        imagen: imagenOk
+          ? { creativeId: data.imagen.creativeId, imageUrl: data.imagen.imageUrl }
+          : null,
+        claudeError: claudeOk ? undefined : data.claude?.error,
+        geminiError: geminiOk ? undefined : data.gemini?.error,
+        imagenError: data.imagen && !imagenOk ? data.imagen?.error : undefined,
+      });
+
+      // Reset legacy single-creative state — it's repopulated when the
+      // user picks a winner.
+      setCode(null);
+      setActiveCreativeId(null);
+      setRemixSourceCode(null);
+
+      // Refresh history and balance.
       const hist = await getUserCreatives();
       if (hist.success && hist.creatives) {
         setHistoryItems(hist.creatives);
       }
+      const bal = await getUserBalance();
+      if (bal.success) setImpulses(bal.impulses);
 
-      setMobileTab('canvas');
+      setMobileTab("canvas");
       setFeedback(null);
       setFeedbackComment("");
       setFeedbackSubmitted(false);
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (err.name === "AbortError") {
         setError("Превышено время ожидания. Код мог успеть сохраниться в вашем Банке Креативов.");
         const hist = await getUserCreatives();
         if (hist.success && hist.creatives) setHistoryItems(hist.creatives);
@@ -708,6 +738,157 @@ export default function Home() {
       setLoadingProgress(0);
     }
   };
+
+  /**
+   * Юзер кликнул "Это лучше" под одной из 2 карточек dual-pair.
+   * - помечаем победителя на сервере (selectedAsBest=true) и проигравшего (false);
+   * - `pair` сбрасываем, `code`/`activeCreativeId` подставляем победителя →
+   *   canvas переходит в обычный single-iframe вид с фидбэком, скачиванием и т.д.
+   */
+  const selectPairWinner = async (winnerModel: "claude" | "gemini" | "imagen") => {
+    if (!pair) return;
+    const winner =
+      winnerModel === "claude" ? pair.claude :
+      winnerModel === "gemini" ? pair.gemini :
+      pair.imagen;
+    if (!winner) return;
+    const winnerCreativeId = winner.creativeId;
+    try {
+      await fetch("/api/select-best", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creativeId: winnerCreativeId }),
+      });
+    } catch (e) {
+      console.warn("[select-best] failed (ignoring, UI continues):", e);
+    }
+    if (winnerModel === "imagen") {
+      // Image winner — no HTML code, just an image URL.
+      setCode(null);
+      setActiveCreativeId(winnerCreativeId);
+      // We cheat by stuffing the image into a minimal HTML wrapper
+      // so the existing single-canvas iframe renders it. Avoids a
+      // new render branch.
+      const imgUrl = (winner as ImageGen).imageUrl;
+      const wrapperHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100vw;height:100vh;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}img{width:100%;height:100%;object-fit:contain}</style></head><body><img src="${imgUrl}" alt=""></body></html>`;
+      setCode(wrapperHtml);
+    } else {
+      setCode((winner as DualGen).code);
+      setActiveCreativeId(winnerCreativeId);
+    }
+    setPair(null);
+    setVideoJob(null);
+    setIframeKey((k) => k + 1);
+  };
+
+  /**
+   * Запустить Veo 3 на победителе → poll status каждые 6 сек.
+   * Видео генерится 30-90 сек. После готовности скачиваем MP4.
+   */
+  const startVideoGeneration = async () => {
+    if (!activeCreativeId) return;
+    if (videoJob) return; // already running for current pick
+    setError("");
+    setVideoJob({
+      creativeId: "", // filled after kick
+      sourceCreativeId: activeCreativeId,
+      state: "kicking",
+    });
+    try {
+      const res = await fetch("/api/generate-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceCreativeId: activeCreativeId,
+          prompt,
+          aspectRatio: format,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (!data.creativeId) throw new Error("Сервер не вернул creativeId");
+
+      const newCreativeId = data.creativeId as string;
+      setVideoJob({
+        creativeId: newCreativeId,
+        sourceCreativeId: activeCreativeId,
+        state: "polling",
+      });
+
+      // Refresh balance — 50 имп. списано.
+      const bal = await getUserBalance();
+      if (bal.success) setImpulses(bal.impulses);
+
+      // Poll loop. Stops on ready/failed or after 5 minutes.
+      const startedAt = Date.now();
+      const POLL_INTERVAL = 6000;
+      const MAX_DURATION_MS = 5 * 60 * 1000;
+      const tick = async () => {
+        if (Date.now() - startedAt > MAX_DURATION_MS) {
+          setVideoJob((prev) =>
+            prev && prev.creativeId === newCreativeId
+              ? { ...prev, state: "failed", error: "Таймаут (>5 мин)" }
+              : prev,
+          );
+          return;
+        }
+        try {
+          const r = await fetch(`/api/check-video?creativeId=${newCreativeId}`);
+          const d = await r.json();
+          if (d.state === "ready" && d.videoUrl) {
+            setVideoJob((prev) =>
+              prev && prev.creativeId === newCreativeId
+                ? { ...prev, state: "ready", videoUrl: d.videoUrl }
+                : prev,
+            );
+            return;
+          }
+          if (d.state === "failed") {
+            setVideoJob((prev) =>
+              prev && prev.creativeId === newCreativeId
+                ? { ...prev, state: "failed", error: d.error || "Veo не справился" }
+                : prev,
+            );
+            // Refund happened server-side — refresh balance.
+            const bal2 = await getUserBalance();
+            if (bal2.success) setImpulses(bal2.impulses);
+            return;
+          }
+        } catch (e) {
+          console.warn("[video poll]", e);
+        }
+        setTimeout(tick, POLL_INTERVAL);
+      };
+      setTimeout(tick, POLL_INTERVAL);
+    } catch (e: any) {
+      setError(e?.message || "Не удалось запустить генерацию видео.");
+      setVideoJob(null);
+      const bal = await getUserBalance();
+      if (bal.success) setImpulses(bal.impulses);
+    }
+  };
+
+  const downloadVideoFile = async () => {
+    if (!videoJob || videoJob.state !== "ready" || !videoJob.videoUrl) return;
+    try {
+      const res = await fetch(videoJob.videoUrl);
+      if (!res.ok) throw new Error(`download failed: ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `creative-veo-${Date.now()}.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+    } catch (e: any) {
+      setError(`Скачивание не удалось: ${e?.message || e}`);
+    }
+  };
+
+  // Auto-polish, vision-loop refine and Canvas-mode helpers removed
+  // per user request — strip-back to bare dual-API only.
 
   const submitFeedback = async (reasonOverride?: string) => {
     if (!activeCreativeId) return;
@@ -1324,38 +1505,17 @@ export default function Home() {
               engine generates this run; both cost the same in
               impulses. We don't editorialize which is "better" because
               it depends on the brief. */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-hermes-500" />
-              Модель
-            </h2>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                disabled={isLoading}
-                onClick={() => setModelChoice("claude")}
-                className={clsx(
-                  "py-3 rounded-xl border text-sm font-bold transition-all duration-200",
-                  modelChoice === "claude"
-                    ? "bg-neutral-900 border-neutral-900 text-white shadow-md"
-                    : "bg-white border-neutral-200 text-neutral-700 hover:border-neutral-300",
-                  isLoading && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                Claude Opus 4.7
-              </button>
-              <button
-                disabled={isLoading}
-                onClick={() => setModelChoice("gemini")}
-                className={clsx(
-                  "py-3 rounded-xl border text-sm font-bold transition-all duration-200",
-                  modelChoice === "gemini"
-                    ? "bg-neutral-900 border-neutral-900 text-white shadow-md"
-                    : "bg-white border-neutral-200 text-neutral-700 hover:border-neutral-300",
-                  isLoading && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                Gemini 3.1 Pro
-              </button>
+          {/* Dual-model info banner. We always run both Claude+Gemini
+              in parallel; user picks the winner side-by-side. */}
+          <div className="rounded-xl bg-gradient-to-br from-neutral-900 to-neutral-800 text-white p-3.5 flex items-start gap-3">
+            <div className="shrink-0 w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="flex-1 leading-tight">
+              <p className="text-xs font-bold tracking-tight">Сравнение Claude vs Gemini</p>
+              <p className="text-[11px] text-white/60 mt-0.5">
+                Каждый бриф собирают <strong className="text-white/90">обе модели</strong>. Ты выбираешь, какой вариант лучше — это один импульс на стоимость.
+              </p>
             </div>
           </div>
 
@@ -1410,32 +1570,9 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Variations Count */}
-          <div className="space-y-3">
-             <h2 className="text-sm font-semibold flex items-center justify-between">
-               <span className="flex items-center gap-2">
-                 Сколько вариантов?
-               </span>
-               <span className="text-xs bg-hermes-50 text-hermes-600 px-2 py-0.5 rounded font-bold">x{currentCost} ⚡</span>
-             </h2>
-             <div className="flex gap-2">
-                {[1, 2, 3, 4].map(v => (
-                   <button 
-                     key={v} 
-                     disabled={isLoading}
-                     onClick={() => setGenerationsCount(v)} 
-                     className={clsx(
-                       "flex-1 py-2 rounded-xl border text-sm font-bold transition-colors", 
-                       generationsCount === v ? "bg-hermes-500 text-white border-hermes-500 shadow-md shadow-hermes-500/20" : "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-300",
-                       isLoading && "opacity-50 cursor-not-allowed"
-                     )}
-                   >
-                     {v}
-                   </button>
-                ))}
-             </div>
-             <p className="text-[10px] text-neutral-400 leading-tight">Система сгенерирует {generationsCount} {generationsCount === 1 ? 'вариант' : 'варианта'} одновременно. Первый откроется сразу, остальные сохранятся в Банк Креативов.</p>
-          </div>
+          {/* Variations Count — removed. Dual-model already produces 2
+              variants (Claude + Gemini) per click; "генерировать N
+              штук разом" больше не нужен. */}
 
           {/* Niche selector — gives the model a default style guide
               when the user has no reference image. */}
@@ -1474,46 +1611,14 @@ export default function Home() {
                 <span className="text-xs text-neutral-400 font-medium">{referenceImages.length}/{MAX_IMAGES}</span>
               </h2>
 
-              {/* Recommendation banner when no reference uploaded yet.
-                  Without a reference the model has no style anchor and the
-                  output rarely matches user expectations — this is the
-                  single biggest cause of "не то, что я ожидал". The
-                  Behance link is a curated firehose of well-shot ad
-                  creatives — one click and the user has 50 candidates
-                  to screenshot. */}
+              {/* Reference-presets grid removed per user request. Users
+                  who want a style anchor upload it manually below. */}
               {referenceImages.length === 0 && !isLoading && (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-2.5">
-                  <div className="flex gap-2.5">
-                    <Lightbulb className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                    <div className="text-xs leading-snug flex-1">
-                      <p className="font-bold text-amber-900">
-                        Рекомендуем загрузить референс
-                      </p>
-                      <p className="text-amber-800 mt-0.5">
-                        Покажи ИИ пример стиля — скриншот рекламы, рендер,
-                        любую картинку, на которую хочешь быть похожим. Без
-                        референса результат может выйти не таким, как ты
-                        ожидаешь.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* tiny how-to */}
-                  <ol className="text-[11px] text-amber-900/80 leading-snug pl-1 space-y-0.5 list-decimal list-inside marker:text-amber-500 marker:font-bold">
-                    <li>Открой Behance и найди дизайн в стиле, который тебе нравится</li>
-                    <li>Сделай скриншот понравившегося креатива</li>
-                    <li>Загрузи его кнопкой «↑» ниже — ИИ повторит стиль</li>
-                  </ol>
-
-                  <a
-                    href="https://www.behance.net/search/projects/%D0%BA%D1%80%D0%B5%D0%B0%D1%82%D0%B8%D0%B2%D1%8B?tracking_source=typeahead_search_recent_suggestion"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-2.5 py-1.5 transition-colors shadow-sm"
-                  >
-                    Открыть галерею референсов
-                    <Upload className="w-3 h-3 rotate-45" />
-                  </a>
+                <div className="rounded-lg bg-neutral-50 border border-neutral-200 p-2.5 flex items-start gap-2">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-neutral-500 leading-snug">
+                    Можно загрузить референс — скриншот рекламы или дизайна, на который хочешь быть похожим. Без референса тоже работает.
+                  </p>
                 </div>
               )}
 
@@ -1540,20 +1645,21 @@ export default function Home() {
                 )}
               </div>
               {referenceImages.length > 0 && (
-                <label className="flex items-center gap-2 pt-2 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    checked={strictClone} 
-                    onChange={(e) => setStrictClone(e.target.checked)} 
-                    className="w-4 h-4 rounded text-hermes-500 border-neutral-300 focus:ring-hermes-500" 
-                  />
-                  <span className="text-xs font-semibold text-neutral-600 group-hover:text-neutral-900 transition-colors">
-                    Точное клонирование (повторить структуру и цвета 1:1)
-                  </span>
-                </label>
+                <div className="flex items-start gap-2 pt-2">
+                  <Check className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-neutral-600 leading-snug">
+                    ИИ <strong>точно повторит</strong> стиль референса —
+                    структуру, цвета, шрифты, расположение блоков. Поменяет
+                    только текст и продукт под твой запрос.
+                  </p>
+                </div>
               )}
             </div>
-          {/* Product Image Upload */}
+          {/* Product Image Upload — TEMP HIDDEN: качество интеграции продукта в HTML-creative
+              ниже, чем когда юзер генерирует напрямую в чате (text overlap, пустоты, неточный
+              кадр). Возвращаем когда починим pipeline (vision-feedback loop / лучший
+              продуктовый layout). См. обсуждение 2026-04-27. */}
+          {false && (
           <div className="space-y-3">
               <h2 className="text-sm font-semibold flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -1612,6 +1718,7 @@ export default function Home() {
               </div>
             )}
           </div>
+          )}
           </>
           ) : (
             <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-xl relative overflow-hidden shadow-inner flex flex-col gap-3">
@@ -1752,7 +1859,9 @@ export default function Home() {
                 <>
                   <div className="flex items-center gap-2 mb-1">
                     <Loader2 className="w-4 h-4 animate-spin opacity-70" />
-                    <span className="text-xs opacity-70 uppercase tracking-widest font-bold">СБОРКА... {loadingProgress}%</span>
+                    <span className="text-xs opacity-70 uppercase tracking-widest font-bold">
+                      СБОРКА... {loadingProgress}%
+                    </span>
                   </div>
                   <span className="text-[13px]">{loadingText}</span>
                 </>
@@ -1763,7 +1872,7 @@ export default function Home() {
                     {remixSourceCode ? "Создать Ремикс" : "Создать Креатив"}
                   </span>
                   <span className="text-[10px] uppercase font-bold opacity-80 flex items-center justify-center gap-1">
-                    (Спишется {currentCost * generationsCount} ⚡)
+                    (Спишется {currentCost} ⚡ — за 2 варианта)
                   </span>
                 </span>
               )}
@@ -1779,14 +1888,10 @@ export default function Home() {
         mobileTab === 'canvas' ? "flex" : "hidden md:flex"
       )}>
 
-        {/* Templates entry — temporarily disabled in prod while we
-            fix the preview layout. The modal is mounted below as
-            null-output until templatesOpen is wired back.
-
-            See TemplatesModal.tsx — preview tiles weren't rendering
-            cleanly on the user's screen (canvas placeholder bleeding
-            through the modal). Reverting visibility while we iterate
-            locally.
+        {/* Templates entry — TEMP HIDDEN: фид/шаблоны выглядят слабо, потому что
+            креативы там — продукт того же сломанного пайплайна. Возвращаем когда
+            улучшим качество генерации. См. обсуждение 2026-04-27. */}
+        {false && (
         <button
           onClick={() => setTemplatesOpen(true)}
           className="absolute top-4 left-4 md:top-6 md:left-6 z-30 flex items-center gap-2 bg-white hover:bg-neutral-50 text-neutral-800 border border-neutral-200 rounded-xl px-3 py-2 shadow-sm hover:shadow-md transition-all font-bold text-xs md:text-sm"
@@ -1795,7 +1900,7 @@ export default function Home() {
           <LayoutGrid className="w-4 h-4 text-hermes-500" />
           Шаблоны
         </button>
-        */}
+        )}
 
 
         {code && (
@@ -1843,8 +1948,131 @@ export default function Home() {
            </div>
         )}
 
-        {code ? (
-          <div 
+        {pair ? (
+          // ---- TRIPLET PREVIEW: Claude HTML / Gemini HTML / Imagen image ----
+          // Static mode renders all 3 cards. Animated mode skips the
+          // image card (Imagen is image-only — doesn't fit motion intent).
+          // User picks a winner via "Этот лучше →"; after that the editor
+          // falls through to the single-canvas render below where they
+          // get download/feedback/«Сделать видео» options.
+          <div className={clsx(
+            "relative z-10 mt-16 md:mt-0 grid grid-cols-1 gap-4 md:gap-5 w-full",
+            pair.imagen
+              ? "md:grid-cols-3 max-w-[1300px]"
+              : "md:grid-cols-2 max-w-[1100px]"
+          )}>
+            {(["claude", "gemini", "imagen"] as const).map((m) => {
+              if (m === "imagen" && !pair.imagen && !pair.imagenError) {
+                // Animated mode — image card not present at all.
+                return null;
+              }
+              const sib =
+                m === "claude" ? pair.claude :
+                m === "gemini" ? pair.gemini :
+                pair.imagen;
+              const sibErr =
+                m === "claude" ? pair.claudeError :
+                m === "gemini" ? pair.geminiError :
+                pair.imagenError;
+              const label =
+                m === "claude" ? "Claude Opus 4.7" :
+                m === "gemini" ? "Gemini 3.1 Pro" :
+                "Imagen 4 (картинка)";
+              const accent =
+                m === "claude" ? "bg-orange-500" :
+                m === "gemini" ? "bg-blue-500" :
+                "bg-emerald-500";
+              if (!sib) {
+                return (
+                  <div key={m} className="bg-white rounded-3xl border-2 border-dashed border-red-200 p-6 flex flex-col items-center justify-center gap-2 min-h-[400px]">
+                    <span className={clsx("text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded text-white", accent)}>{label}</span>
+                    <p className="text-sm font-bold text-red-600 mt-2">Эта модель упала</p>
+                    <p className="text-[11px] text-neutral-500 text-center leading-snug max-w-[260px]">
+                      {sibErr || "Без подробностей."} Импульсы за неудавшийся вариант возвращены.
+                    </p>
+                  </div>
+                );
+              }
+              const isImageCard = m === "imagen";
+              return (
+                <div
+                  key={m}
+                  className="bg-white rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.25)] overflow-hidden flex flex-col"
+                >
+                  <div className="px-4 py-2.5 flex items-center justify-between border-b border-neutral-100">
+                    <span className={clsx("text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded text-white", accent)}>
+                      {label}
+                    </span>
+                  </div>
+                  <div
+                    className="relative bg-[#fcfcfc] overflow-hidden flex items-center justify-center"
+                    style={format === "9:16"
+                      ? { aspectRatio: "9 / 16", width: "100%", maxHeight: "560px" }
+                      : { aspectRatio: "1 / 1", width: "100%" }}
+                  >
+                    {isImageCard ? (
+                      <img
+                        src={(sib as ImageGen).imageUrl}
+                        alt="Imagen creative"
+                        className="w-full h-full object-contain bg-[#fcfcfc]"
+                      />
+                    ) : (() => {
+                      // The HTML creative is designed for a 400×711 (9:16)
+                      // or 500×500 (1:1) viewport — see the system prompt
+                      // and CSS rules. We render it at native size inside
+                      // a fixed-size wrapper, scaled down via CSS to fit.
+                      // Wrapper has scaled WIDTH/HEIGHT so the layout box
+                      // matches what's visible (no overflow surprises on
+                      // mobile, no negative-margin hacks). transform-
+                      // origin: top-left + position: absolute: inset 0
+                      // gives clean, predictable layout.
+                      const nativeW = format === "9:16" ? 400 : 500;
+                      const nativeH = format === "9:16" ? 711 : 500;
+                      const scale = isMobile ? 0.46 : 0.6;
+                      const w = Math.round(nativeW * scale);
+                      const h = Math.round(nativeH * scale);
+                      return (
+                        <div
+                          style={{ width: w, height: h, position: "relative", overflow: "hidden" }}
+                          className="bg-[#fcfcfc]"
+                        >
+                          <iframe
+                            key={`${iframeKey}-${m}`}
+                            data-pair-model={m}
+                            srcDoc={(sib as DualGen).code}
+                            referrerPolicy="no-referrer"
+                            sandbox="allow-scripts"
+                            title={`${label} Preview`}
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: nativeW,
+                              height: nativeH,
+                              transform: `scale(${scale})`,
+                              transformOrigin: "top left",
+                              border: "none",
+                              background: "#fcfcfc",
+                            }}
+                          />
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="p-3">
+                    <button
+                      onClick={() => selectPairWinner(m)}
+                      className="w-full bg-hermes-500 hover:bg-hermes-600 text-white py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <Trophy className="w-4 h-4" /> Этот лучше →
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : code ? (
+          <div
             className="relative z-10 bg-white overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-500 ease-out flex items-center justify-center pointer-events-auto rounded-[32px] shrink-0 mt-20 md:mt-0"
             style={format === '9:16' ? { width: '360px', height: '640px' } : { width: isMobile ? '350px' : '500px', height: isMobile ? '350px' : '500px' }}
           >
@@ -1875,14 +2103,81 @@ export default function Home() {
             </div>
             <div className="text-center">
               <h3 className="text-2xl font-bold text-neutral-800 tracking-tight">Холст пуст</h3>
-              <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500 text-center px-4">Заполните ТЗ в настройках слева и нажмите сгенерировать. Или откройте Шаблоны — там есть твои прошлые работы и креативы клиентов.</p>
+              <p className="text-sm mt-2 max-w-sm font-medium text-neutral-500 text-center px-4">Заполни ТЗ в настройках слева и нажми «Создать» — система сразу соберёт два варианта (Claude и Gemini), а ты выберешь лучший.</p>
             </div>
+          </div>
+        )}
+
+        {/* Veo 3 — «Сделать видео» button + progress + download.
+            Visible only when user has picked a winner (code+activeId)
+            and there's NO already-running render flow (isRecording from
+            legacy Cloud Run video path is for animated HTML videos). */}
+        {code && !pair && !isRecording && activeCreativeId && (
+          <div className="relative mt-6 z-20 shrink-0 w-[90%] max-w-[340px]">
+            {!videoJob ? (
+              <button
+                onClick={startVideoGeneration}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg"
+              >
+                <Video className="w-4 h-4" />
+                Сделать MP4-видео из этого ({VIDEO_GEN_COST} ⚡)
+              </button>
+            ) : videoJob.state === "kicking" ? (
+              <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                <span className="text-xs font-bold text-purple-800">Запускаем Veo 3...</span>
+              </div>
+            ) : videoJob.state === "polling" ? (
+              <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                  <span className="text-xs font-bold text-purple-800">
+                    Veo 3 рендерит видео (30-90 сек)...
+                  </span>
+                </div>
+                <p className="text-[10px] text-purple-600/80 leading-tight">
+                  Можешь не ждать — продолжай работать. Видео появится в «Моих креативах» когда будет готово.
+                </p>
+              </div>
+            ) : videoJob.state === "ready" ? (
+              <div className="w-full flex flex-col gap-2">
+                <video
+                  src={videoJob.videoUrl}
+                  controls
+                  loop
+                  autoPlay
+                  muted
+                  className="w-full rounded-xl shadow-md bg-black aspect-[9/16]"
+                  style={format === "1:1" ? { aspectRatio: "1/1" } : undefined}
+                />
+                <button
+                  onClick={downloadVideoFile}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Скачать MP4
+                </button>
+              </div>
+            ) : (
+              <div className="w-full bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-2">
+                <p className="text-xs font-bold text-red-700">Veo 3 не справился</p>
+                <p className="text-[11px] text-red-600 leading-snug">
+                  {videoJob.error || "Без подробностей."} Импульсы возвращены.
+                </p>
+                <button
+                  onClick={() => setVideoJob(null)}
+                  className="text-[11px] font-bold text-red-700 underline"
+                >
+                  Попробовать ещё раз
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* AI Learning Loop Feedback UI */}
         {code && !isRecording && (
-          <div className="relative mt-8 z-20 shrink-0 flex flex-col items-center gap-3 w-[90%] max-w-[340px] bg-white p-4 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-neutral-200">
+          <div className="relative mt-4 z-20 shrink-0 flex flex-col items-center gap-3 w-[90%] max-w-[340px] bg-white p-4 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-neutral-200">
              {!feedbackSubmitted ? (
                 <div className="w-full flex justify-between items-center">
                    <p className="text-xs font-bold text-neutral-800">Оцените результат:</p>
@@ -1990,7 +2285,7 @@ export default function Home() {
             )}
           </button>
           {!isLoading && prompt.trim() && mobileTab === 'controls' && !activeCreativeId && (
-             <span className="absolute -top-1 -right-1 bg-hermes-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce ring-2 ring-white">{currentCost * generationsCount}</span>
+             <span className="absolute -top-1 -right-1 bg-hermes-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce ring-2 ring-white">{currentCost}</span>
           )}
         </div>
 
@@ -2003,20 +2298,18 @@ export default function Home() {
         </button>
       </div>
       
-      {/* Templates modal — disabled in prod (preview rendering bleed
-          through). Wiring kept in code for the local-only rework. */}
-      {false && (
-        <TemplatesModal
-          open={templatesOpen}
-          onClose={() => setTemplatesOpen(false)}
-          onPickTemplate={(item) => {
-            if (item.htmlCode) setRemixSourceCode(item.htmlCode);
-            setFormat(item.format === "1:1" ? "1:1" : "9:16");
-            setIsAnimated((item.cost ?? 0) > 3);
-            setMobileTab("controls");
-          }}
-        />
-      )}
+      {/* Templates modal. Renders into document.body via a portal so
+          z-index works against the entire page. */}
+      <TemplatesModal
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onPickTemplate={(item) => {
+          if (item.htmlCode) setRemixSourceCode(item.htmlCode);
+          setFormat(item.format === "1:1" ? "1:1" : "9:16");
+          setIsAnimated((item.cost ?? 0) > 3);
+          setMobileTab("controls");
+        }}
+      />
 
       {/* Background Dots Pattern Definition */}
       <style dangerouslySetInnerHTML={{__html: `

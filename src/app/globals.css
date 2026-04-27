@@ -26,6 +26,10 @@ body {
   font-family: var(--font-sans);
   margin: 0;
   overscroll-behavior-y: none;
+  /* Mobile defensive: never allow horizontal scroll on the page.
+     Any internal element that overflows must scroll itself, not push
+     the whole page sideways. Fixes "текст уходит направо" report. */
+  overflow-x: hidden;
   background-image: 
     linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);

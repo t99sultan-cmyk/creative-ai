@@ -5,6 +5,7 @@ import { creatives, users } from "@/db/schema";
 import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { isAdmin } from "@/lib/admin-guard";
 
 export type TemplateScope = "all" | "mine" | "public";
 export type GalleryItem = {
@@ -79,6 +80,11 @@ export async function getAllTemplates(scope: TemplateScope = "all", limit = 24) 
             ),
             or(eq(users.isBanned, false), isNull(users.isBanned)),
             or(ne(creatives.htmlCode, ""), ne(creatives.videoUrl, "")),
+            // Dual-model filter: показываем либо одиночные креативы
+            // (legacy без pairId), либо победителей пар. Проигравших
+            // (selectedAsBest=false) не показываем — они в публичной
+            // галерее были бы шумом.
+            or(isNull(creatives.pairId), eq(creatives.selectedAsBest, true)),
             // Exclude my own from the public bucket — they're already in
             // the "mine" set when scope === "all".
             userId ? ne(creatives.userId, userId) : sql`true`,
@@ -103,10 +109,60 @@ export async function getAllTemplates(scope: TemplateScope = "all", limit = 24) 
       }
     }
 
-    return { success: true as const, items };
+    const adminFlag = await isAdmin();
+    return { success: true as const, items, isAdmin: adminFlag };
   } catch (e: any) {
     console.error("getAllTemplates error", e);
-    return { success: false as const, error: e?.message ?? "load failed", items: [] as GalleryItem[] };
+    return {
+      success: false as const,
+      error: e?.message ?? "load failed",
+      items: [] as GalleryItem[],
+      isAdmin: false,
+    };
+  }
+}
+
+/**
+ * Admin-only: hide ANY creative from the public gallery (sets
+ * is_public=false). Owner himself doesn't get a notification — we
+ * just take it out of the public feed.
+ */
+export async function adminHideFromGallery(creativeId: string) {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  try {
+    await db
+      .update(creatives)
+      .set({ isPublic: false })
+      .where(eq(creatives.id, creativeId));
+    revalidatePath("/editor");
+    return { success: true as const };
+  } catch (e: any) {
+    console.error("adminHideFromGallery error", e);
+    return { success: false as const, error: e?.message ?? "hide failed" };
+  }
+}
+
+/**
+ * Admin-only: soft-delete ANY creative. Sets deletedAt; row stays
+ * in DB for the audit trail but disappears from gallery + author
+ * history just like a normal user-delete.
+ */
+export async function adminDeleteFromGallery(creativeId: string) {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  try {
+    await db
+      .update(creatives)
+      .set({ deletedAt: new Date() })
+      .where(eq(creatives.id, creativeId));
+    revalidatePath("/editor");
+    return { success: true as const };
+  } catch (e: any) {
+    console.error("adminDeleteFromGallery error", e);
+    return { success: false as const, error: e?.message ?? "delete failed" };
   }
 }
 
@@ -149,6 +205,8 @@ export async function getPublicGallery(limit = 12) {
           or(eq(users.isBanned, false), isNull(users.isBanned)),
           // Must have something to render
           or(ne(creatives.htmlCode, ""), ne(creatives.videoUrl, "")),
+          // Dual-model filter: legacy одиночные ИЛИ победитель пары.
+          or(isNull(creatives.pairId), eq(creatives.selectedAsBest, true)),
         ),
       )
       // Liked first, then newest

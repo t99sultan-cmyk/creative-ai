@@ -917,3 +917,61 @@ export async function adminSyncClerkUsers() {
     return { success: false as const, error: e.message };
   }
 }
+
+/**
+ * Dual-model winrate stats. Aggregates `creatives` rows where the user
+ * picked a winner (selectedAsBest IS NOT NULL) — counts wins/losses per
+ * model so we can decide if Claude or Gemini is consistently preferred.
+ *
+ * Returns:
+ *   - overall: { claude: { wins, losses }, gemini: { wins, losses } }
+ *   - totalDecided: number of pairs where the user picked a winner
+ *   - undecided: number of pairs still awaiting a vote
+ */
+export async function getModelStats() {
+  if (!(await isAdmin())) {
+    return { success: false as const, error: "Access Denied" };
+  }
+  try {
+    const rows = await db
+      .select({
+        model: creatives.model,
+        result: creatives.selectedAsBest,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(creatives)
+      .where(sql`${creatives.pairId} IS NOT NULL`)
+      .groupBy(creatives.model, creatives.selectedAsBest);
+
+    const stats = {
+      claude: { wins: 0, losses: 0, undecided: 0 },
+      gemini: { wins: 0, losses: 0, undecided: 0 },
+    };
+    for (const r of rows) {
+      const bucket = r.model === "gemini" ? stats.gemini : stats.claude;
+      if (r.result === true) bucket.wins += r.count;
+      else if (r.result === false) bucket.losses += r.count;
+      else bucket.undecided += r.count;
+    }
+    const totalDecided = stats.claude.wins + stats.gemini.wins;
+    const undecidedPairs = Math.max(stats.claude.undecided, stats.gemini.undecided);
+
+    return {
+      success: true as const,
+      stats,
+      totalDecided,
+      undecidedPairs,
+      claudeWinrate:
+        totalDecided > 0
+          ? Math.round((stats.claude.wins / totalDecided) * 100)
+          : null,
+      geminiWinrate:
+        totalDecided > 0
+          ? Math.round((stats.gemini.wins / totalDecided) * 100)
+          : null,
+    };
+  } catch (e: any) {
+    console.error("getModelStats error:", e);
+    return { success: false as const, error: e.message };
+  }
+}
