@@ -1,8 +1,13 @@
 import { SignIn } from "@clerk/nextjs";
 import { Sparkles, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { isRegistrationOpen } from "@/lib/flags";
 
 export default function LoginPage() {
+  // When registration is closed for maintenance, hide Clerk's
+  // "Don't have an account? Sign up" footer link — otherwise it's a
+  // direct bypass of the closed /register route.
+  const registrationOpen = isRegistrationOpen();
   return (
     <div className="min-h-screen flex flex-col bg-neutral-900 relative overflow-hidden overscroll-none">
       {/* Background decorations */}
@@ -57,6 +62,11 @@ export default function LoginPage() {
                  formFieldInput: "rounded-2xl border-neutral-200 focus:border-hermes-500 focus:ring-hermes-500/20 py-3.5 bg-neutral-50",
                  footerActionLink: "text-hermes-500 font-bold hover:text-hermes-600 transition-colors",
                  footerActionText: "text-neutral-500 font-medium",
+                 // Hide the entire "Don't have an account? Sign up" row
+                 // during maintenance. Clerk renders this inside `footerAction`
+                 // by default; appending `hidden` removes it from the DOM
+                 // while keeping the rest of the footer (terms, etc.) intact.
+                 footerAction: registrationOpen ? undefined : "hidden",
                }
              }}
            />

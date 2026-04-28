@@ -1,8 +1,12 @@
 import { SignUp } from "@clerk/nextjs";
 import { Sparkles, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { isRegistrationOpen } from "@/lib/flags";
+import { MaintenanceView } from "@/components/MaintenanceView";
 
 export default function RegisterPage() {
+  if (!isRegistrationOpen()) return <MaintenanceView />;
+
   return (
     <div className="min-h-screen flex flex-col bg-neutral-900 relative overflow-hidden overscroll-none">
       {/* Background decorations */}

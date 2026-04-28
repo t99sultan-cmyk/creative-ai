@@ -21,6 +21,7 @@ import { CountUp } from "@/components/landing/CountUp";
 import { CountdownLoop } from "@/components/landing/CountdownLoop";
 import { trackInitiateCheckout } from "@/lib/fb-pixel";
 import { DeadlineBanner } from "@/components/DeadlineBanner";
+import { isRegistrationOpen } from "@/lib/flags";
 
 // --- DATA ---
 type Transformation = {
@@ -68,6 +69,9 @@ export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(0);
   const { isSignedIn } = useAuth();
+  // When false, every "Начать бесплатно" / pricing CTA is replaced with
+  // a login link or "скоро вернёмся" stub. See src/lib/flags.ts.
+  const registrationOpen = isRegistrationOpen();
   
   // Custom Hook for Scroll Reveal
   const Reveal = ({ children, delay = 0 }: { children: React.ReactNode, delay?: number }) => {
@@ -120,7 +124,7 @@ export default function LandingPage() {
                  </Link>
                  <UserButton />
                </div>
-            ) : (
+            ) : registrationOpen ? (
                <>
                  <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                    <button className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Войти</button>
@@ -131,6 +135,16 @@ export default function LandingPage() {
                    </button>
                  </SignInButton>
                </>
+            ) : (
+               // Maintenance: drop sign-up CTA, keep only login link.
+               // Direct <Link> instead of <SignInButton> so Clerk's modal
+               // (which still has a "Sign up" footer) doesn't open.
+               <Link
+                 href="/login"
+                 className="text-sm font-bold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 px-5 py-2 rounded-full border border-neutral-200 transition-all"
+               >
+                 Войти
+               </Link>
             )}
           </div>
 
@@ -153,10 +167,18 @@ export default function LandingPage() {
                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-lg font-medium text-neutral-600">Тарифы</a>
                {isSignedIn ? (
                  <Link href="/editor" className="mt-4 text-center text-sm font-bold text-neutral-900 bg-gradient-to-r from-hermes-500 to-amber-500 px-5 py-3 rounded-xl transition-all">Перейти в Студию</Link>
-               ) : (
+               ) : registrationOpen ? (
                  <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                    <button className="mt-4 text-center text-sm font-bold text-white bg-hermes-500 px-5 py-3 rounded-xl transition-all w-full">Начать бесплатно</button>
                  </SignInButton>
+               ) : (
+                 <Link
+                   href="/login"
+                   onClick={() => setMobileMenuOpen(false)}
+                   className="mt-4 text-center text-sm font-bold text-neutral-900 bg-neutral-100 border border-neutral-200 px-5 py-3 rounded-xl transition-all w-full"
+                 >
+                   Войти
+                 </Link>
                )}
             </motion.div>
           )}
@@ -220,7 +242,7 @@ export default function LandingPage() {
                            <div className="absolute inset-0 bg-white/40 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
                      </Link>
-                  ) : (
+                  ) : registrationOpen ? (
                      <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                         <button className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/30">
                            Начать бесплатно
@@ -228,6 +250,23 @@ export default function LandingPage() {
                            <div className="absolute inset-0 bg-white/40 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
                      </SignInButton>
+                  ) : (
+                     // Maintenance: show a disabled-style stub + login link.
+                     <div className="flex flex-col gap-3 w-full sm:w-auto">
+                        <button
+                           disabled
+                           aria-disabled="true"
+                           className="w-full sm:w-auto flex items-center justify-center gap-2 bg-neutral-200 text-neutral-500 font-bold text-lg px-8 py-4 rounded-2xl cursor-not-allowed"
+                        >
+                           Регистрация скоро откроется
+                        </button>
+                        <Link
+                           href="/login"
+                           className="text-center text-sm font-semibold text-neutral-700 hover:text-neutral-900 transition-colors"
+                        >
+                           У меня уже есть аккаунт →
+                        </Link>
+                     </div>
                   )}
                </motion.div>
 
@@ -660,7 +699,7 @@ export default function LandingPage() {
                             >
                               {tier.btn}
                             </Link>
-                          ) : (
+                          ) : registrationOpen ? (
                             // For NEW users (sign-up path) we still route them
                             // through /onboarding to collect phone + welcome —
                             // skipping it leaves the user with no contact in
@@ -676,6 +715,17 @@ export default function LandingPage() {
                                 {tier.btn}
                               </button>
                             </SignInButton>
+                          ) : (
+                            // Maintenance: no purchases by anonymous visitors —
+                            // they need an account, and we're not creating new
+                            // ones right now.
+                            <button
+                              disabled
+                              aria-disabled="true"
+                              className={buttonClass + " cursor-not-allowed opacity-60"}
+                            >
+                              Скоро вернёмся
+                            </button>
                           );
                         })()}
                      </div>
@@ -749,13 +799,22 @@ export default function LandingPage() {
                         Перейти в редактор
                         <Sparkles className="w-6 h-6 text-amber-500" />
                      </Link>
-                  ) : (
+                  ) : registrationOpen ? (
                      <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                         <button className="bg-white text-hermes-600 font-black text-xl px-12 py-6 rounded-2xl hover:scale-105 transition-transform flex items-center justify-center gap-3 shadow-2xl w-full sm:w-auto">
                            Начать бесплатно (12 импульсов)
                            <Sparkles className="w-6 h-6 text-amber-500" />
                         </button>
                      </SignInButton>
+                  ) : (
+                     <button
+                        disabled
+                        aria-disabled="true"
+                        className="bg-white/80 text-hermes-600 font-black text-xl px-12 py-6 rounded-2xl flex items-center justify-center gap-3 shadow-2xl w-full sm:w-auto cursor-not-allowed opacity-80"
+                     >
+                        Регистрация скоро откроется
+                        <Sparkles className="w-6 h-6 text-amber-500" />
+                     </button>
                   )}
                </div>
             </Reveal>
@@ -764,34 +823,38 @@ export default function LandingPage() {
 
       {/* PRE-FOOTER DEADLINE — second urgency touchpoint: users who made
           it to the bottom of the page have read the pitch and now see a
-          hard reminder that the free bonus expires tonight. */}
-      <section className="py-10 md:py-14 px-4 max-w-5xl mx-auto relative">
-        <DeadlineBanner
-          variant="inline"
-          cta={
-            isSignedIn ? (
-              <Link
-                href="/editor"
-                className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg"
-              >
-                Перейти в редактор
-                <ArrowRight className="w-5 h-5" />
-              </Link>
-            ) : (
-              <SignInButton
-                mode="modal"
-                forceRedirectUrl="/editor"
-                signUpForceRedirectUrl="/onboarding"
-              >
-                <button className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg">
-                  Забрать 7 Импульсов
-                  <Sparkles className="w-5 h-5 text-amber-500" />
-                </button>
-              </SignInButton>
-            )
-          }
-        />
-      </section>
+          hard reminder that the free bonus expires tonight.
+          Hidden during registration maintenance — a "deadline" on a CTA
+          users can't act on is just confusing. */}
+      {registrationOpen && (
+        <section className="py-10 md:py-14 px-4 max-w-5xl mx-auto relative">
+          <DeadlineBanner
+            variant="inline"
+            cta={
+              isSignedIn ? (
+                <Link
+                  href="/editor"
+                  className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg"
+                >
+                  Перейти в редактор
+                  <ArrowRight className="w-5 h-5" />
+                </Link>
+              ) : (
+                <SignInButton
+                  mode="modal"
+                  forceRedirectUrl="/editor"
+                  signUpForceRedirectUrl="/onboarding"
+                >
+                  <button className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg">
+                    Забрать 7 Импульсов
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                  </button>
+                </SignInButton>
+              )
+            }
+          />
+        </section>
+      )}
 
       {/* FOOTER */}
       <footer className="border-t border-neutral-200 bg-neutral-50 pt-16 pb-8">
@@ -849,8 +912,8 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* STICKY MOBILE CTA */}
-      {!isSignedIn && (
+      {/* STICKY MOBILE CTA — hidden in maintenance mode (no sign-up to push). */}
+      {!isSignedIn && registrationOpen && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-neutral-200 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
           <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
             <button className="w-full bg-hermes-500 hover:bg-hermes-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-hermes-500/30 transition-colors">

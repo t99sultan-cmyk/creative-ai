@@ -6,6 +6,7 @@ import { users } from '@/db/schema'
 import { sendCapiEvent } from '@/lib/fb-capi'
 import { SIGNUP_BONUS_IMPULSES } from '@/lib/pricing'
 import { notifyAdmin, fmt } from '@/lib/admin-notify'
+import { isRegistrationOpen } from '@/lib/flags'
 
 /**
  * Clerk webhook entry. Verification (svix) is split into its own
@@ -61,51 +62,73 @@ export async function POST(req: Request) {
       const name = [first_name, last_name].filter(Boolean).join(' ') || email?.split('@')[0] || ''
 
       if (email) {
+        // Maintenance mode: someone slipped past the closed UI (Clerk
+        // dashboard / API / direct Clerk URL). Persist the row so the
+        // app doesn't trip on missing-user errors if they ever log in,
+        // but grant 0 impulses and skip both the CAPI conversion event
+        // and the standard "новая регистрация" Telegram notification.
+        // Replace it with a warning so the team knows it happened.
+        const maintenanceMode = !isRegistrationOpen()
+
         try {
           await db.insert(users).values({
             id,
             email,
             name,
             image: image_url || '',
-            impulses: SIGNUP_BONUS_IMPULSES,
+            impulses: maintenanceMode ? 0 : SIGNUP_BONUS_IMPULSES,
+            welcomeShown: maintenanceMode ? true : undefined,
           })
-          console.log(`User ${id} created in database via webhook`)
+          console.log(
+            `User ${id} created in database via webhook${maintenanceMode ? ' (maintenance: 0 impulses)' : ''}`,
+          )
         } catch (err) {
           console.error('Error inserting user to database', err)
           // Re-throw so the outer catch produces 500 (retry-eligible).
           throw err
         }
 
-        // Fire CompleteRegistration to Meta via CAPI. The event id matches
-        // what <RegistrationTracker /> emits from the browser (`reg_<id>`)
-        // so Meta dedupes the pair and counts one conversion, not two.
-        // We await here so Vercel's serverless function doesn't terminate
-        // before the request lands; the 3.5s timeout inside sendCapiEvent
-        // guarantees this won't stall the webhook response past Clerk's
-        // retry threshold.
-        await sendCapiEvent({
-          eventName: 'CompleteRegistration',
-          eventId: `reg_${id}`,
-          user: {
-            email,
-            externalId: id,
-            clientIp: headerPayload.get('x-forwarded-for')?.split(',')[0].trim() ?? undefined,
-            clientUserAgent: headerPayload.get('user-agent') ?? undefined,
-          },
-          customData: {
-            content_name: 'AICreative account',
-            status: 'completed',
-          },
-        })
+        if (maintenanceMode) {
+          notifyAdmin(
+            `⚠️ *Регистрация во время обновления*\n\n` +
+            `Кто-то создал аккаунт пока сайт в maintenance-режиме.\n` +
+            `*Email:* ${fmt.esc(email)}\n` +
+            (name ? `*Имя:* ${fmt.esc(name)}\n` : '') +
+            `*ID:* \`${fmt.esc(id)}\`\n` +
+            `*Импульсы:* 0 (бонус не выдан)`,
+          )
+        } else {
+          // Fire CompleteRegistration to Meta via CAPI. The event id matches
+          // what <RegistrationTracker /> emits from the browser (`reg_<id>`)
+          // so Meta dedupes the pair and counts one conversion, not two.
+          // We await here so Vercel's serverless function doesn't terminate
+          // before the request lands; the 3.5s timeout inside sendCapiEvent
+          // guarantees this won't stall the webhook response past Clerk's
+          // retry threshold.
+          await sendCapiEvent({
+            eventName: 'CompleteRegistration',
+            eventId: `reg_${id}`,
+            user: {
+              email,
+              externalId: id,
+              clientIp: headerPayload.get('x-forwarded-for')?.split(',')[0].trim() ?? undefined,
+              clientUserAgent: headerPayload.get('user-agent') ?? undefined,
+            },
+            customData: {
+              content_name: 'AICreative account',
+              status: 'completed',
+            },
+          })
 
-        // Push to Telegram on each new sign-up. notifyAdmin is fire-and-forget.
-        notifyAdmin(
-          `🎉 *Новая регистрация*\n\n` +
-          `*Email:* ${fmt.esc(email)}\n` +
-          (name ? `*Имя:* ${fmt.esc(name)}\n` : '') +
-          `*ID:* \`${fmt.esc(id)}\`\n` +
-          `*Бонус:* ${SIGNUP_BONUS_IMPULSES} ⚡`,
-        )
+          // Push to Telegram on each new sign-up. notifyAdmin is fire-and-forget.
+          notifyAdmin(
+            `🎉 *Новая регистрация*\n\n` +
+            `*Email:* ${fmt.esc(email)}\n` +
+            (name ? `*Имя:* ${fmt.esc(name)}\n` : '') +
+            `*ID:* \`${fmt.esc(id)}\`\n` +
+            `*Бонус:* ${SIGNUP_BONUS_IMPULSES} ⚡`,
+          )
+        }
       }
     }
 
