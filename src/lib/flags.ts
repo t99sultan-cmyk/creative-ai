@@ -7,15 +7,20 @@
 /**
  * Are we accepting new registrations?
  *
- * Default: open. Setting NEXT_PUBLIC_REGISTRATION_OPEN="false" in Vercel
- * env (or `.env.local`) flips the whole site into maintenance mode for
- * sign-ups: /register shows a "platform updating" view, all sign-up CTAs
- * on the landing become a single "Войти" link, the Clerk webhook stops
- * granting starter impulses to anyone who manages to slip through.
+ * Default: **closed** while we migrate to Veo 3 / Kling / Nano Banana.
+ * Setting NEXT_PUBLIC_REGISTRATION_OPEN="true" in Vercel env (or
+ * `.env.local`) reopens the site: /register renders Clerk's <SignUp />,
+ * landing-page sign-up CTAs come back, the Clerk webhook resumes
+ * granting starter impulses.
+ *
+ * To reopen for production: Vercel → Project → Settings → Environment
+ * Variables → add NEXT_PUBLIC_REGISTRATION_OPEN=true (Production scope)
+ * → Redeploy. To re-close: remove the var (or set it to anything other
+ * than "true") and Redeploy.
  *
  * NEXT_PUBLIC_ prefix is required because the landing page reads this in
  * a client component.
  */
 export function isRegistrationOpen(): boolean {
-  return process.env.NEXT_PUBLIC_REGISTRATION_OPEN !== "false";
+  return process.env.NEXT_PUBLIC_REGISTRATION_OPEN === "true";
 }
