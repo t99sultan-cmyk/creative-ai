@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, ChevronDown, Eye, EyeOff, LayoutGrid, Trophy } from "lucide-react";
 import { toggleCreativePublic } from "@/actions/galleryActions";
 import { TemplatesModal } from "@/components/TemplatesModal";
-import { STATIC_DUAL_COST, ANIMATED_DUAL_COST, VIDEO_GEN_COST } from "@/lib/pricing";
+import { STATIC_DUAL_COST, VIDEO_GEN_COST } from "@/lib/pricing";
+import { generateTzBrief } from "@/actions/generateTzBrief";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { useUser } from "@clerk/nextjs";
@@ -26,20 +27,16 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [remixSourceCode, setRemixSourceCode] = useState<string | null>(null);
   const [format, setFormat] = useState<Format>("9:16");
-  const [isAnimated, setIsAnimated] = useState<boolean>(false);
-  // Static-mode variant count: how many images per model (Nano Banana
-  // and GPT-Image-1 each generate this many in parallel). 1 / 2 / 3.
+  // Animation removed in this iteration — only static. The constant
+  // is kept so we don't have to gut every conditional in the file
+  // (TypeScript will tree-shake the dead branches).
+  const isAnimated = false as const;
   // Static path: 1 image from each model (Gemini 3 Pro + GPT Image 2).
-  // The variant picker UI was removed per simplification — 2 images
-  // per click is the right starting point for A/B comparison.
   const variantCount: 1 = 1;
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
   // Per-click cost. Static = 2 models × 1 variant × 2 imp = 4 imp.
-  // Animated stays a flat dual-HTML cost.
-  const currentCost = isAnimated
-    ? ANIMATED_DUAL_COST
-    : variantCount * 2 * 2;
+  const currentCost = variantCount * 2 * 2;
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);
@@ -132,15 +129,30 @@ export default function Home() {
   const [tzBenefit, setTzBenefit] = useState("");
   const [tzAudience, setTzAudience] = useState("");
   const [tzStyle, setTzStyle] = useState("");
-  function buildTzFromHelper() {
-    const lines: string[] = [];
-    if (tzSubject.trim()) lines.push(`Что рекламируем: ${tzSubject.trim()}.`);
-    if (tzBenefit.trim()) lines.push(`Главная выгода / посыл: ${tzBenefit.trim()}.`);
-    if (tzAudience.trim()) lines.push(`Целевая аудитория: ${tzAudience.trim()}.`);
-    if (tzStyle.trim()) lines.push(`Стиль и тон: ${tzStyle.trim()}.`);
-    if (lines.length === 0) return;
-    setPrompt(lines.join("\n"));
-    setTzHelperOpen(false);
+  const [tzBuilding, setTzBuilding] = useState(false);
+  const [tzError, setTzError] = useState<string | null>(null);
+  async function buildTzFromHelper() {
+    setTzError(null);
+    if (!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim()) {
+      return;
+    }
+    setTzBuilding(true);
+    try {
+      const result = await generateTzBrief({
+        subject: tzSubject,
+        benefit: tzBenefit,
+        audience: tzAudience,
+        style: tzStyle,
+      });
+      if (result.success) {
+        setPrompt(result.brief);
+        setTzHelperOpen(false);
+      } else {
+        setTzError(result.error);
+      }
+    } finally {
+      setTzBuilding(false);
+    }
   }
 
   // Which image variant the user marked as "best" — controls the gold
@@ -531,8 +543,6 @@ export default function Home() {
     const savedFormat = localStorage.getItem("creative_format") as Format;
     if (savedFormat) setFormat(savedFormat);
 
-    const savedAnim = localStorage.getItem("creative_animated");
-    if (savedAnim !== null) setIsAnimated(savedAnim === "true");
   }, []);
 
   useEffect(() => {
@@ -542,10 +552,6 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem("creative_format", format);
   }, [format]);
-
-  useEffect(() => {
-    localStorage.setItem("creative_animated", isAnimated.toString());
-  }, [isAnimated]);
 
   // Handle Progress Timer (Percentage 0 to 95) with Dynamic Texts
   useEffect(() => {
@@ -1395,11 +1401,6 @@ export default function Home() {
                                    setActiveCreativeId(item.id);
                                    setPrompt(item.prompt || "");
                                    setFormat(item.format || '9:16');
-                                   // Animated = GSAP in HTML OR cost marks it (cost=4
-                                   // for animated in /api/generate). Check htmlCode
-                                   // first because legacy creatives were all saved
-                                   // with cost=3 regardless of animated flag.
-                                   setIsAnimated(html.includes('gsap') || (item.cost ?? 3) > 3);
                                    setShowHistory(false);
                                    setMobileTab('canvas');
                                  }}
@@ -1573,57 +1574,6 @@ export default function Home() {
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Animation Toggle */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Video className="w-4 h-4 text-hermes-500" />
-              Тип креатива
-            </h2>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                disabled={isLoading}
-                onClick={() => setIsAnimated(true)}
-                className={clsx(
-                  "py-3 px-2 rounded-xl border text-sm font-medium transition-all duration-200 flex flex-col items-center gap-0.5 relative",
-                  isAnimated ? "bg-neutral-900 border-neutral-900 text-white" : "bg-white border-neutral-200 text-neutral-600",
-                  !isLoading && !isAnimated && "hover:border-neutral-300",
-                  isLoading && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <span className="flex items-center gap-1 font-bold">
-                  Анимированный
-                  <span className={clsx(
-                    "text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider",
-                    isAnimated ? "bg-amber-400 text-neutral-900" : "bg-amber-100 text-amber-700"
-                  )}>
-                    +CTR
-                  </span>
-                </span>
-                <span className={clsx("text-[10px] font-medium leading-tight", isAnimated ? "text-white/70" : "text-neutral-500")}>
-                  MP4 motion-постер
-                </span>
-              </button>
-              <button
-                disabled={isLoading}
-                onClick={() => setIsAnimated(false)}
-                className={clsx(
-                  "py-3 px-2 rounded-xl border text-sm font-medium transition-all duration-200 flex flex-col items-center gap-0.5",
-                  !isAnimated ? "bg-neutral-900 border-neutral-900 text-white" : "bg-white border-neutral-200 text-neutral-600",
-                  !isLoading && isAnimated && "hover:border-neutral-300",
-                  isLoading && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <span className="font-bold">Статичный</span>
-                <span className={clsx("text-[10px] font-medium leading-tight", !isAnimated ? "text-white/70" : "text-neutral-500")}>
-                  PNG-постер 4K
-                </span>
-              </button>
-            </div>
-            <p className="text-[10px] text-neutral-400 leading-tight">
-              Это рекламный креатив (постер или motion-анимация), не видеосъёмка с актёрами и не stock-видео.
-            </p>
           </div>
 
           {/* Reference and Product Image Uploads */}
@@ -1857,11 +1807,26 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={buildTzFromHelper}
-                    disabled={!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim()}
-                    className="w-full bg-hermes-500 hover:bg-hermes-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2 rounded-lg font-bold text-xs transition-colors"
+                    disabled={tzBuilding || (!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim())}
+                    className="w-full bg-hermes-500 hover:bg-hermes-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-2"
                   >
-                    Сформировать ТЗ ↓
+                    {tzBuilding ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ИИ пишет ТЗ...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Сформировать ТЗ ↓
+                      </>
+                    )}
                   </button>
+                  {tzError && (
+                    <p className="text-[10px] text-red-600 font-medium mt-1 leading-tight">
+                      {tzError}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -2507,7 +2472,6 @@ export default function Home() {
         onPickTemplate={(item) => {
           if (item.htmlCode) setRemixSourceCode(item.htmlCode);
           setFormat(item.format === "1:1" ? "1:1" : "9:16");
-          setIsAnimated((item.cost ?? 0) > 3);
           setMobileTab("controls");
         }}
       />
