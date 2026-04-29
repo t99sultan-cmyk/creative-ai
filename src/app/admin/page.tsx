@@ -1011,18 +1011,33 @@ export default function AdminPage() {
                          </div>
                       </div>
 
-                      {/* Right: Rendered HTML iframe preview */}
+                      {/* Right: preview. New static creatives store result as
+                          imageUrl (data: URL), legacy HTML creatives store
+                          srcDoc — render whichever exists. */}
                       <div className="w-full md:w-[350px] bg-neutral-100 flex-shrink-0 flex items-center justify-center p-4">
                         <div className={`shadow-xl bg-white rounded-xl overflow-hidden relative ${item.format === '9:16' ? 'aspect-[9/16] w-[200px]' : 'aspect-square w-[250px]'}`}>
-                            <iframe
-                              srcDoc={item.htmlCode}
-                              sandbox="allow-scripts"
-                              referrerPolicy="no-referrer"
-                              loading="lazy"
-                              title={`Creative preview ${item.id}`}
-                              className="absolute inset-0 w-full h-full border-0 pointer-events-none transform origin-top-left"
-                              style={{ width: '400px', height: item.format === '9:16' ? '711px' : '400px', transform: 'scale(0.5)' }}
-                            />
+                            {item.imageUrl ? (
+                              <img
+                                src={item.imageUrl}
+                                alt={`Creative ${item.id}`}
+                                loading="lazy"
+                                className="absolute inset-0 w-full h-full object-contain bg-white"
+                              />
+                            ) : item.htmlCode ? (
+                              <iframe
+                                srcDoc={item.htmlCode}
+                                sandbox="allow-scripts"
+                                referrerPolicy="no-referrer"
+                                loading="lazy"
+                                title={`Creative preview ${item.id}`}
+                                className="absolute inset-0 w-full h-full border-0 pointer-events-none transform origin-top-left"
+                                style={{ width: '400px', height: item.format === '9:16' ? '711px' : '400px', transform: 'scale(0.5)' }}
+                              />
+                            ) : (
+                              <div className="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
+                                Нет превью
+                              </div>
+                            )}
                         </div>
                       </div>
 

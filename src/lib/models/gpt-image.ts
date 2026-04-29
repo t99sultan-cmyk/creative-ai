@@ -50,6 +50,8 @@ interface GptImageInput {
   productImageBase64?: string;
   /** Mime of the product image; defaults to image/png. */
   productImageMime?: string;
+  /** Optional style references — data: URL or raw base64. */
+  referenceImagesBase64?: string[];
   format: Format;
 }
 
@@ -57,7 +59,7 @@ function sizeFor(format: Format): "1024x1024" | "1024x1536" {
   return format === "1:1" ? "1024x1024" : "1024x1536";
 }
 
-function buildPrompt(prompt: string, format: Format, hasProduct: boolean): string {
+function buildPrompt(prompt: string, format: Format, hasProduct: boolean, hasReference: boolean): string {
   const aspectInstruction =
     format === "9:16"
       ? "Output a 9:16 vertical Instagram Story creative."
@@ -73,7 +75,11 @@ function buildPrompt(prompt: string, format: Format, hasProduct: boolean): strin
         `Preserve the product's exact shape, colors, and labels. Surrounding ` +
         `typography and accent shapes are supporting cast that amplifies the ` +
         `product without competing with it.`
-      : `Compose a strong standalone advertising visual.`)
+      : `Compose a strong standalone advertising visual.`) +
+    (hasReference
+      ? ` Reference image(s) attached AFTER the product — match their visual STYLE ` +
+        `(composition, palette, lighting, typography). Do NOT copy the subject; just adopt the look.`
+      : "")
   );
 }
 
@@ -84,26 +90,59 @@ export async function callGptImage(
   if (!apiKey) throw new Error("OPENAI_API_KEY is missing");
 
   const size = sizeFor(input.format);
-  const prompt = buildPrompt(input.prompt, input.format, !!input.productImageBase64);
+  const refs = (input.referenceImagesBase64 ?? []).filter((s) => typeof s === "string" && s.length > 0);
+  const prompt = buildPrompt(
+    input.prompt,
+    input.format,
+    !!input.productImageBase64,
+    refs.length > 0,
+  );
+
+  // Helper: data: URL or raw base64 → { mime, raw, ext }.
+  function decodeImage(src: string, fallbackMime: string) {
+    let mime = fallbackMime;
+    let raw = src;
+    if (raw.startsWith("data:")) {
+      mime = raw.split(";")[0].split(":")[1] || fallbackMime;
+      raw = raw.split(",")[1] || "";
+    }
+    const ext = mime.includes("jpeg") ? "jpg" : mime.includes("webp") ? "webp" : "png";
+    return { mime, raw, ext };
+  }
 
   let response: Response;
-  if (input.productImageBase64) {
-    // /v1/images/edits — multipart with the source image as a Blob.
-    const buf = Buffer.from(input.productImageBase64, "base64");
-    const mime = input.productImageMime || "image/png";
-    const ext = mime.includes("jpeg") ? "jpg" : mime.includes("webp") ? "webp" : "png";
+  if (input.productImageBase64 || refs.length > 0) {
+    // /v1/images/edits — multipart. gpt-image-2 supports multiple
+    // reference images via repeated `image[]` fields.
     const fd = new FormData();
     fd.set("model", GPT_IMAGE_MODEL);
     fd.set("prompt", prompt);
     fd.set("size", size);
     fd.set("quality", "medium");
     fd.set("n", "1");
-    // Convert Node Buffer → Blob → File-like for FormData.
-    fd.set(
-      "image",
-      new Blob([new Uint8Array(buf)], { type: mime }),
-      `product.${ext}`,
-    );
+
+    if (input.productImageBase64) {
+      const { mime, raw, ext } = decodeImage(
+        input.productImageBase64,
+        input.productImageMime || "image/png",
+      );
+      const buf = Buffer.from(raw, "base64");
+      fd.append(
+        "image[]",
+        new Blob([new Uint8Array(buf)], { type: mime }),
+        `product.${ext}`,
+      );
+    }
+    refs.forEach((ref, i) => {
+      const { mime, raw, ext } = decodeImage(ref, "image/png");
+      if (!raw) return;
+      const buf = Buffer.from(raw, "base64");
+      fd.append(
+        "image[]",
+        new Blob([new Uint8Array(buf)], { type: mime }),
+        `ref-${i}.${ext}`,
+      );
+    });
 
     response = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",

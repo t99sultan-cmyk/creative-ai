@@ -32,6 +32,8 @@ interface Gemini3ProImageInput {
   prompt: string;
   productImageBase64?: string;
   productImageMime?: string;
+  /** Optional style references — each is a data: URL or raw base64. */
+  referenceImagesBase64?: string[];
   format: Format;
 }
 
@@ -64,14 +66,33 @@ export async function callGemini3ProImage(
     | { text: string }
     | { inlineData: { mimeType: string; data: string } };
 
+  // Strip a data: prefix off a base64 string and return { mime, raw }.
+  function splitDataUrl(s: string, fallbackMime: string): { mime: string; data: string } {
+    if (s.startsWith("data:")) {
+      const mime = s.split(";")[0].split(":")[1] || fallbackMime;
+      const data = s.split(",")[1] || "";
+      return { mime, data };
+    }
+    return { mime: fallbackMime, data: s };
+  }
+
   const parts: Part[] = [{ text: fullPrompt }];
   if (input.productImageBase64) {
+    const { mime, data } = splitDataUrl(input.productImageBase64, input.productImageMime || "image/png");
+    parts.push({ inlineData: { mimeType: mime, data } });
+  }
+  if (input.referenceImagesBase64?.length) {
     parts.push({
-      inlineData: {
-        mimeType: input.productImageMime || "image/png",
-        data: input.productImageBase64,
-      },
+      text:
+        "REFERENCE IMAGE(S) below — match this visual STYLE: composition, " +
+        "color palette, lighting mood, typography style. Don't copy the " +
+        "subject — just adopt the look. The product (if provided above) " +
+        "stays the hero, only its presentation should follow these refs.",
     });
+    for (const ref of input.referenceImagesBase64) {
+      const { mime, data } = splitDataUrl(ref, "image/png");
+      if (data) parts.push({ inlineData: { mimeType: mime, data } });
+    }
   }
 
   const body = {

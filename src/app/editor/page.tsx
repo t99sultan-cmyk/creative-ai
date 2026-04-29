@@ -2094,7 +2094,7 @@ export default function Home() {
 
       {/* Main Canvas Area */}
       <section className={clsx(
-        "flex-1 relative flex-col items-center justify-start md:justify-center p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-[300px] md:pb-12 pt-8 md:pt-8 w-full min-h-screen",
+        "flex-1 relative flex-col items-center justify-start p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-[300px] md:pb-12 pt-8 md:pt-8 w-full min-h-screen",
         mobileTab === 'canvas' ? "flex" : "hidden md:flex"
       )}>
 
@@ -2164,7 +2164,7 @@ export default function Home() {
           // a final PNG — user can download any. No "winner" step
           // (only the legacy HTML path needed that to load HTML into
           // the single canvas).
-          <div className="relative z-10 mt-16 md:mt-0 w-full max-w-[1300px] flex flex-col gap-6">
+          <div className="relative z-10 mt-16 md:mt-0 w-full max-w-[1300px] grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {(["gemini-3-pro-image", "gpt-image-2"] as const).map((m) => {
               const row = pair.variants!.filter((v) => v.model === m);
               if (row.length === 0) return null;
@@ -2253,7 +2253,7 @@ export default function Home() {
             })}
             <button
               onClick={() => setPair(null)}
-              className="self-center text-xs font-semibold text-neutral-500 hover:text-neutral-700 underline underline-offset-4"
+              className="md:col-span-2 justify-self-center text-xs font-semibold text-neutral-500 hover:text-neutral-700 underline underline-offset-4"
             >
               Сгенерировать заново
             </button>

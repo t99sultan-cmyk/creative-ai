@@ -243,6 +243,12 @@ export async function POST(req: Request) {
         error?: string;
       };
 
+      // Reference images (style anchors). Both models receive them —
+      // Gemini Pro inlines them as additional parts, GPT Image 2 sends
+      // them as `image[]` multipart entries. We cap at 3 refs to keep
+      // payloads sane and the model focused.
+      const referenceImagesBase64: string[] = (refs ?? []).slice(0, 3);
+
       const tasks: Array<{ model: Variant["model"]; promise: Promise<unknown> }> = [];
       for (let i = 0; i < variantCount; i++) {
         tasks.push({
@@ -251,6 +257,7 @@ export async function POST(req: Request) {
             prompt,
             productImageBase64,
             productImageMime,
+            referenceImagesBase64,
             format: format as "9:16" | "1:1",
           }),
         });
@@ -262,6 +269,7 @@ export async function POST(req: Request) {
             prompt,
             productImageBase64,
             productImageMime,
+            referenceImagesBase64,
             format: format as "9:16" | "1:1",
           }),
         });
