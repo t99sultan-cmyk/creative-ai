@@ -57,7 +57,7 @@ function sizeFor(format: Format): "1024x1024" | "1024x1536" {
   return format === "1:1" ? "1024x1024" : "1024x1536";
 }
 
-function buildPrompt(prompt: string, format: Format): string {
+function buildPrompt(prompt: string, format: Format, hasProduct: boolean): string {
   const aspectInstruction =
     format === "9:16"
       ? "Output a 9:16 vertical Instagram Story creative."
@@ -66,7 +66,14 @@ function buildPrompt(prompt: string, format: Format): string {
     `${prompt}\n\n${aspectInstruction}\n` +
     `Style: high-end advertising creative. Bold composition, modern typography, sales-driven layout. ` +
     `If text appears, write it in Russian unless the brief asks otherwise — render it crisp and legible. ` +
-    `Place product (if provided) prominently and tastefully.`
+    (hasProduct
+      ? `THE PROVIDED PRODUCT IMAGE IS THE HERO of this creative — ` +
+        `place it as the visual centerpiece with cinematic studio lighting, ` +
+        `premium reflections, and dramatic but tasteful composition. ` +
+        `Preserve the product's exact shape, colors, and labels. Surrounding ` +
+        `typography and accent shapes are supporting cast that amplifies the ` +
+        `product without competing with it.`
+      : `Compose a strong standalone advertising visual.`)
   );
 }
 
@@ -77,7 +84,7 @@ export async function callGptImage(
   if (!apiKey) throw new Error("OPENAI_API_KEY is missing");
 
   const size = sizeFor(input.format);
-  const prompt = buildPrompt(input.prompt, input.format);
+  const prompt = buildPrompt(input.prompt, input.format, !!input.productImageBase64);
 
   let response: Response;
   if (input.productImageBase64) {

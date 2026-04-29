@@ -6,6 +6,7 @@ import { toggleCreativePublic } from "@/actions/galleryActions";
 import { TemplatesModal } from "@/components/TemplatesModal";
 import { STATIC_DUAL_COST, VIDEO_GEN_COST } from "@/lib/pricing";
 import { generateTzBrief } from "@/actions/generateTzBrief";
+import { polishProductPhoto } from "@/actions/polishProductPhoto";
 import clsx from "clsx";
 import { removeBackground } from "@imgly/background-removal";
 import { useUser } from "@clerk/nextjs";
@@ -39,8 +40,12 @@ export default function Home() {
   const currentCost = variantCount * 2 * 2;
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
-  const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);
+  const [productImages, setProductImages] = useState<{ file: File; dataUrl: string; original?: string }[]>([]);
   const [pendingProductFile, setPendingProductFile] = useState<{ file: File; dataUrl: string } | null>(null);
+  // Per-product-photo polish state. Indices line up with productImages.
+  // `idle` (just uploaded), `polishing`, `polished`, `failed`.
+  type PolishState = "idle" | "polishing" | "polished" | "failed";
+  const [polishStateByIndex, setPolishStateByIndex] = useState<Record<number, PolishState>>({});
   // strictClone is no longer a user choice — when there's a reference
   // image, we ALWAYS pass strict-clone=true to /api/generate. Without
   // it the model treats the reference as soft inspiration and makes
@@ -632,21 +637,77 @@ export default function Home() {
     e.target.value = '';
   };
 
+  // Background polish — runs Nano Banana studio enhance on the freshly
+  // confirmed product photo. We push the original into `productImages`
+  // first, then swap in the polished version once Gemini returns. If
+  // it fails, the original stays. The user can revert with the "↩
+  // Оригинал" button on the thumbnail.
+  async function runPolishForLatest() {
+    setPolishStateByIndex((prev) => {
+      // Find the newly-added product photo's index (last item).
+      // We can't read productImages here cleanly because of stale-state,
+      // so we rely on functional update inside fetch result instead.
+      return prev;
+    });
+    setProductImages((prev) => {
+      const idx = prev.length - 1;
+      if (idx < 0) return prev;
+      // Mark as polishing.
+      setPolishStateByIndex((s) => ({ ...s, [idx]: "polishing" }));
+      // Kick the polish call (don't await — we're inside a state setter).
+      const target = prev[idx];
+      void (async () => {
+        try {
+          const result = await polishProductPhoto(target.dataUrl);
+          if (result.success) {
+            const polishedDataUrl = `data:${result.mimeType};base64,${result.imageBase64}`;
+            setProductImages((cur) => {
+              if (cur[idx]?.dataUrl !== target.dataUrl) return cur; // gone or replaced
+              const next = [...cur];
+              next[idx] = { ...cur[idx], original: target.dataUrl, dataUrl: polishedDataUrl };
+              return next;
+            });
+            setPolishStateByIndex((s) => ({ ...s, [idx]: "polished" }));
+          } else {
+            console.warn("[polish] failed:", result.error);
+            setPolishStateByIndex((s) => ({ ...s, [idx]: "failed" }));
+          }
+        } catch (e) {
+          console.warn("[polish] crashed:", e);
+          setPolishStateByIndex((s) => ({ ...s, [idx]: "failed" }));
+        }
+      })();
+      return prev;
+    });
+  }
+
+  function revertPolish(index: number) {
+    setProductImages((prev) => {
+      const item = prev[index];
+      if (!item?.original) return prev;
+      const next = [...prev];
+      next[index] = { ...item, dataUrl: item.original, original: undefined };
+      return next;
+    });
+    setPolishStateByIndex((s) => ({ ...s, [index]: "idle" }));
+  }
+
   const confirmProductAsIs = () => {
     if (!pendingProductFile) return;
     setProductImages(prev => [...prev, pendingProductFile]);
     setPendingProductFile(null);
+    runPolishForLatest();
   };
 
   const confirmProductCut = async () => {
     if (!pendingProductFile) return;
     setIsRemovingBg(true);
     setError("");
-    
+
     try {
       const sourceUrl = URL.createObjectURL(pendingProductFile.file);
       const blob = await removeBackground(sourceUrl);
-      
+
       const webpDataUrl = await optimizeImageToWebP(blob);
       setProductImages(prev => [...prev, { file: blob as File, dataUrl: webpDataUrl }]);
     } catch (err) {
@@ -656,6 +717,7 @@ export default function Home() {
     } finally {
       setIsRemovingBg(false);
       setPendingProductFile(null);
+      runPolishForLatest();
     }
   };
 
@@ -670,7 +732,16 @@ export default function Home() {
 
   const removeProduct = (index: number) => {
     setProductImages(prev => prev.filter((_, i) => i !== index));
-    if (error) setError(""); 
+    setPolishStateByIndex((prev) => {
+      const next: Record<number, PolishState> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        const i = Number(k);
+        if (i < index) next[i] = v;
+        else if (i > index) next[i - 1] = v;
+      }
+      return next;
+    });
+    if (error) setError("");
   };
 
   const handleGenerate = async () => {
@@ -1715,19 +1786,47 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {productImages.map((img, i) => (
-                  <div key={i} className={clsx("relative group w-16 h-16 rounded-lg border border-neutral-200 overflow-hidden shadow-sm bg-neutral-100/50 flex items-center justify-center", isLoading && "opacity-50")}>
-                    <img src={img.dataUrl} alt={`Product ${i}`} className="w-full h-full object-contain mix-blend-multiply" />
-                    {!isLoading && (
-                      <button
-                        onClick={() => removeProduct(i)}
-                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {productImages.map((img, i) => {
+                  const polish = polishStateByIndex[i] ?? "idle";
+                  return (
+                    <div key={i} className={clsx("relative group w-16 h-16 rounded-lg border border-neutral-200 overflow-hidden shadow-sm bg-neutral-100/50 flex items-center justify-center", isLoading && "opacity-50")}>
+                      <img src={img.dataUrl} alt={`Product ${i}`} className="w-full h-full object-contain mix-blend-multiply" />
+                      {polish === "polishing" && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white pointer-events-none">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        </div>
+                      )}
+                      {polish === "polished" && (
+                        <span
+                          title="Студийное улучшение применено"
+                          className="absolute top-0.5 left-0.5 bg-amber-400 text-amber-950 rounded-full p-0.5 shadow-sm pointer-events-none"
+                        >
+                          <Sparkles className="w-2.5 h-2.5" />
+                        </span>
+                      )}
+                      {!isLoading && polish !== "polishing" && (
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          {polish === "polished" && img.original && (
+                            <button
+                              onClick={() => revertPolish(i)}
+                              title="Вернуть оригинал"
+                              className="text-white text-[9px] font-bold bg-white/15 hover:bg-white/30 rounded px-1.5 py-0.5"
+                            >
+                              ↩ Ориг
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeProduct(i)}
+                            title="Удалить"
+                            className="text-white"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 
                 {productImages.length < MAX_IMAGES && (
                    <label className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center transition-all", isLoading || isRemovingBg ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-hermes-500 hover:bg-hermes-50 text-neutral-400 hover:text-hermes-500")}>

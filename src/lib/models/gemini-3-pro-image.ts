@@ -50,7 +50,15 @@ export async function callGemini3ProImage(
     `${input.prompt}\n\n${aspectInstruction}\n` +
     `Style: high-end advertising creative. Bold composition, modern typography, sales-driven layout. ` +
     `If text appears, write it in Russian unless the brief asks otherwise — render it crisp and legible, ` +
-    `no garbled letters. Place product (if provided) prominently and tastefully.`;
+    `no garbled letters. ` +
+    (input.productImageBase64
+      ? `THE PROVIDED PRODUCT IMAGE IS THE HERO of this creative — ` +
+        `place it as the visual centerpiece with cinematic studio lighting, ` +
+        `premium reflections, and dramatic but tasteful composition. ` +
+        `Preserve the product's exact shape, colors, and labels. Treat surrounding ` +
+        `elements (typography, accent shapes, gradient backgrounds) as supporting ` +
+        `cast that amplifies the product without competing with it.`
+      : `Compose a strong standalone advertising visual.`);
 
   type Part =
     | { text: string }
