@@ -1576,6 +1576,48 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Тип креатива. Анимированный режим временно скрыт за
+              disabled-кнопкой с бейджем «На обновлении» — пока обкатываем
+              новые видео-модели (Veo 3 / Kling). Статичный — единственный
+              рабочий путь. */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Video className="w-4 h-4 text-hermes-500" />
+              Тип креатива
+            </h2>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled
+                aria-disabled="true"
+                title="Анимированные креативы временно недоступны — обкатываем новые видео-модели"
+                className="py-3 px-2 rounded-xl border border-neutral-200 bg-neutral-50 text-neutral-400 text-sm font-medium flex flex-col items-center gap-0.5 cursor-not-allowed relative"
+              >
+                <span className="flex items-center gap-1 font-bold">
+                  Анимированный
+                  <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider bg-amber-100 text-amber-700">
+                    Скоро
+                  </span>
+                </span>
+                <span className="text-[10px] font-medium leading-tight text-neutral-400">
+                  На обновлении
+                </span>
+              </button>
+              <button
+                disabled
+                aria-pressed="true"
+                className="py-3 px-2 rounded-xl border border-neutral-900 bg-neutral-900 text-white text-sm font-medium flex flex-col items-center gap-0.5 cursor-default"
+              >
+                <span className="font-bold">Статичный</span>
+                <span className="text-[10px] font-medium leading-tight text-white/70">
+                  PNG-постер 4K
+                </span>
+              </button>
+            </div>
+            <p className="text-[10px] text-neutral-400 leading-tight">
+              Анимация вернётся после обновления видео-движка. Сейчас доступна статика — 2 варианта от Gemini 3 Pro Image и GPT Image 2.
+            </p>
+          </div>
+
           {/* Reference and Product Image Uploads */}
           {!remixSourceCode ? (
             <>
