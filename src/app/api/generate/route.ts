@@ -9,17 +9,19 @@ import {
   SIGNUP_BONUS_IMPULSES,
   STATIC_DUAL_COST,
   ANIMATED_DUAL_COST,
+  staticImageTrioCost,
 } from "@/lib/pricing";
 import { lintCreativeHtml } from "@/lib/html-linter";
 import { notifyAdmin, fmt } from "@/lib/admin-notify";
 import {
   AnthropicContentBlock,
-  callImagen,
   callModel,
   injectPlaceholders,
   ModelChoice,
   unwrapHtml,
 } from "@/lib/generation-models";
+import { callGptImage } from "@/lib/models/gpt-image";
+import { callGemini3ProImage } from "@/lib/models/gemini-3-pro-image";
 
 export const maxDuration = 300;
 
@@ -106,6 +108,12 @@ export async function POST(req: Request) {
       strictClone,
     } = body;
 
+    // Variant count (static image-gen path only): 1, 2, or 3 images per
+    // model. Default to 2. Anything else gets clamped — the router
+    // never trusts client input on cost-sensitive numbers.
+    const variantCount: 1 | 2 | 3 =
+      body?.variantCount === 1 ? 1 : body?.variantCount === 3 ? 3 : 2;
+
     // ---- Input validation ----
     if (typeof prompt !== "string" || prompt.trim().length === 0) {
       return new Response(JSON.stringify({ error: "Промпт не может быть пустым." }), { status: 400 });
@@ -163,7 +171,9 @@ export async function POST(req: Request) {
       }
     }
 
-    const cost = isAnimated ? ANIMATED_DUAL_COST : STATIC_DUAL_COST;
+    const cost = isAnimated
+      ? ANIMATED_DUAL_COST
+      : staticImageTrioCost(variantCount);
 
     // ---- Lazy-create user ----
     const userRecords = await db.select().from(users).where(eq(users.id, userId)).limit(1);
@@ -197,6 +207,206 @@ export async function POST(req: Request) {
 
     deductedUserId = userId;
     deductedCost = cost;
+
+    // ============================================================
+    // STATIC IMAGE PATH — Nano Banana × N + GPT-Image-1 × N.
+    // Direct image generation (no HTML). Animated mode falls through
+    // to the legacy Claude+Gemini HTML pipeline below.
+    // ============================================================
+    if (!isAnimated) {
+      // Take the first product image (if any) — Nano Banana accepts
+      // multi-image input but GPT-Image edits endpoint takes a single
+      // image. To keep both models comparing apples-to-apples, pass
+      // exactly one to each.
+      let productImageBase64: string | undefined;
+      let productImageMime: string | undefined;
+      if (prods.length > 0) {
+        const first = prods[0];
+        if (typeof first === "string") {
+          if (first.startsWith("data:")) {
+            productImageMime = first.split(";")[0].split(":")[1];
+            productImageBase64 = first.split(",")[1];
+          } else {
+            productImageBase64 = first;
+            productImageMime = "image/png";
+          }
+        }
+      }
+
+      type Variant = {
+        model: "gemini-3-pro-image" | "gpt-image-2";
+        ok: boolean;
+        creativeId?: string;
+        imageBase64?: string;
+        mediaType?: string;
+        apiCostKzt?: number;
+        error?: string;
+      };
+
+      const tasks: Array<{ model: Variant["model"]; promise: Promise<unknown> }> = [];
+      for (let i = 0; i < variantCount; i++) {
+        tasks.push({
+          model: "gemini-3-pro-image",
+          promise: callGemini3ProImage({
+            prompt,
+            productImageBase64,
+            productImageMime,
+            format: format as "9:16" | "1:1",
+          }),
+        });
+      }
+      for (let i = 0; i < variantCount; i++) {
+        tasks.push({
+          model: "gpt-image-2",
+          promise: callGptImage({
+            prompt,
+            productImageBase64,
+            productImageMime,
+            format: format as "9:16" | "1:1",
+          }),
+        });
+      }
+
+      const settled = await Promise.allSettled(tasks.map((t) => t.promise));
+      const variants: Variant[] = settled.map((s, i) => {
+        const model = tasks[i].model;
+        if (s.status === "fulfilled") {
+          const v = s.value as { imageBase64: string; mediaType: string; apiCostKzt: number };
+          return {
+            model,
+            ok: true,
+            imageBase64: v.imageBase64,
+            mediaType: v.mediaType,
+            apiCostKzt: v.apiCostKzt,
+          };
+        }
+        const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+        console.error(`[generate:${model}] failed:`, errMsg);
+        return { model, ok: false, error: errMsg };
+      });
+
+      const successCount = variants.filter((v) => v.ok).length;
+      if (successCount === 0) {
+        const sampleErr =
+          variants.find((v) => v.error)?.error ?? "all models failed silently";
+        throw new Error(
+          `All ${variants.length} image generations failed. Sample: ${sampleErr}`,
+        );
+      }
+
+      // Insert successful rows under one shared pairId.
+      const pairId = crypto.randomUUID();
+      for (const v of variants) {
+        if (v.ok) v.creativeId = crypto.randomUUID();
+      }
+
+      const insertedIds: string[] = [];
+      try {
+        for (const v of variants) {
+          if (!v.ok || !v.creativeId || !v.imageBase64) continue;
+          const dataUrl = `data:${v.mediaType ?? "image/png"};base64,${v.imageBase64}`;
+          await db.insert(creatives).values({
+            id: v.creativeId,
+            userId,
+            prompt,
+            format,
+            cost,
+            apiCostKzt: v.apiCostKzt ?? 0,
+            imageUrl: dataUrl,
+            model: v.model,
+            pairId,
+          });
+          insertedIds.push(v.creativeId);
+        }
+      } catch (insertErr) {
+        if (insertedIds.length > 0) {
+          try {
+            await db.delete(creatives).where(eq(creatives.pairId, pairId));
+            console.warn(`[generate saga] rolled back ${insertedIds.length} insert(s)`);
+          } catch (rollbackErr) {
+            console.error(`[generate saga] ROLLBACK FAILED:`, {
+              pairId,
+              insertedIds,
+              rollbackErr,
+            });
+            try {
+              notifyAdmin(
+                `🔴 *Saga rollback FAILED*\n\n*pairId:* \`${pairId}\`\n*ids:* ${insertedIds.join(", ")}\n\n\`DELETE FROM creative WHERE pair_id = '${pairId}';\``,
+              );
+            } catch {}
+          }
+        }
+        throw insertErr;
+      }
+
+      // Partial refund: bill upfront for 2 × variantCount images; if K
+      // succeed, refund (cost × (N-K) / N).
+      const expectedOutputs = variants.length;
+      let partialRefunded = 0;
+      if (successCount < expectedOutputs) {
+        partialRefunded = Math.floor(
+          (cost * (expectedOutputs - successCount)) / expectedOutputs,
+        );
+        if (partialRefunded > 0) {
+          await db
+            .update(users)
+            .set({ impulses: sql`${users.impulses} + ${partialRefunded}` })
+            .where(eq(users.id, userId));
+          console.warn(
+            `[Partial refund] ${expectedOutputs - successCount}/${expectedOutputs} failed; returned ${partialRefunded} imp.`,
+          );
+        }
+        deductedCost = cost - partialRefunded;
+      } else {
+        deductedCost = 0;
+      }
+
+      // Admin notify (fire-and-forget) — surface partial failures so
+      // we can debug per-model issues.
+      void (async () => {
+        try {
+          if (successCount < expectedOutputs) {
+            const failed = variants.filter((v) => !v.ok);
+            const summary = failed
+              .map((v) => `${v.model}: ${fmt.short(v.error ?? "?", 120)}`)
+              .join(" | ");
+            const okPerModel = (m: Variant["model"]) =>
+              variants.filter((v) => v.model === m && v.ok).length;
+            notifyAdmin(
+              `⚠️ *Image-gen partial fail*\n\n*Юзер:* \`${fmt.esc(userId)}\`\n*Модели:* NB-Pro ${okPerModel("gemini-3-pro-image")}/${variantCount}, GPT2 ${okPerModel("gpt-image-2")}/${variantCount}\n*Ошибки:* ${fmt.esc(fmt.short(summary, 350))}\n*Возврат:* ${partialRefunded} имп.`,
+            );
+          }
+        } catch (e) {
+          console.warn("[notifyAdmin] image-gen notify failed:", e);
+        }
+      })().catch(() => undefined);
+
+      return new Response(
+        JSON.stringify({
+          pairId,
+          variants: variants.map((v) => ({
+            creativeId: v.creativeId ?? null,
+            model: v.model,
+            ok: v.ok,
+            imageUrl:
+              v.ok && v.imageBase64
+                ? `data:${v.mediaType ?? "image/png"};base64,${v.imageBase64}`
+                : null,
+            error: v.error ?? null,
+          })),
+          partialRefunded,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // ============================================================
+    // ANIMATED HTML PATH — Claude + Gemini in parallel.
+    // Existing pipeline; will be replaced once Veo 3 / Kling are wired.
+    // ============================================================
 
     // ---- Build user-content blocks ----
     const baseContent: AnthropicContentBlock[] = [];
@@ -281,48 +491,25 @@ export async function POST(req: Request) {
       }
     }
 
-    // ---- Imagen also gets a brief — without the HTML output-format
-    //      requirement. We pass the raw user prompt + niche/format hints. ----
-    // Animated mode: skip Imagen (image is static — doesn't fit the
-    // motion-poster intent). For animated, we only run the 2 HTML cards.
-    const imagenPromptParts: string[] = [];
-    imagenPromptParts.push(prompt);
-    imagenPromptParts.push(
-      "Style: high-quality advertising creative poster. Bold, modern, 2026 aesthetic. Russian copy if any text appears.",
-    );
-    if (refs.length > 0) {
-      imagenPromptParts.push("Match the visual style of the reference if attached.");
-    }
-    const imagenPrompt = imagenPromptParts.join(" ");
-
-    // ---- Run all models in parallel ----
+    // ---- Run Claude + Gemini in parallel (animated HTML path) ----
     const tasks: Promise<unknown>[] = [
       callModel("claude", SYSTEM_PROMPT, baseContent),
       callModel("gemini", SYSTEM_PROMPT, baseContent),
     ];
-    if (!isAnimated) {
-      tasks.push(callImagen(imagenPrompt, format as "9:16" | "1:1"));
-    }
     const settled = await Promise.allSettled(tasks);
 
     type PerModelResult = {
-      model: ModelChoice | "imagen";
-      kind: "html" | "image";
+      model: ModelChoice;
       ok: boolean;
       html?: string;
-      imageBase64?: string;
-      mediaType?: string;
       apiCostKzt?: number;
       error?: string;
       creativeId?: string;
     };
     const results: PerModelResult[] = [
-      { model: "claude", kind: "html", ok: false },
-      { model: "gemini", kind: "html", ok: false },
+      { model: "claude", ok: false },
+      { model: "gemini", ok: false },
     ];
-    if (!isAnimated) {
-      results.push({ model: "imagen", kind: "image", ok: false });
-    }
 
     settled.forEach((s, i) => {
       const r = results[i];
@@ -331,29 +518,23 @@ export async function POST(req: Request) {
         console.error(`[generate:${r.model}] failed:`, r.error);
         return;
       }
-      if (r.kind === "html") {
-        const value = s.value as { html: string; apiCostKzt: number };
-        const cleaned = injectPlaceholders(unwrapHtml(value.html), prods, preservedImages);
-        try {
-          const lintIssues = lintCreativeHtml(cleaned);
-          if (lintIssues.length > 0) {
-            const high = lintIssues.filter((x) => x.severity === "high").length;
-            console.log(`[lint:${r.model}] ${lintIssues.length} (${high} high):`, lintIssues.map((x) => x.code).join(", "));
-          }
-        } catch (e) {
-          console.warn(`[lint:${r.model}] linter crashed:`, e);
+      const value = s.value as { html: string; apiCostKzt: number };
+      const cleaned = injectPlaceholders(unwrapHtml(value.html), prods, preservedImages);
+      try {
+        const lintIssues = lintCreativeHtml(cleaned);
+        if (lintIssues.length > 0) {
+          const high = lintIssues.filter((x) => x.severity === "high").length;
+          console.log(
+            `[lint:${r.model}] ${lintIssues.length} (${high} high):`,
+            lintIssues.map((x) => x.code).join(", "),
+          );
         }
-        r.ok = true;
-        r.html = cleaned;
-        r.apiCostKzt = value.apiCostKzt;
-      } else {
-        // Imagen result.
-        const value = s.value as { imageBase64: string; mediaType: string; apiCostKzt: number };
-        r.ok = true;
-        r.imageBase64 = value.imageBase64;
-        r.mediaType = value.mediaType;
-        r.apiCostKzt = value.apiCostKzt;
+      } catch (e) {
+        console.warn(`[lint:${r.model}] linter crashed:`, e);
       }
+      r.ok = true;
+      r.html = cleaned;
+      r.apiCostKzt = value.apiCostKzt;
     });
 
     const successCount = results.filter((r) => r.ok).length;
@@ -373,37 +554,18 @@ export async function POST(req: Request) {
     const insertedIds: string[] = [];
     try {
       for (const r of results) {
-        if (!r.ok || !r.creativeId) continue;
-        if (r.kind === "html") {
-          if (!r.html) continue;
-          await db.insert(creatives).values({
-            id: r.creativeId,
-            userId,
-            prompt,
-            format,
-            cost,
-            apiCostKzt: r.apiCostKzt ?? 0,
-            htmlCode: r.html,
-            model: r.model,
-            pairId,
-          });
-        } else {
-          // Image card (Imagen 4) — store base64 data URL in imageUrl,
-          // leave htmlCode null. Editor renders <img src={imageUrl}/>.
-          if (!r.imageBase64) continue;
-          const dataUrl = `data:${r.mediaType ?? "image/png"};base64,${r.imageBase64}`;
-          await db.insert(creatives).values({
-            id: r.creativeId,
-            userId,
-            prompt,
-            format,
-            cost,
-            apiCostKzt: r.apiCostKzt ?? 0,
-            imageUrl: dataUrl,
-            model: r.model,
-            pairId,
-          });
-        }
+        if (!r.ok || !r.creativeId || !r.html) continue;
+        await db.insert(creatives).values({
+          id: r.creativeId,
+          userId,
+          prompt,
+          format,
+          cost,
+          apiCostKzt: r.apiCostKzt ?? 0,
+          htmlCode: r.html,
+          model: r.model,
+          pairId,
+        });
         insertedIds.push(r.creativeId);
       }
     } catch (insertErr) {
@@ -424,8 +586,8 @@ export async function POST(req: Request) {
     }
 
     // ---- Partial refund based on success ratio ----
-    // We bill `cost` upfront for N expected outputs (2 for animated,
-    // 3 for static). If only K succeed, refund (cost * (N-K) / N).
+    // Animated bills upfront for 2 expected outputs (Claude + Gemini).
+    // If only K succeed, refund (cost × (N-K) / N).
     const expectedOutputs = results.length;
     let partialRefunded = 0;
     if (successCount < expectedOutputs) {
@@ -476,25 +638,15 @@ export async function POST(req: Request) {
 
     const respondHtml = (r: PerModelResult | undefined) =>
       r && r.ok ? { creativeId: r.creativeId!, code: r.html! } : { error: r?.error || "Unknown error" };
-    const respondImage = (r: PerModelResult | undefined) =>
-      r && r.ok
-        ? {
-            creativeId: r.creativeId!,
-            imageUrl: `data:${r.mediaType ?? "image/png"};base64,${r.imageBase64}`,
-          }
-        : { error: r?.error || "Unknown error" };
 
     const claudeR = results.find((r) => r.model === "claude");
     const geminiR = results.find((r) => r.model === "gemini");
-    const imagenR = results.find((r) => r.model === "imagen");
 
     return new Response(
       JSON.stringify({
         pairId,
         claude: respondHtml(claudeR),
         gemini: respondHtml(geminiR),
-        // imagen is only present in static mode; absent in animated.
-        imagen: imagenR ? respondImage(imagenR) : null,
         partialRefunded,
       }),
       {

@@ -39,6 +39,25 @@ export const STATIC_DUAL_COST = 8;
 export const ANIMATED_DUAL_COST = 10;
 
 /**
+ * Direct image-gen path: 2 models in parallel
+ *   • Gemini 3 Pro Image   (gemini-3-pro-image-preview, "Nano Banana Pro")
+ *   • GPT Image 2          (gpt-image-2, OpenAI, quality medium)
+ *
+ * Nano Banana (the original gemini-2.5-flash-image) was dropped after
+ * A/B testing — Pro variant gives noticeably better composition and
+ * typography. The user picks 1/2/3 variants per model, so each click
+ * produces 2/4/6 images. Cost is 2 impulses per image. Real API cost
+ * at 1 variant (2 images):
+ *   NB Pro ≈ $0.24, GPT-Image-2 medium ≈ $0.04. Total ≈ $0.28 ≈ 135 ₸.
+ *   We charge 4 imp ≈ 210 ₸ → ~35% margin. Tuning is for later.
+ */
+export const STATIC_IMAGE_PER_VARIANT_COST = 2;
+export const STATIC_IMAGE_MODEL_COUNT = 2;
+export function staticImageTrioCost(variantCount: 1 | 2 | 3): number {
+  return variantCount * STATIC_IMAGE_MODEL_COUNT * STATIC_IMAGE_PER_VARIANT_COST;
+}
+
+/**
  * Imagen 4 image generation cost (Google). $0.04 per image ≈ 19 ₸.
  * Included in the bundled STATIC_DUAL_COST — no separate charge for the
  * 3rd "image" card. We raised STATIC_DUAL_COST from 6 to 8 to absorb it.

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, Tag, Eye, EyeOff, LayoutGrid, Trophy } from "lucide-react";
-import { NICHE_LIST } from "@/lib/niche-packs";
+import { Sparkles, Code2, Image as ImageIcon, Loader2, Expand, Maximize, Smartphone, Upload, Frame, X, Download, Video, PackageSearch, Trash2, Scissors, Zap, Check, Wand2, Lightbulb, ChevronDown, Eye, EyeOff, LayoutGrid, Trophy } from "lucide-react";
 import { toggleCreativePublic } from "@/actions/galleryActions";
 import { TemplatesModal } from "@/components/TemplatesModal";
 import { STATIC_DUAL_COST, ANIMATED_DUAL_COST, VIDEO_GEN_COST } from "@/lib/pricing";
@@ -27,16 +26,20 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [remixSourceCode, setRemixSourceCode] = useState<string | null>(null);
   const [format, setFormat] = useState<Format>("9:16");
-  const [isAnimated, setIsAnimated] = useState<boolean>(true);
-  // Niche selector — gives the model a sensible default style when the
-  // user has no reference image. Empty string = no niche chosen.
-  const [niche, setNiche] = useState<string>("");
-  // Dual-model: every generate click runs Claude + Gemini in parallel.
-  // The user picks the winner from side-by-side previews.
+  const [isAnimated, setIsAnimated] = useState<boolean>(false);
+  // Static-mode variant count: how many images per model (Nano Banana
+  // and GPT-Image-1 each generate this many in parallel). 1 / 2 / 3.
+  // Static path: 1 image from each model (Gemini 3 Pro + GPT Image 2).
+  // The variant picker UI was removed per simplification — 2 images
+  // per click is the right starting point for A/B comparison.
+  const variantCount: 1 = 1;
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
-  // Per-click cost: 6 imp. static / 8 animated.
-  const currentCost = isAnimated ? ANIMATED_DUAL_COST : STATIC_DUAL_COST;
+  // Per-click cost. Static = 2 models × 1 variant × 2 imp = 4 imp.
+  // Animated stays a flat dual-HTML cost.
+  const currentCost = isAnimated
+    ? ANIMATED_DUAL_COST
+    : variantCount * 2 * 2;
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string }[]>([]);
@@ -58,16 +61,25 @@ export default function Home() {
   const [error, setError] = useState("");
 
   // ---- Multi-model triplet state ----
-  // After /api/generate returns, `pair` holds 2 HTML siblings + 1 image
-  // sibling (in static mode). In animated mode, no image — just HTML×2.
-  // UI renders cards side-by-side; user picks a winner via "Этот лучше".
+  // Animated mode → `pair.claude` + `pair.gemini` (HTML).
+  // Static mode  → `pair.variants` (Nano Banana × N + GPT-Image-1 × N).
+  // The two are mutually exclusive — only one is populated per
+  // generation. UI branches on whichever is present.
   type DualGen = { creativeId: string; code: string };
   type ImageGen = { creativeId: string; imageUrl: string };
+  type ImageVariant = {
+    creativeId: string | null;
+    model: "gemini-3-pro-image" | "gpt-image-2";
+    ok: boolean;
+    imageUrl: string | null;
+    error: string | null;
+  };
   const [pair, setPair] = useState<{
     pairId: string;
     claude: DualGen | null;
     gemini: DualGen | null;
     imagen: ImageGen | null;
+    variants: ImageVariant[] | null;
     claudeError?: string;
     geminiError?: string;
     imagenError?: string;
@@ -109,6 +121,53 @@ export default function Home() {
   }, []);
 
   const [activeCreativeId, setActiveCreativeId] = useState<string | null>(null);
+
+  // ---- TZ helper / 4-question wizard ----
+  // The user can fill in 4 short fields and we synthesize a clean
+  // Russian brief for the image-gen models. Keeps prompts consistent
+  // ("реклама ___, главное ___, аудитория ___, стиль ___") without
+  // making the user remember the structure each time.
+  const [tzHelperOpen, setTzHelperOpen] = useState(false);
+  const [tzSubject, setTzSubject] = useState("");
+  const [tzBenefit, setTzBenefit] = useState("");
+  const [tzAudience, setTzAudience] = useState("");
+  const [tzStyle, setTzStyle] = useState("");
+  function buildTzFromHelper() {
+    const lines: string[] = [];
+    if (tzSubject.trim()) lines.push(`Что рекламируем: ${tzSubject.trim()}.`);
+    if (tzBenefit.trim()) lines.push(`Главная выгода / посыл: ${tzBenefit.trim()}.`);
+    if (tzAudience.trim()) lines.push(`Целевая аудитория: ${tzAudience.trim()}.`);
+    if (tzStyle.trim()) lines.push(`Стиль и тон: ${tzStyle.trim()}.`);
+    if (lines.length === 0) return;
+    setPrompt(lines.join("\n"));
+    setTzHelperOpen(false);
+  }
+
+  // Which image variant the user marked as "best" — controls the gold
+  // star highlight on the cards. One per pair; selecting a different
+  // card auto-deselects the previous one.
+  const [bestCreativeId, setBestCreativeId] = useState<string | null>(null);
+  const [savingBestId, setSavingBestId] = useState<string | null>(null);
+
+  async function markAsBest(creativeId: string) {
+    if (!creativeId || savingBestId) return;
+    setSavingBestId(creativeId);
+    try {
+      const res = await fetch("/api/select-best", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creativeId }),
+      });
+      if (res.ok) {
+        setBestCreativeId(creativeId);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        console.warn("[select-best] failed:", err);
+      }
+    } finally {
+      setSavingBestId(null);
+    }
+  }
   
   // Moved below historyItems
   const [backgroundJobId, setBackgroundJobId] = useState<string | null>(null);
@@ -523,6 +582,7 @@ export default function Home() {
     setRemixSourceCode(null);
     setError("");
     setPair(null);
+    setBestCreativeId(null);
     setVideoJob(null);
     localStorage.removeItem("creative_prompt");
   };
@@ -659,6 +719,7 @@ export default function Home() {
             prompt,
             format,
             isAnimated,
+            variantCount,
             referenceImagesBase64: refBase64,
             productImagesBase64: prodBase64,
             remixHtmlCode: htmlCodeToRemix,
@@ -682,30 +743,43 @@ export default function Home() {
         throw err;
       }
 
-      // ---- Triplet response: { pairId, claude, gemini, imagen } ----
-      const claudeOk = data.claude && data.claude.code && !data.claude.error;
-      const geminiOk = data.gemini && data.gemini.code && !data.gemini.error;
-      const imagenOk = data.imagen && data.imagen.imageUrl && !data.imagen.error;
+      // ---- Response shape ----
+      // Static mode:  { pairId, variants: [...], partialRefunded }
+      // Animated mode: { pairId, claude, gemini, partialRefunded }
+      if (Array.isArray(data.variants)) {
+        const okCount = data.variants.filter((v: any) => v.ok).length;
+        if (okCount === 0) {
+          throw new Error("Все модели вернули ошибку. Импульсы возвращены.");
+        }
+        setPair({
+          pairId: data.pairId,
+          claude: null,
+          gemini: null,
+          imagen: null,
+          variants: data.variants as ImageVariant[],
+        });
+      } else {
+        const claudeOk = data.claude && data.claude.code && !data.claude.error;
+        const geminiOk = data.gemini && data.gemini.code && !data.gemini.error;
 
-      if (!claudeOk && !geminiOk && !imagenOk) {
-        throw new Error("Все модели вернули ошибку. Импульсы возвращены.");
+        if (!claudeOk && !geminiOk) {
+          throw new Error("Все модели вернули ошибку. Импульсы возвращены.");
+        }
+
+        setPair({
+          pairId: data.pairId,
+          claude: claudeOk
+            ? { creativeId: data.claude.creativeId, code: data.claude.code }
+            : null,
+          gemini: geminiOk
+            ? { creativeId: data.gemini.creativeId, code: data.gemini.code }
+            : null,
+          imagen: null,
+          variants: null,
+          claudeError: claudeOk ? undefined : data.claude?.error,
+          geminiError: geminiOk ? undefined : data.gemini?.error,
+        });
       }
-
-      setPair({
-        pairId: data.pairId,
-        claude: claudeOk
-          ? { creativeId: data.claude.creativeId, code: data.claude.code }
-          : null,
-        gemini: geminiOk
-          ? { creativeId: data.gemini.creativeId, code: data.gemini.code }
-          : null,
-        imagen: imagenOk
-          ? { creativeId: data.imagen.creativeId, imageUrl: data.imagen.imageUrl }
-          : null,
-        claudeError: claudeOk ? undefined : data.claude?.error,
-        geminiError: geminiOk ? undefined : data.gemini?.error,
-        imagenError: data.imagen && !imagenOk ? data.imagen?.error : undefined,
-      });
 
       // Reset legacy single-creative state — it's repopulated when the
       // user picks a winner.
@@ -1501,24 +1575,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* AI model choice — neutral framing. The user picks which
-              engine generates this run; both cost the same in
-              impulses. We don't editorialize which is "better" because
-              it depends on the brief. */}
-          {/* Dual-model info banner. We always run both Claude+Gemini
-              in parallel; user picks the winner side-by-side. */}
-          <div className="rounded-xl bg-gradient-to-br from-neutral-900 to-neutral-800 text-white p-3.5 flex items-start gap-3">
-            <div className="shrink-0 w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="flex-1 leading-tight">
-              <p className="text-xs font-bold tracking-tight">Сравнение Claude vs Gemini</p>
-              <p className="text-[11px] text-white/60 mt-0.5">
-                Каждый бриф собирают <strong className="text-white/90">обе модели</strong>. Ты выбираешь, какой вариант лучше — это один импульс на стоимость.
-              </p>
-            </div>
-          </div>
-
           {/* Animation Toggle */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
@@ -1567,34 +1623,6 @@ export default function Home() {
             </div>
             <p className="text-[10px] text-neutral-400 leading-tight">
               Это рекламный креатив (постер или motion-анимация), не видеосъёмка с актёрами и не stock-видео.
-            </p>
-          </div>
-
-          {/* Variations Count — removed. Dual-model already produces 2
-              variants (Claude + Gemini) per click; "генерировать N
-              штук разом" больше не нужен. */}
-
-          {/* Niche selector — gives the model a default style guide
-              when the user has no reference image. */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Tag className="w-4 h-4 text-neutral-400" />
-              Ниша / категория
-              <span className="text-[10px] text-neutral-400 font-medium ml-1">(если без референса)</span>
-            </h2>
-            <select
-              value={niche}
-              onChange={(e) => setNiche(e.target.value)}
-              disabled={isLoading}
-              className="w-full rounded-xl border border-neutral-200 bg-white text-neutral-800 px-3 py-2.5 text-sm font-medium outline-none focus:border-hermes-500 focus:ring-2 focus:ring-hermes-500/15 transition-colors disabled:opacity-50"
-            >
-              <option value="">— Не указывать —</option>
-              {NICHE_LIST.filter(n => n.id !== "general").map(n => (
-                <option key={n.id} value={n.id}>{n.label}</option>
-              ))}
-            </select>
-            <p className="text-[10px] text-neutral-400 leading-tight">
-              ИИ подберёт цвета, шрифты и тон сообщения под нишу. Не нужно если уже есть референс-картинка.
             </p>
           </div>
 
@@ -1655,11 +1683,12 @@ export default function Home() {
                 </div>
               )}
             </div>
-          {/* Product Image Upload — TEMP HIDDEN: качество интеграции продукта в HTML-creative
-              ниже, чем когда юзер генерирует напрямую в чате (text overlap, пустоты, неточный
-              кадр). Возвращаем когда починим pipeline (vision-feedback loop / лучший
-              продуктовый layout). См. обсуждение 2026-04-27. */}
-          {false && (
+          {/* Product Image Upload — re-enabled for the Nano Banana / GPT-Image
+              testing phase. Both image-gen models accept a single product
+              photo as input and edit/restyle it into a sales creative;
+              this is the whole point of the static path now. The previous
+              HTML-creative integration issues (text overlap, off-frame
+              product) don't apply because we're no longer rendering HTML. */}
           <div className="space-y-3">
               <h2 className="text-sm font-semibold flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -1718,7 +1747,6 @@ export default function Home() {
               </div>
             )}
           </div>
-          )}
           </>
           ) : (
             <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-xl relative overflow-hidden shadow-inner flex flex-col gap-3">
@@ -1752,7 +1780,7 @@ export default function Home() {
                 <Sparkles className="w-4 h-4 text-hermes-500" />
                 ТЗ для генерации
               </span>
-              <button 
+              <button
                 onClick={handleClearAll}
                 disabled={isLoading || isRemovingBg}
                 className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-neutral-400 bg-neutral-100 rounded-md hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
@@ -1762,6 +1790,82 @@ export default function Home() {
                 Очистить
               </button>
             </h2>
+
+            {/* TZ helper — 4 short questions to build a structured brief.
+                Collapsed by default; expanded on click. After "Сформировать"
+                the assembled text overwrites the textarea content. */}
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setTzHelperOpen((v) => !v)}
+                className="w-full px-3 py-2.5 text-xs font-bold text-neutral-700 hover:bg-neutral-100 flex items-center gap-2 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-hermes-500" />
+                <span className="flex-1 text-left">Помощь с ТЗ — ответь на 4 вопроса</span>
+                <ChevronDown className={clsx("w-3.5 h-3.5 transition-transform", tzHelperOpen && "rotate-180")} />
+              </button>
+              {tzHelperOpen && (
+                <div className="px-3 pb-3 pt-1 space-y-2.5 border-t border-neutral-200 bg-white">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                      1. Что рекламируем?
+                    </label>
+                    <input
+                      type="text"
+                      value={tzSubject}
+                      onChange={(e) => setTzSubject(e.target.value)}
+                      placeholder="Кроссовки Nike Air Max"
+                      className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                      2. Главная выгода / посыл
+                    </label>
+                    <input
+                      type="text"
+                      value={tzBenefit}
+                      onChange={(e) => setTzBenefit(e.target.value)}
+                      placeholder="Скидка 30%, новинка, premium-качество"
+                      className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                      3. Целевая аудитория
+                    </label>
+                    <input
+                      type="text"
+                      value={tzAudience}
+                      onChange={(e) => setTzAudience(e.target.value)}
+                      placeholder="Молодёжь 18-24, активный городской образ жизни"
+                      className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                      4. Стиль и тон
+                    </label>
+                    <input
+                      type="text"
+                      value={tzStyle}
+                      onChange={(e) => setTzStyle(e.target.value)}
+                      placeholder="Минимализм / премиум / дерзкий / яркие цвета"
+                      className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={buildTzFromHelper}
+                    disabled={!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim()}
+                    className="w-full bg-hermes-500 hover:bg-hermes-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2 rounded-lg font-bold text-xs transition-colors"
+                  >
+                    Сформировать ТЗ ↓
+                  </button>
+                </div>
+              )}
+            </div>
+
             <textarea
               disabled={isLoading}
               readOnly={!!activeCreativeId}
@@ -1948,13 +2052,110 @@ export default function Home() {
            </div>
         )}
 
-        {pair ? (
-          // ---- TRIPLET PREVIEW: Claude HTML / Gemini HTML / Imagen image ----
-          // Static mode renders all 3 cards. Animated mode skips the
-          // image card (Imagen is image-only — doesn't fit motion intent).
-          // User picks a winner via "Этот лучше →"; after that the editor
-          // falls through to the single-canvas render below where they
-          // get download/feedback/«Сделать видео» options.
+        {pair && pair.variants ? (
+          // ---- IMAGE VARIANTS GRID (2 models × N variants) ----
+          // Two rows: Gemini 3 Pro Image, GPT Image 2. Each card is
+          // a final PNG — user can download any. No "winner" step
+          // (only the legacy HTML path needed that to load HTML into
+          // the single canvas).
+          <div className="relative z-10 mt-16 md:mt-0 w-full max-w-[1300px] flex flex-col gap-6">
+            {(["gemini-3-pro-image", "gpt-image-2"] as const).map((m) => {
+              const row = pair.variants!.filter((v) => v.model === m);
+              if (row.length === 0) return null;
+              const label =
+                m === "gemini-3-pro-image" ? "Gemini 3 Pro Image (Google)" :
+                "GPT Image 2 (OpenAI)";
+              const accent =
+                m === "gemini-3-pro-image" ? "bg-amber-500" :
+                "bg-blue-500";
+              return (
+                <div key={m} className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className={clsx("text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded text-white", accent)}>
+                      {label}
+                    </span>
+                    <span className="text-[11px] text-neutral-500 font-medium">
+                      {row.filter((v) => v.ok).length} / {row.length} ok
+                    </span>
+                  </div>
+                  <div
+                    className="grid gap-3 md:gap-4"
+                    style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
+                  >
+                    {row.map((v, i) => (
+                      <div
+                        key={`${m}-${i}`}
+                        className="bg-white rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] overflow-hidden flex flex-col"
+                      >
+                        <div
+                          className="relative bg-[#fcfcfc] flex items-center justify-center"
+                          style={format === "9:16"
+                            ? { aspectRatio: "9 / 16", width: "100%", maxHeight: "560px" }
+                            : { aspectRatio: "1 / 1", width: "100%" }}
+                        >
+                          {v.ok && v.imageUrl ? (
+                            <img
+                              src={v.imageUrl}
+                              alt={`${label} variant ${i + 1}`}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="p-4 flex flex-col items-center justify-center text-center">
+                              <p className="text-sm font-bold text-red-600 mb-1">Ошибка</p>
+                              <p className="text-[10px] text-neutral-500 leading-snug">
+                                {v.error?.slice(0, 200) || "Без подробностей."}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {v.ok && v.imageUrl && (
+                          <div className="p-2.5 flex flex-col gap-2">
+                            {(() => {
+                              const isBest = bestCreativeId === v.creativeId;
+                              const isSaving = savingBestId === v.creativeId;
+                              return (
+                                <button
+                                  onClick={() => v.creativeId && markAsBest(v.creativeId)}
+                                  disabled={isSaving || !v.creativeId}
+                                  className={clsx(
+                                    "w-full py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors",
+                                    isBest
+                                      ? "bg-amber-400 text-amber-950 hover:bg-amber-500"
+                                      : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200",
+                                    isSaving && "opacity-60 cursor-wait",
+                                  )}
+                                >
+                                  <Trophy className="w-3.5 h-3.5" />
+                                  {isBest ? "Лучший выбран" : "Этот лучший"}
+                                </button>
+                              );
+                            })()}
+                            <a
+                              href={v.imageUrl}
+                              download={`creative-${m}-${i + 1}.png`}
+                              className="w-full bg-hermes-500 hover:bg-hermes-600 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Скачать PNG
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              onClick={() => setPair(null)}
+              className="self-center text-xs font-semibold text-neutral-500 hover:text-neutral-700 underline underline-offset-4"
+            >
+              Сгенерировать заново
+            </button>
+          </div>
+        ) : pair ? (
+          // ---- TRIPLET PREVIEW (animated HTML mode): Claude / Gemini ----
+          // Image card (Imagen) is no longer here — static path uses the
+          // new variants grid above. Animated stays HTML×2.
           <div className={clsx(
             "relative z-10 mt-16 md:mt-0 grid grid-cols-1 gap-4 md:gap-5 w-full",
             pair.imagen
