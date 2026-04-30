@@ -289,7 +289,7 @@ export default function LandingPage() {
                >
                   <span className="flex items-center gap-1"><Check className="w-4 h-4 text-hermes-500" /> Без карты</span>
                   <span>•</span>
-                  <span className="flex items-center gap-1"><Gift className="w-4 h-4 text-amber-500" /> 12 импульсов в подарок</span>
+                  <span className="flex items-center gap-1"><Gift className="w-4 h-4 text-amber-500" /> 7 импульсов в подарок</span>
                   <span className="hidden sm:inline">•</span>
                   <span className="hidden sm:flex items-center gap-1"><RefreshCw className="w-4 h-4 text-neutral-600" /> Отмена в 1 клик</span>
                </motion.div>
@@ -802,7 +802,7 @@ export default function LandingPage() {
                   ) : registrationOpen ? (
                      <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
                         <button className="bg-white text-hermes-600 font-black text-xl px-12 py-6 rounded-2xl hover:scale-105 transition-transform flex items-center justify-center gap-3 shadow-2xl w-full sm:w-auto">
-                           Начать бесплатно (12 импульсов)
+                           Начать бесплатно (7 импульсов)
                            <Sparkles className="w-6 h-6 text-amber-500" />
                         </button>
                      </SignInButton>

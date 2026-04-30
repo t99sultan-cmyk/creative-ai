@@ -10,13 +10,9 @@
 
 /**
  * Impulses every new user gets on first sign-up.
- * 12 = enough for either:
- *   • 2 dual-model static generations (2 × 6 = 12), or
- *   • 1 dual-model static + 1 refine (6 + 2 = 8, with leftover), or
- *   • 1 dual-model animated + 1 refine (8 + 2 = 10, with leftover).
- * Keep in sync with landing copy ("12 импульсов в подарок").
+ * Keep in sync with landing copy.
  */
-export const SIGNUP_BONUS_IMPULSES = 12;
+export const SIGNUP_BONUS_IMPULSES = 7;
 
 /**
  * Per-generation impulse cost. Each click on "Сгенерировать" runs THREE

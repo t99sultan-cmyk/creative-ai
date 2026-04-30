@@ -8,7 +8,7 @@ export const users = pgTable("user", {
   // kept literal here because drizzle schema is evaluated at migration-gen
   // time and can't import runtime constants. If the bonus changes, bump
   // both values.
-  impulses: integer("impulses").default(12),
+  impulses: integer("impulses").default(7),
   image: text("image"),
   phone: text("phone"), // Phone number collected during onboarding (also used as WhatsApp contact)
   // Optional Telegram handle (without the @). Collected on the welcome
