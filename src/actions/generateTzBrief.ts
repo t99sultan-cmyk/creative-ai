@@ -56,37 +56,67 @@ export async function generateTzBrief(
     `Целевая аудитория: ${input.audience?.trim() || "—"}\n` +
     `Стиль и тон: ${input.style?.trim() || "—"}`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ role: "user", parts: [{ text: userMessage }] }],
-          generationConfig: { maxOutputTokens: 256, temperature: 0.7 },
-        }),
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("[generateTzBrief] gemini error:", res.status, text.slice(0, 300));
-      return { success: false, error: `Gemini вернул ${res.status}` };
+  // Primary: Gemini 3 Pro Preview (text). On transient 503/429/5xx,
+  // retry the same model with backoff; if it's still overloaded after
+  // 2 retries, fall back once to Gemini 3.1 Pro Preview (newer line,
+  // sometimes has spare capacity when 3-pro spikes).
+  const MODELS = ["gemini-3-pro-preview", "gemini-3.1-pro-preview"];
+  const BACKOFFS_MS = [800, 2500, 5000];
+
+  let lastError = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const model = attempt < 2 ? MODELS[0] : MODELS[1]; // last attempt switches model
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            contents: [{ role: "user", parts: [{ text: userMessage }] }],
+            generationConfig: { maxOutputTokens: 256, temperature: 0.7 },
+          }),
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      if (res.status === 503 || res.status === 429 || res.status >= 500) {
+        // Transient — wait and retry.
+        const text = await res.text().catch(() => "");
+        lastError = `Gemini ${res.status} (${model})`;
+        console.warn(`[generateTzBrief] ${lastError}, retrying in ${BACKOFFS_MS[attempt]}ms:`, text.slice(0, 200));
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt]));
+          continue;
+        }
+        return {
+          success: false,
+          error: "Серверы Gemini перегружены, попробуй ещё раз через минуту",
+        };
+      }
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("[generateTzBrief] gemini error:", res.status, text.slice(0, 300));
+        return { success: false, error: `Gemini вернул ${res.status}` };
+      }
+      const data = await res.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const brief = raw.replace(/^["«»\s]+|["«»\s]+$/g, "").trim();
+      if (!brief) {
+        return { success: false, error: "Пустой ответ от Gemini" };
+      }
+      return { success: true, brief: brief.slice(0, 240) };
+    } catch (err: any) {
+      lastError = err?.message || "fetch failed";
+      console.warn("[generateTzBrief] attempt failed:", lastError);
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt]));
+        continue;
+      }
     }
-    const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const brief = raw.replace(/^["«»\s]+|["«»\s]+$/g, "").trim();
-    if (!brief) {
-      return { success: false, error: "Пустой ответ от Gemini" };
-    }
-    return { success: true, brief: brief.slice(0, 240) };
-  } catch (err: any) {
-    console.error("[generateTzBrief] crashed:", err);
-    return {
-      success: false,
-      error: err?.message || "Не удалось сформировать ТЗ",
-    };
   }
+  return {
+    success: false,
+    error: lastError || "Не удалось сформировать ТЗ",
+  };
 }
