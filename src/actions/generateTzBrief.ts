@@ -12,15 +12,17 @@ import { auth } from "@clerk/nextjs/server";
  * Image 2). Keep it concise — long prompts hurt image-gen quality.
  */
 
-const SYSTEM_PROMPT = `You are a senior copywriter for paid social ads (Instagram / TikTok).
-Given 4 short fields about a product/campaign, write a single concise Russian brief (60-200 chars) optimized for an AI image generator.
+const SYSTEM_PROMPT = `You are a senior copywriter for PAID-SOCIAL AD CREATIVES (Instagram, TikTok, Kaspi).
+Given short fields about a product/campaign, write a single concise Russian brief (80-200 chars) for an AI image generator that will produce a SELLING ad creative — not a product catalog photo.
 
-The brief must:
-- Lead with the product noun
-- State the unique benefit / hook in punchy active voice
-- Reflect the audience tone implicitly (don't write "for X audience")
-- End with a one-word style cue
-- Read like a designer's brief, not marketing copy
+The brief MUST:
+- Specify a BOLD HEADLINE (2-6 words) the AI should render on the creative — punchy hook, not a product description
+- Hint at a sub-headline or price/discount callout (e.g. "−30%", "Бесплатная доставка", "Только сегодня")
+- Hint at a clear CTA element ("Купить", "Узнать", "Заказать")
+- Reflect audience tone (premium / молодёжный / семейный) IMPLICITLY through word choice
+- Match the city/market context if provided (currency, local style)
+
+The brief should read like a designer's TZ for a paid-social creative, NOT marketing prose. Lead with the product noun and weave in headline + price/discount + CTA hints.
 
 Return ONLY the brief text. No quotes, no commentary, no markdown.`;
 
@@ -29,6 +31,8 @@ interface TzBriefInput {
   benefit: string;
   audience: string;
   style: string;
+  /** Optional city or country the creative targets (free text). */
+  cityCountry?: string;
 }
 
 export async function generateTzBrief(
@@ -54,7 +58,10 @@ export async function generateTzBrief(
     `Что рекламируем: ${input.subject?.trim() || "—"}\n` +
     `Главная выгода / посыл: ${input.benefit?.trim() || "—"}\n` +
     `Целевая аудитория: ${input.audience?.trim() || "—"}\n` +
-    `Стиль и тон: ${input.style?.trim() || "—"}`;
+    `Стиль и тон: ${input.style?.trim() || "—"}` +
+    (input.cityCountry?.trim()
+      ? `\nГород или страна (рынок): ${input.cityCountry.trim()} — учти валюту и культурный контекст`
+      : "");
 
   // Primary: Gemini 3 Pro Preview (text). On transient 503/429/5xx,
   // retry the same model with backoff; if it's still overloaded after

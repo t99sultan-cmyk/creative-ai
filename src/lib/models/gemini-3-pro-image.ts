@@ -34,7 +34,16 @@ interface Gemini3ProImageInput {
   productImageMime?: string;
   /** Optional style references — each is a data: URL or raw base64. */
   referenceImagesBase64?: string[];
+  /** Region-specific instruction (currency, locale). Appended to prompt. */
+  regionHint?: string;
   format: Format;
+  /**
+   * True when the user picked a scene preset ("в использовании",
+   * "в интерьере", и т.д.). Suppresses the default "isolated studio
+   * hero centerpiece" directive — otherwise the model defaults to a
+   * catalog-style shot and ignores the scene composition.
+   */
+  sceneActive?: boolean;
 }
 
 export async function callGemini3ProImage(
@@ -43,23 +52,58 @@ export async function callGemini3ProImage(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is missing");
 
-  const aspectInstruction =
-    input.format === "9:16"
-      ? "Output a 9:16 vertical Instagram Story creative (1080x1920 or higher)."
-      : "Output a 1:1 square Instagram feed creative (1080x1080 or higher).";
+  const aspectInstruction = ((): string => {
+    switch (input.format) {
+      case "9:16":
+        return "Output a 9:16 vertical Instagram Story creative (1080x1920 or higher).";
+      case "3:4":
+        return "Output a 3:4 portrait creative (1080x1440 or higher) — standard Instagram feed portrait.";
+      case "1:1":
+        return "Output a 1:1 square Instagram feed creative (1080x1080 or higher).";
+      case "4:3":
+        return "Output a 4:3 landscape creative (1440x1080 or higher) — classic feed landscape.";
+      case "16:9":
+        return "Output a 16:9 horizontal creative (1920x1080 or higher) — YouTube / banner aspect.";
+    }
+  })();
 
   const fullPrompt =
     `${input.prompt}\n\n${aspectInstruction}\n` +
-    `Style: high-end advertising creative. Bold composition, modern typography, sales-driven layout. ` +
-    `If text appears, write it in Russian unless the brief asks otherwise — render it crisp and legible, ` +
-    `no garbled letters. ` +
+    (input.regionHint ? `${input.regionHint}\n` : "") +
+    // This is a PAID-SOCIAL AD CREATIVE, not a product shot. Drives
+    // clicks. Must include the standard components below.
+    `THIS IS AN ADVERTISING CREATIVE FOR PAID SOCIAL (Instagram / TikTok / Kaspi). ` +
+    `It is NOT a product catalog photo. It must SELL — drive clicks and purchases. ` +
+    `\n\nMandatory components:\n` +
+    `1) BOLD HEADLINE — large, high-contrast Russian copy at the top or middle ` +
+    `(unless the brief specifies English). Punchy 2-6 words. Communicates the hook.\n` +
+    `2) Supporting sub-headline OR price/discount callout — secondary size, ` +
+    `complementary contrast.\n` +
+    `3) Visual hierarchy — the eye should hit headline → product → price/CTA in ` +
+    `that order. Use scale, contrast, position, color blocking to enforce it.\n` +
+    `4) Strong CTA cue — button, badge, arrow, or pill ("Купить", "Узнать", ` +
+    `"-30%", "Только сегодня"), placed bottom or beside the price.\n` +
+    `5) Sales-driven aesthetic — saturated brand colors, bold sans-serif (Inter, ` +
+    `Bebas, Druk style) for headline, designed-not-typed feel. ` +
+    `\n\nText quality bar: every letter crisp and legible, no garbled fake-text, ` +
+    `no overlapping with the product. Russian by default unless brief overrides. ` +
     (input.productImageBase64
-      ? `THE PROVIDED PRODUCT IMAGE IS THE HERO of this creative — ` +
-        `place it as the visual centerpiece with cinematic studio lighting, ` +
-        `premium reflections, and dramatic but tasteful composition. ` +
-        `Preserve the product's exact shape, colors, and labels. Treat surrounding ` +
-        `elements (typography, accent shapes, gradient backgrounds) as supporting ` +
-        `cast that amplifies the product without competing with it.`
+      ? input.sceneActive
+        ? `THE PROVIDED PRODUCT IMAGE is the reference for the product's exact ` +
+          `shape, colors, materials, and labels — preserve those EXACTLY. But the ` +
+          `COMPOSITION must follow the scene direction in the brief above (e.g. ` +
+          `"in use by a person", "in real environment", "lifestyle moment"). ` +
+          `DO NOT default to an isolated studio catalog shot — render the product ` +
+          `WITHIN the described real-world context: hands holding/wearing/using it, ` +
+          `or sitting naturally in the described environment. The scene direction ` +
+          `wins over any "centerpiece" instinct. People, hands, props, and ambient ` +
+          `lighting from the described setting are mandatory if the brief says so.`
+        : `THE PROVIDED PRODUCT IMAGE IS THE HERO of this creative — ` +
+          `place it as the visual centerpiece with cinematic studio lighting, ` +
+          `premium reflections, and dramatic but tasteful composition. ` +
+          `Preserve the product's exact shape, colors, and labels. Treat surrounding ` +
+          `elements (typography, accent shapes, gradient backgrounds) as supporting ` +
+          `cast that amplifies the product without competing with it.`
       : `Compose a strong standalone advertising visual.`);
 
   type Part =

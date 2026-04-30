@@ -22,6 +22,7 @@ import {
 } from "@/lib/generation-models";
 import { callGptImage } from "@/lib/models/gpt-image";
 import { callGemini3ProImage } from "@/lib/models/gemini-3-pro-image";
+import { getScene } from "@/lib/categories";
 
 export const maxDuration = 300;
 
@@ -106,7 +107,30 @@ export async function POST(req: Request) {
       remixHtmlCode,
       remixScreenshotBase64,
       strictClone,
+      cityCountry,
+      categoryId,
+      sceneId,
     } = body;
+    const scene = getScene(categoryId, sceneId);
+
+    // City/country free-text hint for the image-gen models. We don't
+    // try to map this to a fixed currency anymore — modern multimodal
+    // models (Gemini 3 Pro Image / GPT Image 2) reliably infer the
+    // local currency, language, and cultural cues from a city name.
+    const cityHint =
+      typeof cityCountry === "string" && cityCountry.trim().length > 0
+        ? `Target market: ${cityCountry.trim()}. If a price appears on the creative, use this market's local currency. Background details, signage, or environmental cues should match the local culture.`
+        : "";
+
+    // Combine scene-preset clause with the user's brief. Goes to BOTH
+    // image-gen models so they share the same composition direction.
+    // Scene direction is placed FIRST and marked MANDATORY — otherwise
+    // the model's default "studio hero centerpiece" wiring drowns it
+    // out and produces a clean catalog shot instead of the in-use /
+    // lifestyle composition the user picked.
+    const enrichedPrompt = scene
+      ? `MANDATORY SCENE COMPOSITION (overrides any default catalog/studio framing): ${scene.prompt}\n\nBrief: ${prompt}`
+      : prompt;
 
     // Variant count (static image-gen path only): 1, 2, or 3 images per
     // model. Default to 2. Anything else gets clamped — the router
@@ -254,11 +278,13 @@ export async function POST(req: Request) {
         tasks.push({
           model: "gemini-3-pro-image",
           promise: callGemini3ProImage({
-            prompt,
+            prompt: enrichedPrompt,
             productImageBase64,
             productImageMime,
             referenceImagesBase64,
+            regionHint: cityHint,
             format: format as "9:16" | "1:1",
+            sceneActive: !!scene,
           }),
         });
       }
@@ -266,11 +292,13 @@ export async function POST(req: Request) {
         tasks.push({
           model: "gpt-image-2",
           promise: callGptImage({
-            prompt,
+            prompt: enrichedPrompt,
             productImageBase64,
             productImageMime,
             referenceImagesBase64,
+            regionHint: cityHint,
             format: format as "9:16" | "1:1",
+            sceneActive: !!scene,
           }),
         });
       }

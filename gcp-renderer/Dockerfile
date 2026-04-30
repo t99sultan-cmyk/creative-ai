@@ -24,7 +24,7 @@ RUN mkdir -p /usr/share/fonts/truetype/apple-emoji && \
     chmod 644 /usr/share/fonts/truetype/apple-emoji/AppleColorEmoji.ttf && \
     fc-cache -f -v
 
-# Install Google Chrome Stable
+# Install Google Chrome Stable (used by timecut for /gcp/render/task)
 RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
     && apt-get update \
@@ -33,13 +33,20 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
 
 WORKDIR /app
 
+# Skip Remotion's anonymous telemetry (mostly noise in our logs).
+ENV REMOTION_DISABLE_TELEMETRY=1
+
 COPY package*.json ./
+# `npm install` pulls @remotion/renderer which downloads its own
+# Chromium-Headless-Shell binary (~150 MB). This adds 30-60s to build
+# time but is the supported way to run Remotion server-side.
 RUN npm install
 
 COPY server.js ./
+COPY remotion ./remotion
 
 # Create output tmp directory
-RUN mkdir out
+RUN mkdir -p out
 
 ENV PORT=8080
 EXPOSE 8080

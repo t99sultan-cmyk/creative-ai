@@ -42,6 +42,7 @@ const KZT_PER_USD = 480;
 const GPT_IMAGE_USD_BY_SIZE: Record<string, number> = {
   "1024x1024": 0.04,
   "1024x1536": 0.05,
+  "1536x1024": 0.05,
 };
 
 interface GptImageInput {
@@ -52,29 +53,68 @@ interface GptImageInput {
   productImageMime?: string;
   /** Optional style references — data: URL or raw base64. */
   referenceImagesBase64?: string[];
+  /** Region-specific instruction (currency, locale). Appended to prompt. */
+  regionHint?: string;
   format: Format;
+  /**
+   * True when the user picked a scene preset ("в использовании",
+   * "в интерьере", и т.д.). Suppresses the default "isolated studio
+   * hero centerpiece" directive so the model actually renders a
+   * person using / interacting with the product.
+   */
+  sceneActive?: boolean;
 }
 
-function sizeFor(format: Format): "1024x1024" | "1024x1536" {
-  return format === "1:1" ? "1024x1024" : "1024x1536";
+function sizeFor(format: Format): "1024x1024" | "1024x1536" | "1536x1024" {
+  // GPT Image 2 has only three pixel sizes — pick the closest match
+  // for each aspect ratio. 3:4 ≈ 1024x1366 → use 1024x1536 (slightly
+  // narrower); 4:3 ≈ 1366x1024 → use 1536x1024 (slightly wider).
+  switch (format) {
+    case "1:1":
+      return "1024x1024";
+    case "9:16":
+    case "3:4":
+      return "1024x1536";
+    case "16:9":
+    case "4:3":
+      return "1536x1024";
+  }
 }
 
-function buildPrompt(prompt: string, format: Format, hasProduct: boolean, hasReference: boolean): string {
+function buildPrompt(prompt: string, format: Format, hasProduct: boolean, hasReference: boolean, sceneActive: boolean): string {
   const aspectInstruction =
     format === "9:16"
       ? "Output a 9:16 vertical Instagram Story creative."
       : "Output a 1:1 square Instagram feed creative.";
   return (
     `${prompt}\n\n${aspectInstruction}\n` +
-    `Style: high-end advertising creative. Bold composition, modern typography, sales-driven layout. ` +
-    `If text appears, write it in Russian unless the brief asks otherwise — render it crisp and legible. ` +
+    `THIS IS AN ADVERTISING CREATIVE FOR PAID SOCIAL (Instagram / TikTok / Kaspi). ` +
+    `It is NOT a product catalog photo. It must SELL — drive clicks and purchases.\n\n` +
+    `Mandatory components:\n` +
+    `1) BOLD HEADLINE — large high-contrast Russian copy (2-6 words) at top or middle. Punchy hook.\n` +
+    `2) Supporting sub-headline or price/discount callout in complementary size.\n` +
+    `3) Visual hierarchy: headline → product → price/CTA. Enforce with scale, contrast, color blocking.\n` +
+    `4) Strong CTA cue — button, badge, arrow, or pill ("Купить", "-30%", "Только сегодня") bottom area.\n` +
+    `5) Sales-driven aesthetic — saturated brand colors, bold sans-serif headlines, designed-not-typed feel.\n\n` +
+    `Text quality bar: every letter crisp and legible, no garbled fake-text, no overlap with product. ` +
+    `Russian by default unless the brief overrides. ` +
     (hasProduct
-      ? `THE PROVIDED PRODUCT IMAGE IS THE HERO of this creative — ` +
-        `place it as the visual centerpiece with cinematic studio lighting, ` +
-        `premium reflections, and dramatic but tasteful composition. ` +
-        `Preserve the product's exact shape, colors, and labels. Surrounding ` +
-        `typography and accent shapes are supporting cast that amplifies the ` +
-        `product without competing with it.`
+      ? sceneActive
+        ? `THE PROVIDED PRODUCT IMAGE is the reference for the product's exact ` +
+          `shape, colors, materials, and labels — preserve those EXACTLY. But the ` +
+          `COMPOSITION must follow the scene direction in the brief above (e.g. ` +
+          `"in use by a person", "in real environment", "lifestyle moment"). ` +
+          `DO NOT default to an isolated studio catalog shot — render the product ` +
+          `WITHIN the described real-world context: hands holding/wearing/using it, ` +
+          `or sitting naturally in the described environment. The scene direction ` +
+          `wins over any "centerpiece" instinct. People, hands, props, and ambient ` +
+          `lighting from the described setting are mandatory if the brief says so.`
+        : `THE PROVIDED PRODUCT IMAGE IS THE HERO of this creative — ` +
+          `place it as the visual centerpiece with cinematic studio lighting, ` +
+          `premium reflections, and dramatic but tasteful composition. ` +
+          `Preserve the product's exact shape, colors, and labels. Surrounding ` +
+          `typography and accent shapes are supporting cast that amplifies the ` +
+          `product without competing with it.`
       : `Compose a strong standalone advertising visual.`) +
     (hasReference
       ? ` Reference image(s) attached AFTER the product — match their visual STYLE ` +
@@ -91,12 +131,14 @@ export async function callGptImage(
 
   const size = sizeFor(input.format);
   const refs = (input.referenceImagesBase64 ?? []).filter((s) => typeof s === "string" && s.length > 0);
-  const prompt = buildPrompt(
-    input.prompt,
-    input.format,
-    !!input.productImageBase64,
-    refs.length > 0,
-  );
+  const prompt =
+    buildPrompt(
+      input.prompt,
+      input.format,
+      !!input.productImageBase64,
+      refs.length > 0,
+      !!input.sceneActive,
+    ) + (input.regionHint ? `\n${input.regionHint}` : "");
 
   // Helper: data: URL or raw base64 → { mime, raw, ext }.
   function decodeImage(src: string, fallbackMime: string) {

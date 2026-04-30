@@ -43,6 +43,14 @@ export async function getUserCreatives() {
         format: creatives.format,
         cost: creatives.cost,
         videoUrl: creatives.videoUrl,
+        // imageUrl was missing here — new static creatives (Gemini 3 Pro
+        // Image / GPT Image 2) store the result as a data: URL in this
+        // column with htmlCode=null. Without it, history thumbnails
+        // rendered as empty white iframes.
+        imageUrl: creatives.imageUrl,
+        // model lets us tag the badge correctly when re-opening from
+        // history into the pair view.
+        model: creatives.model,
         feedbackScore: creatives.feedbackScore,
         isPublic: creatives.isPublic,
         createdAt: creatives.createdAt,

@@ -7,8 +7,12 @@ import { TemplatesModal } from "@/components/TemplatesModal";
 import { STATIC_DUAL_COST, VIDEO_GEN_COST } from "@/lib/pricing";
 import { generateTzBrief } from "@/actions/generateTzBrief";
 import { polishProductPhoto } from "@/actions/polishProductPhoto";
+import { refineImage } from "@/actions/refineImage";
+import { analyzeProductForBrief } from "@/actions/analyzeProductForBrief";
+import { ANIMATION_PRESETS, type AnimationPresetId } from "@/lib/models/animation-presets";
+import { CATEGORIES, getCategory, type CategoryId } from "@/lib/categories";
+import { ManualImageEditor } from "@/components/editor/ManualImageEditor";
 import clsx from "clsx";
-import { removeBackground } from "@imgly/background-removal";
 import { useUser } from "@clerk/nextjs";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
@@ -22,12 +26,20 @@ import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
-type Format = "1:1" | "9:16";
+type Format = "9:16" | "3:4" | "1:1" | "4:3" | "16:9";
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [remixSourceCode, setRemixSourceCode] = useState<string | null>(null);
   const [format, setFormat] = useState<Format>("9:16");
+  // Product category — controls which scene presets are shown to the
+  // user. AI auto-detects from the uploaded photo (analyzeProductForBrief
+  // returns `category`); user can override via the picker. Default
+  // "other" so the UI always has SOMETHING to show even if detection
+  // hasn't finished yet.
+  const [categoryId, setCategoryId] = useState<CategoryId>("other");
+  // Scene id (within the current category). null = no scene picked.
+  const [sceneId, setSceneId] = useState<string | null>(null);
   // Animation removed in this iteration — only static. The constant
   // is kept so we don't have to gut every conditional in the file
   // (TypeScript will tree-shake the dead branches).
@@ -41,11 +53,54 @@ export default function Home() {
   
   const [referenceImages, setReferenceImages] = useState<{ file: File; dataUrl: string }[]>([]);
   const [productImages, setProductImages] = useState<{ file: File; dataUrl: string; original?: string }[]>([]);
-  const [pendingProductFile, setPendingProductFile] = useState<{ file: File; dataUrl: string } | null>(null);
   // Per-product-photo polish state. Indices line up with productImages.
   // `idle` (just uploaded), `polishing`, `polished`, `failed`.
   type PolishState = "idle" | "polishing" | "polished" | "failed";
   const [polishStateByIndex, setPolishStateByIndex] = useState<Record<number, PolishState>>({});
+
+  // AI product recognition + brief proposal — runs in parallel with
+  // polish right after a product photo is confirmed. Banner shows the
+  // recognized product, TZ textarea auto-fills with the proposed brief
+  // (only if the textarea is currently empty — never overwrite user
+  // typing).
+  type AnalyzeState =
+    | { kind: "idle" }
+    | { kind: "analyzing" }
+    | { kind: "ready"; product: string; brief: string }
+    | { kind: "failed"; error: string };
+  const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ kind: "idle" });
+
+  async function runAnalyzeForLatest(imageDataUrl: string) {
+    setAnalyzeState({ kind: "analyzing" });
+    try {
+      const res = await analyzeProductForBrief(imageDataUrl);
+      if (res.success) {
+        setAnalyzeState({ kind: "ready", product: res.product, brief: res.brief });
+        // Auto-pick the product category from analysis. Falls back to
+        // "other" if Gemini returned a value we don't recognise.
+        const detectedCat = CATEGORIES.find((c) => c.id === res.category);
+        if (detectedCat) {
+          setCategoryId(detectedCat.id);
+          setSceneId(null); // reset scene since the category just changed
+        }
+        // Auto-fill TZ textarea (only if empty, never overwrite user typing).
+        setPrompt((cur) => (cur.trim().length === 0 && res.brief ? res.brief : cur));
+        // Auto-fill the 4-question helper too — same rule: only if empty.
+        setTzSubject((cur) => (cur.trim().length === 0 && res.subject ? res.subject : cur));
+        setTzBenefit((cur) => (cur.trim().length === 0 && res.benefit ? res.benefit : cur));
+        setTzAudience((cur) => (cur.trim().length === 0 && res.audience ? res.audience : cur));
+        setTzStyle((cur) => (cur.trim().length === 0 && res.style ? res.style : cur));
+        // Open the accordion so the user sees what was filled.
+        if (res.subject || res.benefit || res.audience || res.style) {
+          setTzHelperOpen(true);
+        }
+      } else {
+        setAnalyzeState({ kind: "failed", error: res.error });
+      }
+    } catch (e: any) {
+      setAnalyzeState({ kind: "failed", error: e?.message || "analyze failed" });
+    }
+  }
   // strictClone is no longer a user choice — when there's a reference
   // image, we ALWAYS pass strict-clone=true to /api/generate. Without
   // it the model treats the reference as soft inspiration and makes
@@ -55,7 +110,6 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0); 
   const [loadingText, setLoadingText] = useState("Инициируем сервера...");
-  const [isRemovingBg, setIsRemovingBg] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showVideoInstruction, setShowVideoInstruction] = useState(false);
   
@@ -134,11 +188,15 @@ export default function Home() {
   const [tzBenefit, setTzBenefit] = useState("");
   const [tzAudience, setTzAudience] = useState("");
   const [tzStyle, setTzStyle] = useState("");
+  // Free-text "Город или страна" — passed verbatim to image-gen models.
+  // Replaces the old standalone Region dropdown. Models infer the
+  // currency from the city name naturally.
+  const [tzCity, setTzCity] = useState("");
   const [tzBuilding, setTzBuilding] = useState(false);
   const [tzError, setTzError] = useState<string | null>(null);
   async function buildTzFromHelper() {
     setTzError(null);
-    if (!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim()) {
+    if (!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim() && !tzCity.trim()) {
       return;
     }
     setTzBuilding(true);
@@ -148,6 +206,7 @@ export default function Home() {
         benefit: tzBenefit,
         audience: tzAudience,
         style: tzStyle,
+        cityCountry: tzCity,
       });
       if (result.success) {
         setPrompt(result.brief);
@@ -183,6 +242,199 @@ export default function Home() {
       }
     } finally {
       setSavingBestId(null);
+    }
+  }
+
+  // ==================== VIDEO PIPELINE (LOCAL DEV) ====================
+  // Animation / text-overlay / sound features. Routed through fal.ai
+  // (Seedance + MMAudio) and Cloud Run Remotion. Available locally
+  // while we iterate; not yet enabled on prod.
+  type AnimState =
+    | { kind: "submitting" }
+    | { kind: "queued"; requestId: string }
+    | { kind: "in_progress"; requestId: string }
+    | { kind: "completed"; videoUrl: string }
+    | { kind: "failed"; error: string };
+  const [animByCreative, setAnimByCreative] = useState<Record<string, AnimState>>({});
+  const [presetByCreative, setPresetByCreative] = useState<Record<string, AnimationPresetId>>({});
+  const [durationByCreative, setDurationByCreative] = useState<Record<string, 5 | 10>>({});
+
+  type OverlayState =
+    | { kind: "rendering" }
+    | { kind: "ready"; videoUrl: string }
+    | { kind: "failed"; error: string };
+  const [overlayTextByCreative, setOverlayTextByCreative] = useState<Record<string, string>>({});
+  const [overlayByCreative, setOverlayByCreative] = useState<Record<string, OverlayState>>({});
+
+  type SoundState =
+    | { kind: "rendering" }
+    | { kind: "ready"; videoUrl: string }
+    | { kind: "failed"; error: string };
+  const [soundByCreative, setSoundByCreative] = useState<Record<string, SoundState>>({});
+
+  // Refine state — user can iterate on the static image with text edits
+  // before animating ("change text to X", "darker bg", etc.).
+  type RefineState =
+    | { kind: "idle" }
+    | { kind: "open" }       // form expanded, user typing
+    | { kind: "rendering" }  // call in flight
+    | { kind: "failed"; error: string };
+  const [refineByCreative, setRefineByCreative] = useState<Record<string, RefineState>>({});
+  const [refineTextByCreative, setRefineTextByCreative] = useState<Record<string, string>>({});
+
+  // Manual editor — direct text-overlay manipulation modal. Stores
+  // the currently-being-edited variant so the modal knows which image
+  // to load and which slot to save the result into.
+  const [manualEditTarget, setManualEditTarget] = useState<{ creativeId: string; imageUrl: string } | null>(null);
+
+  function applyManualSave(newDataUrl: string) {
+    if (!manualEditTarget) return;
+    const targetId = manualEditTarget.creativeId;
+    setPair((prev) =>
+      prev
+        ? {
+            ...prev,
+            variants:
+              prev.variants?.map((v) =>
+                v.creativeId === targetId ? { ...v, imageUrl: newDataUrl } : v,
+              ) ?? null,
+          }
+        : prev,
+    );
+    setManualEditTarget(null);
+  }
+
+  function toggleRefine(creativeId: string) {
+    setRefineByCreative((prev) => {
+      const cur = prev[creativeId];
+      if (cur?.kind === "rendering") return prev;
+      const next = cur?.kind === "open" ? { kind: "idle" as const } : { kind: "open" as const };
+      return { ...prev, [creativeId]: next };
+    });
+  }
+
+  async function startRefine(creativeId: string) {
+    const text = (refineTextByCreative[creativeId] || "").trim();
+    if (!text) return;
+    setRefineByCreative((prev) => ({ ...prev, [creativeId]: { kind: "rendering" } }));
+    try {
+      const res = await refineImage(creativeId, text);
+      if (res.success) {
+        // Replace the imageUrl on the matching variant in pair state.
+        setPair((prev) =>
+          prev
+            ? {
+                ...prev,
+                variants:
+                  prev.variants?.map((v) =>
+                    v.creativeId === creativeId ? { ...v, imageUrl: res.imageUrl } : v,
+                  ) ?? null,
+              }
+            : prev,
+        );
+        setRefineByCreative((prev) => ({ ...prev, [creativeId]: { kind: "idle" } }));
+        setRefineTextByCreative((prev) => ({ ...prev, [creativeId]: "" }));
+      } else {
+        setRefineByCreative((prev) => ({
+          ...prev,
+          [creativeId]: { kind: "failed", error: res.error },
+        }));
+      }
+    } catch (e: any) {
+      setRefineByCreative((prev) => ({
+        ...prev,
+        [creativeId]: { kind: "failed", error: e?.message || "refine error" },
+      }));
+    }
+  }
+
+  // Poll fal.ai status for any in-flight animation requests every 4s.
+  useEffect(() => {
+    const inflight = Object.entries(animByCreative)
+      .filter(([, st]) => st.kind === "queued" || st.kind === "in_progress")
+      .map(([cid, st]) => ({ creativeId: cid, requestId: (st as { requestId: string }).requestId }));
+    if (inflight.length === 0) return;
+    let cancelled = false;
+    const t = setInterval(async () => {
+      for (const { creativeId, requestId } of inflight) {
+        try {
+          const r = await fetch(`/api/animate/status?id=${encodeURIComponent(requestId)}`);
+          const data = await r.json();
+          if (cancelled) return;
+          if (data.state === "completed" && data.videoUrl) {
+            setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "completed", videoUrl: data.videoUrl } }));
+          } else if (data.state === "failed") {
+            setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: data.error || "fal.ai error" } }));
+          } else if (data.state === "in_progress") {
+            setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "in_progress", requestId } }));
+          }
+        } catch (e) {
+          console.warn("[animate-poll]", e);
+        }
+      }
+    }, 4000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [animByCreative]);
+
+  async function startAnimate(creativeId: string) {
+    if (!creativeId) return;
+    const existing = animByCreative[creativeId];
+    if (existing && existing.kind !== "failed") return;
+    const presetId: AnimationPresetId = presetByCreative[creativeId] ?? "subtle";
+    const durationSec = durationByCreative[creativeId] ?? 5;
+    setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "submitting" } }));
+    try {
+      const res = await fetch("/api/animate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creativeId, presetId, durationSec }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.requestId) throw new Error(data?.error || `HTTP ${res.status}`);
+      setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "queued", requestId: data.requestId } }));
+    } catch (e: any) {
+      setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: e?.message || "submit failed" } }));
+    }
+  }
+
+  async function startTextOverlay(creativeId: string, sourceVideoUrl: string) {
+    const text = (overlayTextByCreative[creativeId] || "").trim();
+    if (!text) return;
+    setOverlayByCreative((p) => ({ ...p, [creativeId]: { kind: "rendering" } }));
+    try {
+      const res = await fetch("/api/text-overlay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: sourceVideoUrl,
+          text,
+          width: 1080,
+          height: format === "1:1" ? 1080 : 1920,
+          durationSec: 5,
+          fps: 30,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.videoUrl) throw new Error(data?.error || `HTTP ${res.status}`);
+      setOverlayByCreative((p) => ({ ...p, [creativeId]: { kind: "ready", videoUrl: data.videoUrl } }));
+    } catch (e: any) {
+      setOverlayByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: e?.message || "render failed" } }));
+    }
+  }
+
+  async function startAddSound(creativeId: string, sourceVideoUrl: string) {
+    setSoundByCreative((p) => ({ ...p, [creativeId]: { kind: "rendering" } }));
+    try {
+      const res = await fetch("/api/sound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: sourceVideoUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.videoUrl) throw new Error(data?.error || `HTTP ${res.status}`);
+      setSoundByCreative((p) => ({ ...p, [creativeId]: { kind: "ready", videoUrl: data.videoUrl } }));
+    } catch (e: any) {
+      setSoundByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: e?.message || "render failed" } }));
     }
   }
   
@@ -314,7 +566,7 @@ export default function Home() {
     });
   };
 
-  const isUIBlocked = isLoading || isRemovingBg || isRecording || isRedeeming;
+  const isUIBlocked = isLoading || isRecording || isRedeeming;
 
   // Global Background Render Poller (Persists across page refresh!)
   useEffect(() => {
@@ -548,6 +800,14 @@ export default function Home() {
     const savedFormat = localStorage.getItem("creative_format") as Format;
     if (savedFormat) setFormat(savedFormat);
 
+    const savedCategory = localStorage.getItem("creative_category") as CategoryId;
+    if (savedCategory && CATEGORIES.some((c) => c.id === savedCategory)) setCategoryId(savedCategory);
+
+    const savedScene = localStorage.getItem("creative_scene");
+    if (savedScene) setSceneId(savedScene);
+
+    const savedCity = localStorage.getItem("creative_city");
+    if (savedCity) setTzCity(savedCity);
   }, []);
 
   useEffect(() => {
@@ -557,6 +817,20 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem("creative_format", format);
   }, [format]);
+
+  useEffect(() => {
+    localStorage.setItem("creative_category", categoryId);
+  }, [categoryId]);
+
+  useEffect(() => {
+    if (sceneId) localStorage.setItem("creative_scene", sceneId);
+    else localStorage.removeItem("creative_scene");
+  }, [sceneId]);
+
+  useEffect(() => {
+    if (tzCity.trim()) localStorage.setItem("creative_city", tzCity);
+    else localStorage.removeItem("creative_city");
+  }, [tzCity]);
 
   // Handle Progress Timer (Percentage 0 to 95) with Dynamic Texts
   useEffect(() => {
@@ -587,13 +861,21 @@ export default function Home() {
     setPrompt("");
     setReferenceImages([]);
     setProductImages([]);
-    setPendingProductFile(null);
     setCode(null);
     setActiveCreativeId(null);
     setRemixSourceCode(null);
     setError("");
     setPair(null);
     setBestCreativeId(null);
+    setAnimByCreative({});
+    setPresetByCreative({});
+    setOverlayTextByCreative({});
+    setOverlayByCreative({});
+    setSoundByCreative({});
+    setRefineByCreative({});
+    setRefineTextByCreative({});
+    setDurationByCreative({});
+    setAnalyzeState({ kind: "idle" });
     setVideoJob(null);
     localStorage.removeItem("creative_prompt");
   };
@@ -630,55 +912,54 @@ export default function Home() {
 
     try {
       const webpDataUrl = await optimizeImageToWebP(file);
-      setPendingProductFile({ file, dataUrl: webpDataUrl });
-    } catch(err) {
+      const target = { file, dataUrl: webpDataUrl };
+      // Direct insert — no intermediate "БЕЗ ФОНА / ОРИГИНАЛ" screen.
+      // Polish + analyze are kicked off in parallel; the user sees a
+      // spinner on the thumbnail and the recognized-product banner
+      // appears within ~15 sec.
+      let assignedIdx = -1;
+      setProductImages((prev) => {
+        assignedIdx = prev.length;
+        return [...prev, target];
+      });
+      queueMicrotask(() => {
+        if (assignedIdx >= 0) {
+          void runPolishForIndex(assignedIdx, target);
+          void runAnalyzeForLatest(target.dataUrl);
+        }
+      });
+    } catch (err) {
       console.error(err);
     }
-    e.target.value = '';
+    e.target.value = "";
   };
 
-  // Background polish — runs Nano Banana studio enhance on the freshly
-  // confirmed product photo. We push the original into `productImages`
-  // first, then swap in the polished version once Gemini returns. If
-  // it fails, the original stays. The user can revert with the "↩
-  // Оригинал" button on the thumbnail.
-  async function runPolishForLatest() {
-    setPolishStateByIndex((prev) => {
-      // Find the newly-added product photo's index (last item).
-      // We can't read productImages here cleanly because of stale-state,
-      // so we rely on functional update inside fetch result instead.
-      return prev;
-    });
-    setProductImages((prev) => {
-      const idx = prev.length - 1;
-      if (idx < 0) return prev;
-      // Mark as polishing.
-      setPolishStateByIndex((s) => ({ ...s, [idx]: "polishing" }));
-      // Kick the polish call (don't await — we're inside a state setter).
-      const target = prev[idx];
-      void (async () => {
-        try {
-          const result = await polishProductPhoto(target.dataUrl);
-          if (result.success) {
-            const polishedDataUrl = `data:${result.mimeType};base64,${result.imageBase64}`;
-            setProductImages((cur) => {
-              if (cur[idx]?.dataUrl !== target.dataUrl) return cur; // gone or replaced
-              const next = [...cur];
-              next[idx] = { ...cur[idx], original: target.dataUrl, dataUrl: polishedDataUrl };
-              return next;
-            });
-            setPolishStateByIndex((s) => ({ ...s, [idx]: "polished" }));
-          } else {
-            console.warn("[polish] failed:", result.error);
-            setPolishStateByIndex((s) => ({ ...s, [idx]: "failed" }));
-          }
-        } catch (e) {
-          console.warn("[polish] crashed:", e);
-          setPolishStateByIndex((s) => ({ ...s, [idx]: "failed" }));
-        }
-      })();
-      return prev;
-    });
+  // Background polish — runs Nano Banana studio enhance on a product
+  // photo at a known index. Caller passes idx + the source dataUrl
+  // (captured at confirm time, no race). We never call setState from
+  // inside another setState's updater — that triggers React's
+  // "setState while rendering another component" warning.
+  async function runPolishForIndex(idx: number, target: { dataUrl: string }) {
+    setPolishStateByIndex((s) => ({ ...s, [idx]: "polishing" }));
+    try {
+      const result = await polishProductPhoto(target.dataUrl);
+      if (result.success) {
+        const polishedDataUrl = `data:${result.mimeType};base64,${result.imageBase64}`;
+        setProductImages((cur) => {
+          if (cur[idx]?.dataUrl !== target.dataUrl) return cur; // gone or replaced
+          const next = [...cur];
+          next[idx] = { ...cur[idx], original: target.dataUrl, dataUrl: polishedDataUrl };
+          return next;
+        });
+        setPolishStateByIndex((s) => ({ ...s, [idx]: "polished" }));
+      } else {
+        console.warn("[polish] failed:", result.error);
+        setPolishStateByIndex((s) => ({ ...s, [idx]: "failed" }));
+      }
+    } catch (e) {
+      console.warn("[polish] crashed:", e);
+      setPolishStateByIndex((s) => ({ ...s, [idx]: "failed" }));
+    }
   }
 
   function revertPolish(index: number) {
@@ -691,39 +972,6 @@ export default function Home() {
     });
     setPolishStateByIndex((s) => ({ ...s, [index]: "idle" }));
   }
-
-  const confirmProductAsIs = () => {
-    if (!pendingProductFile) return;
-    setProductImages(prev => [...prev, pendingProductFile]);
-    setPendingProductFile(null);
-    runPolishForLatest();
-  };
-
-  const confirmProductCut = async () => {
-    if (!pendingProductFile) return;
-    setIsRemovingBg(true);
-    setError("");
-
-    try {
-      const sourceUrl = URL.createObjectURL(pendingProductFile.file);
-      const blob = await removeBackground(sourceUrl);
-
-      const webpDataUrl = await optimizeImageToWebP(blob);
-      setProductImages(prev => [...prev, { file: blob as File, dataUrl: webpDataUrl }]);
-    } catch (err) {
-      console.error("BG removal failed", err);
-      setError("Не удалось удалить фон. Загружен оригинал.");
-      setProductImages(prev => [...prev, pendingProductFile]);
-    } finally {
-      setIsRemovingBg(false);
-      setPendingProductFile(null);
-      runPolishForLatest();
-    }
-  };
-
-  const cancelPendingProduct = () => {
-    setPendingProductFile(null);
-  };
 
   const removeReference = (index: number) => {
     setReferenceImages(prev => prev.filter((_, i) => i !== index));
@@ -802,6 +1050,9 @@ export default function Home() {
             remixHtmlCode: htmlCodeToRemix,
             remixScreenshotBase64,
             strictClone: referenceImages.length > 0,
+            cityCountry: tzCity,
+            categoryId,
+            sceneId,
           }),
           signal: controller.signal,
         });
@@ -1238,12 +1489,24 @@ export default function Home() {
     }
   };
 
+  // CSS aspect-ratio string for any of our 5 formats. Used by tile
+  // wrappers in the result grid and history thumbnails.
+  function aspectCss(f: Format): string {
+    return f.replace(":", " / ");
+  }
+
   const getCanvasStyle = () => {
     switch (format) {
       case "1:1":
         return { aspectRatio: "1 / 1", width: "100%", maxWidth: "500px", maxHeight: "500px" };
       case "9:16":
         return { aspectRatio: "9 / 16", width: "100%", maxWidth: "360px", maxHeight: "640px" };
+      case "3:4":
+        return { aspectRatio: "3 / 4", width: "100%", maxWidth: "420px", maxHeight: "560px" };
+      case "4:3":
+        return { aspectRatio: "4 / 3", width: "100%", maxWidth: "560px", maxHeight: "420px" };
+      case "16:9":
+        return { aspectRatio: "16 / 9", width: "100%", maxWidth: "640px", maxHeight: "360px" };
     }
   };
 
@@ -1419,19 +1682,34 @@ export default function Home() {
                                    ? "aspect-[9/16] w-[min(200px,100%)] sm:w-[200px]"
                                    : "aspect-square w-[min(200px,100%)] sm:w-[200px]",
                                )}>
-                                  <iframe
-                                     srcDoc={item.htmlCode}
-                                     loading="lazy"
-                                     title={`Creative ${item.id}`}
-                                     referrerPolicy="no-referrer"
-                                     className="absolute inset-0 border-0 pointer-events-none origin-top-left"
-                                     style={{
+                                  {item.imageUrl ? (
+                                    // New static creatives: a finished PNG (data URL).
+                                    // Just render <img>, no iframe scaling needed.
+                                    <img
+                                      src={item.imageUrl}
+                                      alt={`Creative ${item.id}`}
+                                      loading="lazy"
+                                      className="absolute inset-0 w-full h-full object-contain bg-white"
+                                    />
+                                  ) : item.htmlCode ? (
+                                    <iframe
+                                      srcDoc={item.htmlCode}
+                                      loading="lazy"
+                                      title={`Creative ${item.id}`}
+                                      referrerPolicy="no-referrer"
+                                      className="absolute inset-0 border-0 pointer-events-none origin-top-left"
+                                      style={{
                                         width: isVertical ? '400px' : '500px',
                                         height: isVertical ? '711px' : '500px',
                                         transform: isVertical ? 'scale(0.5)' : 'scale(0.4)',
-                                     }}
-                                     sandbox="allow-scripts"
-                                  />
+                                      }}
+                                      sandbox="allow-scripts"
+                                    />
+                                  ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-400">
+                                      Нет превью
+                                    </div>
+                                  )}
                                   <div className="absolute inset-0 bg-transparent z-10" />
                                </div>
 
@@ -1453,10 +1731,38 @@ export default function Home() {
                                {/* Hover overlay */}
                                <div
                                  onClick={async () => {
-                                   // Ensure htmlCode is loaded before switching canvas.
-                                   // It's usually fetched by the lazy-loader when the
-                                   // modal opened, but if the user clicked too fast
-                                   // we fall back to an on-demand fetch here.
+                                   // New image creatives (no htmlCode, only imageUrl):
+                                   // load into the pair view as a single variant so the
+                                   // user gets the full post-gen toolkit (refine,
+                                   // animate, text-overlay, sound).
+                                   if (item.imageUrl && !item.htmlCode) {
+                                     const isGpt =
+                                       item.model === "gpt-image-2" ||
+                                       item.model === "gpt-image-1";
+                                     setPair({
+                                       pairId: item.id,
+                                       claude: null,
+                                       gemini: null,
+                                       imagen: null,
+                                       variants: [
+                                         {
+                                           creativeId: item.id,
+                                           model: isGpt ? "gpt-image-2" : "gemini-3-pro-image",
+                                           ok: true,
+                                           imageUrl: item.imageUrl,
+                                           error: null,
+                                         },
+                                       ],
+                                     });
+                                     setPrompt(item.prompt || "");
+                                     setFormat(item.format === "1:1" ? "1:1" : "9:16");
+                                     setShowHistory(false);
+                                     setMobileTab("canvas");
+                                     setError("");
+                                     return;
+                                   }
+
+                                   // Legacy HTML path — load into single-canvas iframe.
                                    let html: string | undefined = item.htmlCode;
                                    if (!html) {
                                      const res = await getCreativeHtml([item.id]);
@@ -1467,7 +1773,7 @@ export default function Home() {
                                        );
                                      }
                                    }
-                                   if (!html) return; // Silently skip if fetch failed
+                                   if (!html) return;
                                    setCode(html);
                                    setActiveCreativeId(item.id);
                                    setPrompt(item.prompt || "");
@@ -1505,6 +1811,25 @@ export default function Home() {
         onStart={() => startVideoRecording()}
       />
 
+      {/* Manual creative editor (overlay text + drag). Pre-populated
+          with text blocks from the TZ helper / analyze brief so the
+          user opens it with editable headlines already on the canvas. */}
+      {manualEditTarget && (
+        <ManualImageEditor
+          imageUrl={manualEditTarget.imageUrl}
+          format={format}
+          initialBlocks={(() => {
+            const blocks: { text: string; role?: "headline" | "sub" | "cta" }[] = [];
+            const subj = tzSubject.trim();
+            const ben = tzBenefit.trim();
+            if (subj) blocks.push({ text: subj, role: "headline" });
+            if (ben && ben.length < 80) blocks.push({ text: ben, role: "sub" });
+            return blocks;
+          })()}
+          onClose={() => setManualEditTarget(null)}
+          onSave={applyManualSave}
+        />
+      )}
 
       {/* Sidebar Controls */}
       <aside className={clsx(
@@ -1618,20 +1943,22 @@ export default function Home() {
             </div>
           )}
           
-          {/* Format Selection */}
+          {/* Format Selection — 5 aspect ratios. Visual cue for each
+              is a small div sized to the aspect, so the user can see at
+              a glance what they're picking. */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Maximize className="w-4 h-4 text-hermes-500" />
               Формат креатива
             </h2>
-            <div className="grid grid-cols-2 gap-2">
-              {(["9:16", "1:1"] as Format[]).map((f) => (
+            <div className="grid grid-cols-5 gap-1.5">
+              {(["9:16", "3:4", "1:1", "4:3", "16:9"] as Format[]).map((f) => (
                 <button
                   key={f}
                   disabled={isLoading}
                   onClick={() => setFormat(f)}
                   className={clsx(
-                    "py-3 rounded-xl border text-sm font-medium transition-all duration-200 flex flex-col items-center gap-1",
+                    "py-2.5 px-1 rounded-xl border text-[11px] font-bold transition-all duration-200 flex flex-col items-center gap-1.5",
                     format === f
                       ? "bg-neutral-900 border-neutral-900 text-white shadow-md shadow-neutral-900/10"
                       : "bg-white border-neutral-200 text-neutral-600",
@@ -1639,8 +1966,16 @@ export default function Home() {
                     isLoading && "opacity-50 cursor-not-allowed"
                   )}
                 >
-                  {f === "9:16" && <Smartphone className="w-4 h-4" />}
-                  {f === "1:1" && <div className="border-2 border-current rounded-sm w-4 h-4" />}
+                  <div
+                    className={clsx(
+                      "border-2 border-current rounded-sm",
+                      f === "9:16" && "w-2.5 h-4",
+                      f === "3:4" && "w-3 h-4",
+                      f === "1:1" && "w-3.5 h-3.5",
+                      f === "4:3" && "w-4 h-3",
+                      f === "16:9" && "w-4 h-2.5",
+                    )}
+                  />
                   {f}
                 </button>
               ))}
@@ -1761,31 +2096,7 @@ export default function Home() {
               <span className="text-xs text-neutral-400 font-medium">{productImages.length}/{MAX_IMAGES}</span>
             </h2>
             
-            {pendingProductFile ? (
-              <div className="bg-white border-2 border-hermes-200 rounded-xl p-3 flex gap-3 shadow-sm items-center relative overflow-hidden">
-                {!isRemovingBg && (
-                  <button onClick={cancelPendingProduct} className="absolute inset-0 bg-black/10 opacity-0 hover:opacity-100 flex items-start justify-end p-2 transition-opacity z-10">
-                    <X className="w-4 h-4 text-neutral-500 bg-white rounded-full shadow-sm" />
-                  </button>
-                )}
-                <div className="w-14 h-14 bg-neutral-50 rounded-lg border border-neutral-100 overflow-hidden shrink-0">
-                  <img src={pendingProductFile?.dataUrl} className={clsx("w-full h-full object-contain", isRemovingBg && "opacity-50")} />
-                </div>
-                <div className="flex-1 relative z-20">
-                  <p className="text-xs font-bold text-neutral-800 mb-2">Что делаем с фото?</p>
-                  <div className="flex flex-col gap-1.5">
-                     <button onClick={confirmProductCut} disabled={isRemovingBg} className="w-full bg-hermes-500 hover:bg-hermes-600 text-white text-[10px] font-bold py-1.5 rounded-md flex justify-center items-center gap-1 transition-colors disabled:opacity-75 disabled:cursor-wait">
-                        {isRemovingBg ? <Loader2 className="w-3 h-3 animate-spin"/> : <Scissors className="w-3 h-3"/>}
-                        {isRemovingBg ? "ВЫРЕЗАЮ ФОН..." : "БЕЗ ФОНА"}
-                     </button>
-                     <button onClick={confirmProductAsIs} disabled={isRemovingBg} className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 text-[10px] font-bold py-1.5 rounded-md transition-colors disabled:opacity-50">
-                        ОРИГИНАЛ
-                     </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
                 {productImages.map((img, i) => {
                   const polish = polishStateByIndex[i] ?? "idle";
                   return (
@@ -1829,15 +2140,106 @@ export default function Home() {
                 })}
                 
                 {productImages.length < MAX_IMAGES && (
-                   <label className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center transition-all", isLoading || isRemovingBg ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-hermes-500 hover:bg-hermes-50 text-neutral-400 hover:text-hermes-500")}>
+                   <label className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center transition-all", isLoading ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-hermes-500 hover:bg-hermes-50 text-neutral-400 hover:text-hermes-500")}>
                      <Upload className="w-5 h-5 mb-1 text-inherit" />
                      <span className="text-[9px] font-semibold uppercase">Загрузить</span>
-                     <input type="file" accept="image/*" className="hidden" onChange={handleProductSelect} disabled={isLoading || isRemovingBg}/>
+                     <input type="file" accept="image/*" className="hidden" onChange={handleProductSelect} disabled={isLoading}/>
                    </label>
                 )}
-              </div>
-            )}
+            </div>
           </div>
+
+          {/* «Как показать товар?» — появляется ПОД блоком загрузки фото
+              товара только когда хотя бы один продукт уже загружен.
+              Плавно вьезжает через AnimatePresence так, чтобы появление
+              не было резким. Категория авто-определяется из
+              analyzeProductForBrief, пользователь может перебрать. */}
+          <AnimatePresence>
+            {productImages.length > 0 && (
+              <motion.div
+                key="scene-block"
+                initial={{ opacity: 0, height: 0, y: -8 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -8 }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+                className="overflow-hidden"
+              >
+                {(() => {
+                  const cat = getCategory(categoryId);
+                  return (
+                    <div className="space-y-3 pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h2 className="text-sm font-semibold flex items-center gap-2">
+                          <ImageIcon className="w-4 h-4 text-hermes-500" />
+                          Как показать товар?
+                        </h2>
+                        <span className="text-[10px] text-neutral-400 font-medium">(необязательно)</span>
+                      </div>
+                      <select
+                        value={categoryId}
+                        onChange={(e) => {
+                          setCategoryId(e.target.value as CategoryId);
+                          setSceneId(null);
+                        }}
+                        disabled={isLoading}
+                        className="w-full rounded-lg border border-neutral-200 bg-white text-neutral-800 px-3 py-2 text-xs font-medium outline-none focus:border-hermes-500 focus:ring-2 focus:ring-hermes-500/15 transition-colors disabled:opacity-50"
+                      >
+                        {CATEGORIES.map((c) => (
+                          <option key={c.id} value={c.id}>{c.label}</option>
+                        ))}
+                      </select>
+                      <div className="grid grid-cols-2 gap-2">
+                        {cat.scenes.map((s) => {
+                          const active = sceneId === s.id;
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              disabled={isLoading}
+                              onClick={() => setSceneId(active ? null : s.id)}
+                              title={s.subtitle}
+                              className={clsx(
+                                "rounded-xl border-2 overflow-hidden text-left transition-all duration-150 flex flex-col disabled:opacity-50 disabled:cursor-not-allowed",
+                                active
+                                  ? "border-hermes-500 shadow-md shadow-hermes-500/15 ring-2 ring-hermes-500/20"
+                                  : "border-neutral-200 hover:border-neutral-300 hover:shadow-sm",
+                              )}
+                            >
+                              <div className="aspect-square w-full relative overflow-hidden bg-neutral-100">
+                                <img
+                                  src={s.thumbSrc}
+                                  alt={s.label}
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                />
+                                {active && (
+                                  <div className="absolute top-1 right-1 bg-hermes-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                                    <Check className="w-3 h-3" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-2 bg-white">
+                                <p className="text-[11px] font-bold text-neutral-800 leading-tight">{s.label}</p>
+                                <p className="text-[9px] text-neutral-500 mt-0.5 leading-tight">{s.subtitle}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {sceneId && (
+                        <button
+                          type="button"
+                          onClick={() => setSceneId(null)}
+                          className="text-[10px] font-semibold text-neutral-500 hover:text-neutral-700 underline underline-offset-2"
+                        >
+                          Снять выбор сцены
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </motion.div>
+            )}
+          </AnimatePresence>
           </>
           ) : (
             <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-xl relative overflow-hidden shadow-inner flex flex-col gap-3">
@@ -1873,7 +2275,7 @@ export default function Home() {
               </span>
               <button
                 onClick={handleClearAll}
-                disabled={isLoading || isRemovingBg}
+                disabled={isLoading}
                 className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-neutral-400 bg-neutral-100 rounded-md hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
                 title="Очистить текстовое ТЗ и картинки"
               >
@@ -1881,6 +2283,46 @@ export default function Home() {
                 Очистить
               </button>
             </h2>
+
+            {/* AI product recognition banner. Shown after a product photo
+                is uploaded — Gemini 3 Pro identifies the product and
+                proposes a brief, which we auto-load into the textarea. */}
+            {analyzeState.kind === "analyzing" && (
+              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 flex items-center gap-2 text-xs font-bold text-sky-700">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span>ИИ изучает фото и пишет ТЗ...</span>
+              </div>
+            )}
+            {analyzeState.kind === "ready" && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 flex items-start gap-2">
+                <span className="text-base leading-none mt-0.5">🎯</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
+                    Распознали продукт
+                  </p>
+                  <p className="text-sm font-bold text-emerald-900 leading-snug">
+                    {analyzeState.product || "Продукт не определён"}
+                  </p>
+                  <p className="text-[10px] text-emerald-700/80 leading-tight mt-1">
+                    Предварительное ТЗ загружено ниже — отредактируй и нажми «Создать»
+                  </p>
+                  {analyzeState.brief && (
+                    <button
+                      type="button"
+                      onClick={() => setPrompt(analyzeState.brief)}
+                      className="text-[10px] font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-900 mt-1.5"
+                    >
+                      Восстановить ТЗ от ИИ
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {analyzeState.kind === "failed" && (
+              <p className="text-[10px] text-amber-700 leading-tight">
+                ⚠️ Не удалось распознать продукт автоматически — заполни ТЗ вручную ниже.
+              </p>
+            )}
 
             {/* TZ helper — 4 short questions to build a structured brief.
                 Collapsed by default; expanded on click. After "Сформировать"
@@ -1945,10 +2387,25 @@ export default function Home() {
                       className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500"
                     />
                   </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                      5. Город или страна <span className="font-medium normal-case text-neutral-400">(рынок креатива)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={tzCity}
+                      onChange={(e) => setTzCity(e.target.value)}
+                      placeholder="Алматы / Москва / Бишкек / Минск..."
+                      className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500"
+                    />
+                    <p className="text-[10px] text-neutral-400 mt-1 leading-tight">
+                      ИИ подберёт валюту и культурный контекст под этот рынок.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={buildTzFromHelper}
-                    disabled={tzBuilding || (!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim())}
+                    disabled={tzBuilding || (!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim() && !tzCity.trim())}
                     className="w-full bg-hermes-500 hover:bg-hermes-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-2"
                   >
                     {tzBuilding ? (
@@ -2055,10 +2512,10 @@ export default function Home() {
             })()}
             <button
               onClick={() => handleGenerate()}
-              disabled={isLoading || isRemovingBg || !prompt.trim()}
+              disabled={isLoading || !prompt.trim()}
               className={clsx(
                 "w-full py-4 rounded-xl font-bold text-white transition-all duration-300 flex flex-col items-center justify-center gap-1 relative overflow-hidden",
-                isLoading || isRemovingBg || !prompt.trim()
+                isLoading || !prompt.trim()
                   ? "bg-neutral-300 cursor-not-allowed text-neutral-600 shadow-none"
                   : remixSourceCode
                   ? "bg-amber-500 hover:bg-amber-600 shadow-lg hover:shadow-amber-500/30 active:scale-95"
@@ -2089,6 +2546,21 @@ export default function Home() {
             </button>
             </>
           )}
+
+          {/* Telegram support — sticks at the bottom of the left
+              sidebar so the user always has a one-tap path to
+              human help. */}
+          <a
+            href="https://t.me/aicreative_support"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#2AABEE]/10 hover:bg-[#2AABEE]/15 border border-[#2AABEE]/30 text-[#2AABEE] font-bold text-xs transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M21.05 4.49 17.7 19.65c-.21.94-.85 1.18-1.6.74l-4.42-3.26-2.13 2.05c-.24.24-.43.43-.86.43l.31-4.4 8.06-7.27c.35-.31-.08-.49-.55-.18l-9.96 6.27-4.29-1.34c-.93-.29-.95-.93.2-1.38l16.79-6.47c.79-.29 1.46.18 1.2 1.34Z"/>
+            </svg>
+            Поддержка в Telegram
+          </a>
         </div>
       </aside>
 
@@ -2125,7 +2597,7 @@ export default function Home() {
              {isAnimated && (
                <button 
                  onClick={handleReplay}
-                 disabled={isLoading || isRemovingBg || isRecording}
+                 disabled={isLoading || isRecording}
                  className="w-12 h-12 shrink-0 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-neutral-800 transition-all flex items-center justify-center hover:bg-neutral-50 hover:-translate-y-0.5"
                  title="Повторить анимацию"
                >
@@ -2135,7 +2607,7 @@ export default function Home() {
              
              <button 
                onClick={handleDownloadClick}
-               disabled={isLoading || isRemovingBg || isRecording}
+               disabled={isLoading || isRecording}
                className={clsx("flex-grow md:flex-grow-0 px-6 py-3 shrink-0 bg-white border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full text-sm font-bold text-neutral-800 transition-all flex items-center justify-center gap-1", 
                 isRecording ? "flex-col opacity-100 cursor-wait bg-hermes-50 border-hermes-200 min-w-[200px]" : "hover:bg-neutral-50 hover:-translate-y-0.5 flex-row"
                )}
@@ -2195,24 +2667,49 @@ export default function Home() {
                       >
                         <div
                           className="relative bg-[#fcfcfc] flex items-center justify-center"
-                          style={format === "9:16"
-                            ? { aspectRatio: "9 / 16", width: "100%", maxHeight: "560px" }
-                            : { aspectRatio: "1 / 1", width: "100%" }}
+                          style={{ aspectRatio: aspectCss(format), width: "100%", maxHeight: 560 }}
                         >
-                          {v.ok && v.imageUrl ? (
-                            <img
-                              src={v.imageUrl}
-                              alt={`${label} variant ${i + 1}`}
-                              className="w-full h-full object-contain"
-                            />
-                          ) : (
-                            <div className="p-4 flex flex-col items-center justify-center text-center">
-                              <p className="text-sm font-bold text-red-600 mb-1">Ошибка</p>
-                              <p className="text-[10px] text-neutral-500 leading-snug">
-                                {v.error?.slice(0, 200) || "Без подробностей."}
-                              </p>
-                            </div>
-                          )}
+                          {(() => {
+                            if (!v.ok) {
+                              return (
+                                <div className="p-4 flex flex-col items-center justify-center text-center">
+                                  <p className="text-sm font-bold text-red-600 mb-1">Ошибка</p>
+                                  <p className="text-[10px] text-neutral-500 leading-snug">
+                                    {v.error?.slice(0, 200) || "Без подробностей."}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            const anim = v.creativeId ? animByCreative[v.creativeId] : undefined;
+                            const overlay = v.creativeId ? overlayByCreative[v.creativeId] : undefined;
+                            const sound = v.creativeId ? soundByCreative[v.creativeId] : undefined;
+                            // Layer priority: sound > overlay > anim > image.
+                            const playSrc =
+                              sound?.kind === "ready" ? sound.videoUrl :
+                              overlay?.kind === "ready" ? overlay.videoUrl :
+                              anim?.kind === "completed" ? anim.videoUrl :
+                              null;
+                            if (playSrc) {
+                              return (
+                                <video
+                                  key={playSrc}
+                                  src={playSrc}
+                                  controls
+                                  autoPlay
+                                  loop
+                                  playsInline
+                                  className="w-full h-full object-contain bg-black"
+                                />
+                              );
+                            }
+                            return (
+                              <img
+                                src={v.imageUrl!}
+                                alt={`${label} variant ${i + 1}`}
+                                className="w-full h-full object-contain"
+                              />
+                            );
+                          })()}
                         </div>
                         {v.ok && v.imageUrl && (
                           <div className="p-2.5 flex flex-col gap-2">
@@ -2234,6 +2731,229 @@ export default function Home() {
                                   <Trophy className="w-3.5 h-3.5" />
                                   {isBest ? "Лучший выбран" : "Этот лучший"}
                                 </button>
+                              );
+                            })()}
+                            {/* ========== REFINE / EDIT (before animation) ========== */}
+                            {(() => {
+                              if (!v.creativeId) return null;
+                              const anim = animByCreative[v.creativeId];
+                              // Hide refine after animation has started — once
+                              // a video exists, editing the static image is
+                              // confusing UX.
+                              if (anim && anim.kind !== "failed") return null;
+                              const refine = refineByCreative[v.creativeId] ?? { kind: "idle" };
+                              const refineText = refineTextByCreative[v.creativeId] ?? "";
+
+                              if (refine.kind === "rendering") {
+                                return (
+                                  <div className="w-full bg-sky-50 border border-sky-200 text-sky-700 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    Применяю правку ~15-30 сек
+                                  </div>
+                                );
+                              }
+
+                              if (refine.kind === "open" || refine.kind === "failed") {
+                                return (
+                                  <>
+                                    <textarea
+                                      value={refineText}
+                                      maxLength={240}
+                                      placeholder="Что изменить? Например: «поменяй текст на 'Скидка 50%'» или «сделай фон тёмно-синим»"
+                                      onChange={(e) =>
+                                        setRefineTextByCreative((prev) => ({
+                                          ...prev,
+                                          [v.creativeId!]: e.target.value,
+                                        }))
+                                      }
+                                      rows={3}
+                                      className="w-full text-xs px-2 py-1.5 rounded-lg border border-sky-200 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 resize-none"
+                                    />
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <button
+                                        onClick={() => toggleRefine(v.creativeId!)}
+                                        className="bg-neutral-100 hover:bg-neutral-200 text-neutral-700 py-2 rounded-xl font-bold text-xs transition-colors"
+                                      >
+                                        Отмена
+                                      </button>
+                                      <button
+                                        onClick={() => startRefine(v.creativeId!)}
+                                        disabled={!refineText.trim()}
+                                        className="bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                                      >
+                                        <Wand2 className="w-3.5 h-3.5" />
+                                        Применить (2⚡)
+                                      </button>
+                                    </div>
+                                    {refine.kind === "failed" && (
+                                      <p className="text-[10px] text-red-600 leading-tight">
+                                        {refine.error.slice(0, 120)}
+                                      </p>
+                                    )}
+                                  </>
+                                );
+                              }
+
+                              return (
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <button
+                                    onClick={() =>
+                                      v.imageUrl &&
+                                      v.creativeId &&
+                                      setManualEditTarget({
+                                        creativeId: v.creativeId,
+                                        imageUrl: v.imageUrl,
+                                      })
+                                    }
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                                    title="Двигай текст мышкой, меняй шрифт, цвет и размер"
+                                  >
+                                    <span className="text-sm leading-none">✏</span>
+                                    Ручная
+                                  </button>
+                                  <button
+                                    onClick={() => toggleRefine(v.creativeId!)}
+                                    className="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                                    title="Опиши что изменить — ИИ переделает"
+                                  >
+                                    <Wand2 className="w-3.5 h-3.5" />
+                                    AI-правка
+                                  </button>
+                                </div>
+                              );
+                            })()}
+                            {/* ========== VIDEO PIPELINE (LOCAL) ========== */}
+                            {(() => {
+                              const anim = v.creativeId ? animByCreative[v.creativeId] : undefined;
+                              const overlay = v.creativeId ? overlayByCreative[v.creativeId] : undefined;
+                              const sound = v.creativeId ? soundByCreative[v.creativeId] : undefined;
+                              if (!v.creativeId) return null;
+
+                              if (anim?.kind === "submitting" || anim?.kind === "queued" || anim?.kind === "in_progress") {
+                                return (
+                                  <div className="w-full bg-purple-50 border border-purple-200 text-purple-700 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    {anim.kind === "submitting" ? "Запускаем..." : anim.kind === "queued" ? "В очереди..." : "Анимация ~30-90 сек"}
+                                  </div>
+                                );
+                              }
+
+                              if (anim?.kind === "completed") {
+                                const overlayText = overlayTextByCreative[v.creativeId] || "";
+                                return (
+                                  <>
+                                    <input
+                                      type="text"
+                                      value={overlayText}
+                                      maxLength={120}
+                                      placeholder="Заголовок на видео (необязательно)"
+                                      onChange={(e) =>
+                                        setOverlayTextByCreative((prev) => ({ ...prev, [v.creativeId!]: e.target.value }))
+                                      }
+                                      disabled={overlay?.kind === "rendering"}
+                                      className="w-full text-xs px-2 py-1.5 rounded-lg border border-neutral-200 focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500 disabled:opacity-60"
+                                    />
+                                    {overlay?.kind === "rendering" ? (
+                                      <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Текст ~20-40 сек
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => startTextOverlay(v.creativeId!, anim.videoUrl)}
+                                        disabled={!overlayText.trim()}
+                                        className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                      >
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                        {overlay?.kind === "ready" ? "Перезаписать (5⚡)" : "Добавить текст (5⚡)"}
+                                      </button>
+                                    )}
+                                    {sound?.kind === "rendering" ? (
+                                      <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Звук ~20-60 сек
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          const src = overlay?.kind === "ready" ? overlay.videoUrl : anim.videoUrl;
+                                          startAddSound(v.creativeId!, src);
+                                        }}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                      >
+                                        <Video className="w-3.5 h-3.5" />
+                                        {sound?.kind === "ready" ? "Перегенерировать звук (5⚡)" : "Добавить звук (5⚡)"}
+                                      </button>
+                                    )}
+                                    <a
+                                      href={
+                                        sound?.kind === "ready" ? sound.videoUrl :
+                                        overlay?.kind === "ready" ? overlay.videoUrl :
+                                        anim.videoUrl
+                                      }
+                                      download={`creative-${m}-${i + 1}.mp4`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                      <Video className="w-3.5 h-3.5" /> Скачать MP4
+                                    </a>
+                                  </>
+                                );
+                              }
+
+                              const failed = anim?.kind === "failed";
+                              const selectedPreset = presetByCreative[v.creativeId] ?? "subtle";
+                              const selectedDuration = durationByCreative[v.creativeId] ?? 5;
+                              return (
+                                <>
+                                  <div className="grid grid-cols-2 gap-1">
+                                    {ANIMATION_PRESETS.map((p) => {
+                                      const active = selectedPreset === p.id;
+                                      return (
+                                        <button
+                                          key={p.id}
+                                          type="button"
+                                          onClick={() =>
+                                            setPresetByCreative((prev) => ({ ...prev, [v.creativeId!]: p.id }))
+                                          }
+                                          title={p.description}
+                                          className={clsx(
+                                            "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                            active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
+                                          )}
+                                        >
+                                          {p.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-1">
+                                    {([5, 10] as const).map((d) => {
+                                      const active = selectedDuration === d;
+                                      return (
+                                        <button
+                                          key={d}
+                                          type="button"
+                                          onClick={() =>
+                                            setDurationByCreative((prev) => ({ ...prev, [v.creativeId!]: d }))
+                                          }
+                                          className={clsx(
+                                            "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                            active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
+                                          )}
+                                        >
+                                          {d} сек
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <button
+                                    onClick={() => startAnimate(v.creativeId!)}
+                                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                    {failed ? "Ошибка — повторить" : `Анимировать ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
+                                  </button>
+                                </>
                               );
                             })()}
                             <a
@@ -2313,9 +3033,7 @@ export default function Home() {
                   </div>
                   <div
                     className="relative bg-[#fcfcfc] overflow-hidden flex items-center justify-center"
-                    style={format === "9:16"
-                      ? { aspectRatio: "9 / 16", width: "100%", maxHeight: "560px" }
-                      : { aspectRatio: "1 / 1", width: "100%" }}
+                    style={{ aspectRatio: aspectCss(format), width: "100%", maxHeight: 560 }}
                   >
                     {isImageCard ? (
                       <img
@@ -2562,10 +3280,10 @@ export default function Home() {
                  setMobileTab('controls');
               }
             }}
-            disabled={isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls' && !activeCreativeId)}
+            disabled={isLoading || (!prompt.trim() && mobileTab === 'controls' && !activeCreativeId)}
             className={clsx(
               "w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center text-white shadow-xl border-[5px] border-white transition-all duration-300",
-              isLoading || isRemovingBg || (!prompt.trim() && mobileTab === 'controls' && !activeCreativeId)
+              isLoading || (!prompt.trim() && mobileTab === 'controls' && !activeCreativeId)
                 ? "bg-neutral-300 shadow-none hover:scale-100 cursor-not-allowed border-neutral-100"
                 : activeCreativeId && mobileTab === 'controls'
                 ? "bg-amber-500 shadow-amber-500/30 hover:bg-amber-600 hover:scale-105 active:scale-95 hover:border-amber-50"
