@@ -9,8 +9,14 @@ import { generateTzBrief } from "@/actions/generateTzBrief";
 import { polishProductPhoto } from "@/actions/polishProductPhoto";
 import { refineImage } from "@/actions/refineImage";
 import { analyzeProductForBrief } from "@/actions/analyzeProductForBrief";
-import { ANIMATION_PRESETS, type AnimationPresetId } from "@/lib/models/animation-presets";
-import { CATEGORIES, getCategory, type CategoryId } from "@/lib/categories";
+import { getIsAdmin } from "@/actions/getIsAdmin";
+import {
+  ANIMATION_PRESETS,
+  AMBIENT_PRESETS,
+  ACTION_PRESETS,
+  type AnimationPresetId,
+} from "@/lib/models/animation-presets";
+import { CATEGORIES, getCategory, getScene, type CategoryId } from "@/lib/categories";
 import { ManualImageEditor } from "@/components/editor/ManualImageEditor";
 import clsx from "clsx";
 import { useUser } from "@clerk/nextjs";
@@ -176,6 +182,20 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Admin check: drives whether variant cards reveal their underlying
+  // model name (Gemini 3 Pro Image / GPT Image 2) or stay anonymous
+  // ("Вариант 1" / "Вариант 2") so users compare blind. Defaults to
+  // false until the server check resolves; non-admins never see the
+  // technical label even briefly.
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getIsAdmin().then((ok) => {
+      if (!cancelled) setIsAdminUser(ok);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const [activeCreativeId, setActiveCreativeId] = useState<string | null>(null);
 
   // ---- TZ helper / 4-question wizard ----
@@ -196,17 +216,28 @@ export default function Home() {
   const [tzError, setTzError] = useState<string | null>(null);
   async function buildTzFromHelper() {
     setTzError(null);
-    if (!tzSubject.trim() && !tzBenefit.trim() && !tzAudience.trim() && !tzStyle.trim() && !tzCity.trim()) {
+    const hasAnyText = tzSubject.trim() || tzBenefit.trim() || tzAudience.trim() || tzStyle.trim() || tzCity.trim();
+    const hasPhoto = productImages.length > 0;
+    if (!hasAnyText && !hasPhoto) {
       return;
     }
     setTzBuilding(true);
     try {
+      // Always pass the uploaded product photo (polished version when
+      // available, original otherwise) — the brief is grounded in what
+      // we actually see, not just the 4 text fields. Also pass the
+      // chosen scene preset so КОМПОЗИЦИЯ/ПРОДУКТ sections reflect it.
+      const photoDataUrl = productImages[0]?.dataUrl;
+      const scene = getScene(categoryId, sceneId);
+      const sceneHint = scene ? `${scene.label} — ${scene.subtitle}` : undefined;
       const result = await generateTzBrief({
         subject: tzSubject,
         benefit: tzBenefit,
         audience: tzAudience,
         style: tzStyle,
         cityCountry: tzCity,
+        photoDataUrl,
+        sceneHint,
       });
       if (result.success) {
         setPrompt(result.brief);
@@ -258,6 +289,15 @@ export default function Home() {
   const [animByCreative, setAnimByCreative] = useState<Record<string, AnimState>>({});
   const [presetByCreative, setPresetByCreative] = useState<Record<string, AnimationPresetId>>({});
   const [durationByCreative, setDurationByCreative] = useState<Record<string, 5 | 10>>({});
+  // "ambient" — frame-locked light/atmosphere only.
+  // "promo"   — action preset (5 sec) + auto-chained MMAudio sound effects.
+  // The animation card UI swaps preset picker + button label based on this.
+  type AnimMode = "ambient" | "promo";
+  const [modeByCreative, setModeByCreative] = useState<Record<string, AnimMode>>({});
+  // Ids that have already kicked off auto-sound after their promo
+  // animation completed. Prevents double-firing if the polling effect
+  // re-runs while sound is in progress.
+  const promoSoundFiredRef = useRef<Set<string>>(new Set());
 
   type OverlayState =
     | { kind: "rendering" }
@@ -397,6 +437,35 @@ export default function Home() {
     }
   }
 
+  // Promo flow: action preset (forces 5 sec) → on completion the
+  // animate-completion effect auto-fires startAddSound, so the user
+  // gets a single magic button instead of two clicks.
+  async function startPromo(creativeId: string) {
+    if (!creativeId) return;
+    const existing = animByCreative[creativeId];
+    if (existing && existing.kind !== "failed") return;
+    const current = presetByCreative[creativeId];
+    const isAction = ACTION_PRESETS.some((p) => p.id === current);
+    const presetId: AnimationPresetId = isAction ? current : "unbox";
+    promoSoundFiredRef.current.delete(creativeId); // allow sound to fire on this run
+    setModeByCreative((p) => ({ ...p, [creativeId]: "promo" }));
+    setPresetByCreative((p) => ({ ...p, [creativeId]: presetId }));
+    setDurationByCreative((p) => ({ ...p, [creativeId]: 5 }));
+    setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "submitting" } }));
+    try {
+      const res = await fetch("/api/animate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creativeId, presetId, durationSec: 5 }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.requestId) throw new Error(data?.error || `HTTP ${res.status}`);
+      setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "queued", requestId: data.requestId } }));
+    } catch (e: any) {
+      setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: e?.message || "submit failed" } }));
+    }
+  }
+
   async function startTextOverlay(creativeId: string, sourceVideoUrl: string) {
     const text = (overlayTextByCreative[creativeId] || "").trim();
     if (!text) return;
@@ -437,7 +506,24 @@ export default function Home() {
       setSoundByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: e?.message || "render failed" } }));
     }
   }
-  
+
+  // Promo auto-chain: when an animation finishes for a creativeId in
+  // "promo" mode and we haven't already kicked off sound for it, fire
+  // startAddSound automatically. The ref guards against re-firing if
+  // soundByCreative state lags behind the animByCreative transition.
+  useEffect(() => {
+    for (const [cid, st] of Object.entries(animByCreative)) {
+      if (st.kind !== "completed") continue;
+      if (modeByCreative[cid] !== "promo") continue;
+      if (promoSoundFiredRef.current.has(cid)) continue;
+      if (soundByCreative[cid]) continue;
+      promoSoundFiredRef.current.add(cid);
+      void startAddSound(cid, st.videoUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animByCreative, modeByCreative]);
+
+
   // Moved below historyItems
   const [backgroundJobId, setBackgroundJobId] = useState<string | null>(null);
   const [isBackgroundRendering, setIsBackgroundRendering] = useState(false);
@@ -2020,67 +2106,16 @@ export default function Home() {
               </button>
             </div>
             <p className="text-[10px] text-neutral-400 leading-tight">
-              Анимация вернётся после обновления видео-движка. Сейчас доступна статика — 2 варианта от Gemini 3 Pro Image и GPT Image 2.
+              Анимация вернётся после обновления видео-движка. Сейчас доступна статика — 2 варианта от двух разных ИИ. Выбери лучший — мы учтём твой голос.
             </p>
           </div>
 
           {/* Reference and Product Image Uploads */}
           {!remixSourceCode ? (
             <>
-              {/* Reference Image Upload */}
-              <div className="space-y-3">
-              <h2 className="text-sm font-semibold flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4 text-neutral-400" />
-                  Референс (стиль / дизайн)
-                </span>
-                <span className="text-xs text-neutral-400 font-medium">{referenceImages.length}/{MAX_IMAGES}</span>
-              </h2>
-
-              {/* Reference-presets grid removed per user request. Users
-                  who want a style anchor upload it manually below. */}
-              {referenceImages.length === 0 && !isLoading && (
-                <div className="rounded-lg bg-neutral-50 border border-neutral-200 p-2.5 flex items-start gap-2">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-neutral-500 leading-snug">
-                    Можно загрузить референс — скриншот рекламы или дизайна, на который хочешь быть похожим. Без референса тоже работает.
-                  </p>
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                {referenceImages.map((img, i) => (
-                  <div key={i} className={clsx("relative group w-16 h-16 rounded-lg border border-neutral-200 overflow-hidden shadow-sm flex items-center justify-center", isLoading && "opacity-50")}>
-                    <img src={img.dataUrl} alt={`Ref ${i}`} className="w-full h-full object-cover" />
-                    {!isLoading && (
-                      <button
-                        onClick={() => removeReference(i)}
-                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                
-                {referenceImages.length < MAX_IMAGES && (
-                  <label className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center transition-all", isLoading ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-neutral-500 hover:bg-neutral-50 text-neutral-400 hover:text-neutral-500")}>
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleReferenceUpload} disabled={isLoading} />
-                    <Upload className="w-5 h-5" />
-                  </label>
-                )}
-              </div>
-              {referenceImages.length > 0 && (
-                <div className="flex items-start gap-2 pt-2">
-                  <Check className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-neutral-600 leading-snug">
-                    ИИ <strong>точно повторит</strong> стиль референса —
-                    структуру, цвета, шрифты, расположение блоков. Поменяет
-                    только текст и продукт под твой запрос.
-                  </p>
-                </div>
-              )}
-            </div>
+              {/* Reference image upload — temporarily hidden. The detailed
+                  TZ brief now drives composition/style on its own; users
+                  no longer need a visual style anchor for typical flows. */}
           {/* Product Image Upload — re-enabled for the Nano Banana / GPT-Image
               testing phase. Both image-gen models accept a single product
               photo as input and edit/restyle it into a sales creative;
@@ -2147,6 +2182,24 @@ export default function Home() {
                    </label>
                 )}
             </div>
+            {/* Analyze indicator inline under the photo grid. The same
+                state drives a more detailed banner in the brief section
+                below — but the upload area is where the user is looking
+                right after dropping a file, so we surface the spinner
+                here too. Polish runs in parallel and has its own thumbnail
+                overlay; this strip is specifically the "ИИ читает фото
+                и пишет ТЗ" signal. */}
+            {analyzeState.kind === "analyzing" && (
+              <div className="rounded-lg bg-sky-50 border border-sky-200 px-2.5 py-2 flex items-center gap-2 text-[11px] font-bold text-sky-700">
+                <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                <span>ИИ изучает фото и пишет ТЗ...</span>
+              </div>
+            )}
+            {analyzeState.kind === "failed" && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-[11px] text-amber-700 leading-snug">
+                Не получилось разобрать фото — заполни ТЗ ниже вручную.
+              </div>
+            )}
           </div>
 
           {/* «Как показать товар?» — появляется ПОД блоком загрузки фото
@@ -2632,17 +2685,21 @@ export default function Home() {
 
         {pair && pair.variants ? (
           // ---- IMAGE VARIANTS GRID (2 models × N variants) ----
-          // Two rows: Gemini 3 Pro Image, GPT Image 2. Each card is
-          // a final PNG — user can download any. No "winner" step
-          // (only the legacy HTML path needed that to load HTML into
-          // the single canvas).
+          // Two rows. Models stay anonymous to the user as
+          // "Вариант 1" / "Вариант 2" so the pair-vote (markAsBest)
+          // is blind — that gives us honest model winrate telemetry.
+          // Admins see the underlying model name appended for QA.
           <div className="relative z-10 mt-16 md:mt-0 w-full max-w-[1300px] grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            {(["gemini-3-pro-image", "gpt-image-2"] as const).map((m) => {
+            {(["gemini-3-pro-image", "gpt-image-2"] as const).map((m, modelIdx) => {
               const row = pair.variants!.filter((v) => v.model === m);
               if (row.length === 0) return null;
-              const label =
+              const variantNumber = modelIdx + 1;
+              const technicalName =
                 m === "gemini-3-pro-image" ? "Gemini 3 Pro Image (Google)" :
                 "GPT Image 2 (OpenAI)";
+              const label = isAdminUser
+                ? `Вариант ${variantNumber} · ${technicalName}`
+                : `Вариант ${variantNumber}`;
               const accent =
                 m === "gemini-3-pro-image" ? "bg-amber-500" :
                 "bg-blue-500";
@@ -2901,12 +2958,42 @@ export default function Home() {
                               }
 
                               const failed = anim?.kind === "failed";
-                              const selectedPreset = presetByCreative[v.creativeId] ?? "subtle";
+                              const mode: AnimMode = modeByCreative[v.creativeId] ?? "ambient";
+                              const presets = mode === "promo" ? ACTION_PRESETS : AMBIENT_PRESETS;
+                              const stored = presetByCreative[v.creativeId];
+                              // If the stored preset doesn't belong to the current mode's
+                              // list (e.g. user switched ambient→promo), fall back to the
+                              // first preset of the active mode without mutating state.
+                              const selectedPreset = presets.some((p) => p.id === stored)
+                                ? (stored as AnimationPresetId)
+                                : presets[0].id;
                               const selectedDuration = durationByCreative[v.creativeId] ?? 5;
+                              const promoCost = VIDEO_GEN_COST + 5; // animate + MMAudio
                               return (
                                 <>
+                                  {/* Mode toggle: Атмосфера (ambient) ↔ Промо со звуком (action+sound). */}
+                                  <div className="grid grid-cols-2 gap-1 p-0.5 bg-neutral-100 rounded-xl">
+                                    {(["ambient", "promo"] as const).map((mk) => {
+                                      const active = mode === mk;
+                                      return (
+                                        <button
+                                          key={mk}
+                                          type="button"
+                                          onClick={() =>
+                                            setModeByCreative((prev) => ({ ...prev, [v.creativeId!]: mk }))
+                                          }
+                                          className={clsx(
+                                            "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                            active ? "bg-white text-purple-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700",
+                                          )}
+                                        >
+                                          {mk === "ambient" ? "Атмосфера" : "🎬 Промо со звуком"}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                   <div className="grid grid-cols-2 gap-1">
-                                    {ANIMATION_PRESETS.map((p) => {
+                                    {presets.map((p) => {
                                       const active = selectedPreset === p.id;
                                       return (
                                         <button
@@ -2926,33 +3013,49 @@ export default function Home() {
                                       );
                                     })}
                                   </div>
-                                  <div className="grid grid-cols-2 gap-1">
-                                    {([5, 10] as const).map((d) => {
-                                      const active = selectedDuration === d;
-                                      return (
-                                        <button
-                                          key={d}
-                                          type="button"
-                                          onClick={() =>
-                                            setDurationByCreative((prev) => ({ ...prev, [v.creativeId!]: d }))
-                                          }
-                                          className={clsx(
-                                            "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
-                                            active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
-                                          )}
-                                        >
-                                          {d} сек
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                  <button
-                                    onClick={() => startAnimate(v.creativeId!)}
-                                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
-                                  >
-                                    <Video className="w-3.5 h-3.5" />
-                                    {failed ? "Ошибка — повторить" : `Анимировать ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
-                                  </button>
+                                  {mode === "ambient" ? (
+                                    <div className="grid grid-cols-2 gap-1">
+                                      {([5, 10] as const).map((d) => {
+                                        const active = selectedDuration === d;
+                                        return (
+                                          <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() =>
+                                              setDurationByCreative((prev) => ({ ...prev, [v.creativeId!]: d }))
+                                            }
+                                            className={clsx(
+                                              "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                              active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
+                                            )}
+                                          >
+                                            {d} сек
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-neutral-500 leading-tight px-1">
+                                      5 сек · видео + звук одной кнопкой
+                                    </p>
+                                  )}
+                                  {mode === "ambient" ? (
+                                    <button
+                                      onClick={() => startAnimate(v.creativeId!)}
+                                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                      <Video className="w-3.5 h-3.5" />
+                                      {failed ? "Ошибка — повторить" : `Анимировать ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => startPromo(v.creativeId!)}
+                                      className="w-full bg-gradient-to-r from-emerald-600 to-purple-600 hover:from-emerald-700 hover:to-purple-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                      <Sparkles className="w-3.5 h-3.5" />
+                                      {failed ? "Ошибка — повторить" : `Промо со звуком (${promoCost}⚡)`}
+                                    </button>
+                                  )}
                                 </>
                               );
                             })()}

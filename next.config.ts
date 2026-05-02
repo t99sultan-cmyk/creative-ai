@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
   // in Next.js 16; we use the new name and keep both under `experimental.*`.
   experimental: {
     proxyClientMaxBodySize: '25mb',
+    // Server Actions (e.g. generateTzBrief, analyzeProductForBrief)
+    // accept the uploaded product photo as a base64 data URL. WebP at
+    // 1024×1024 fits in ~500 KB but a high-res phone JPEG can hit
+    // 2-4 MB. Default 1 MB blew up "Body exceeded 1 MB limit" for
+    // any non-trivial upload — bump to 10 MB so the brief flow works
+    // for real-world photos while still bounded.
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
   },
   images: {
     formats: ['image/avif', 'image/webp'],

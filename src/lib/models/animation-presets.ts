@@ -21,7 +21,14 @@ export type AnimationPresetId =
   | "lights"
   | "atmosphere"
   | "energy"
-  | "reveal";
+  | "reveal"
+  // Action presets — used by the "Промо со звуком" flow. Frame is NOT
+  // locked: the product/person performs a small action. Pairs with
+  // MMAudio for synchronized sound effects.
+  | "unbox"
+  | "smile"
+  | "interact"
+  | "ambience";
 
 export interface AnimationPreset {
   id: AnimationPresetId;
@@ -31,6 +38,11 @@ export interface AnimationPreset {
   description: string;
   /** English prompt sent to fal.ai. */
   prompt: string;
+  /**
+   * "ambient" — frame-locked, only ambient motion (light, atmosphere).
+   * "action" — product/person performs a small action; pairs with sound.
+   */
+  category: "ambient" | "action";
 }
 
 const FRAME_LOCK = `STRICT REQUIREMENTS — these override everything:
@@ -43,6 +55,7 @@ const FRAME_LOCK = `STRICT REQUIREMENTS — these override everything:
 export const ANIMATION_PRESETS: AnimationPreset[] = [
   {
     id: "subtle",
+    category: "ambient",
     label: "Лёгкое оживление",
     description: "Едва заметное движение света. Кадр и продукт неподвижны.",
     prompt:
@@ -54,6 +67,7 @@ export const ANIMATION_PRESETS: AnimationPreset[] = [
   },
   {
     id: "lights",
+    category: "ambient",
     label: "Световые блики",
     description: "Тёплые блики и отражения. Композиция стабильна.",
     prompt:
@@ -65,6 +79,7 @@ export const ANIMATION_PRESETS: AnimationPreset[] = [
   },
   {
     id: "atmosphere",
+    category: "ambient",
     label: "Атмосфера / пар",
     description: "Лёгкий пар, пыль или искры в воздухе. Кадр зафиксирован.",
     prompt:
@@ -77,6 +92,7 @@ export const ANIMATION_PRESETS: AnimationPreset[] = [
   },
   {
     id: "energy",
+    category: "ambient",
     label: "Энергия / свечение",
     description: "Пульсирующее свечение, лёгкие искры. Без сдвига кадра.",
     prompt:
@@ -89,6 +105,7 @@ export const ANIMATION_PRESETS: AnimationPreset[] = [
   },
   {
     id: "reveal",
+    category: "ambient",
     label: "Раскрытие продукта",
     description: "Продукт открывается / распаковывается. Камера статична.",
     // NOTE: This preset INTENTIONALLY breaks the FRAME_LOCK rule for
@@ -108,9 +125,92 @@ export const ANIMATION_PRESETS: AnimationPreset[] = [
       `- Do NOT redraw, redesign, or re-render the product itself. Preserve every detail of identity ` +
       `(brand, color, materials, proportions). The opened state should look like the same product, just opened.`,
   },
+  // ─── ACTION PRESETS — used by "Промо со звуком" ──────────────────
+  // Frame-lock is partially relaxed here: the product or person performs
+  // a brief, recognizable action. The camera still does NOT move (no
+  // dolly/pan/zoom) — only the subject inside the frame moves. Output
+  // is always 5 sec; client auto-chains MMAudio for sound effects that
+  // sync with the visible action.
+  {
+    id: "unbox",
+    category: "action",
+    label: "Открытие / распаковка",
+    description: "Коробка/чехол щёлкает и открывается. Идеально для наушников, гаджетов, парфюма.",
+    prompt:
+      `STRICT REQUIREMENTS — these override everything:\n` +
+      `- The camera is COMPLETELY STATIC. No dolly, no pan, no zoom, no tilt.\n` +
+      `- All text, logos, and the BACKGROUND stay in EXACTLY the same position throughout.\n` +
+      `- The product is the only thing that animates. It mechanically opens, unboxes, ` +
+      `or reveals its contents — lid flips up, case clicks open, package unfolds, ` +
+      `headphones case lid pops up exposing the buds, perfume cap lifts off.\n` +
+      `- The motion is physically plausible: real hinges, real materials, real weight. ` +
+      `Smooth easing, no warping or magical morphing.\n` +
+      `- 5-second pacing: t=0-1s closed and still, t=1-2s a slight nudge or pre-motion, ` +
+      `t=2-3.5s the actual open/click action, t=3.5-5s held open with contents catching light.\n` +
+      `- Preserve every detail of brand, color, materials, proportions. The opened state ` +
+      `must look like the same product just in its open configuration.`,
+  },
+  {
+    id: "smile",
+    category: "action",
+    label: "Улыбка / эмоция",
+    description: "Человек улыбается, моргает, чуть поворачивает голову. Для портретов и lifestyle.",
+    prompt:
+      `STRICT REQUIREMENTS — these override everything:\n` +
+      `- The camera is COMPLETELY STATIC. No dolly, no pan, no zoom, no tilt, no shake.\n` +
+      `- The framing, background, lighting, and clothing all stay in the same position.\n` +
+      `- The PERSON in the frame may animate naturally and warmly: a soft smile blooming, ` +
+      `eyes blinking, head tilting just slightly, hair settling. Lifelike micro-expressions only.\n` +
+      `- The person's identity, face structure, skin tone, and outfit must NOT change. ` +
+      `This is the same person from the source image, gently brought to life.\n` +
+      `- 5-second pacing: t=0-1s neutral expression, t=1-3s warmth builds (smile forms, ` +
+      `eyes soften), t=3-5s held smile with one natural blink.\n` +
+      `- The mood is genuine, magazine-quality, never uncanny or exaggerated. No lip-sync, ` +
+      `no talking, no teeth-gnashing — just human warmth.\n` +
+      `- Background elements may have very subtle ambient motion (light, hair).`,
+  },
+  {
+    id: "interact",
+    category: "action",
+    label: "Взаимодействие с товаром",
+    description: "Рука берёт, надевает, демонстрирует продукт. Для одежды, аксессуаров, гаджетов.",
+    prompt:
+      `STRICT REQUIREMENTS — these override everything:\n` +
+      `- The camera is COMPLETELY STATIC. No dolly, no pan, no zoom, no tilt.\n` +
+      `- The background and overall framing stay locked.\n` +
+      `- A natural human interaction with the product happens within the frame: a hand ` +
+      `enters and picks up the item, slides it on, opens it, demonstrates a feature. ` +
+      `If the source already has a person holding the product, they perform a small ` +
+      `presentation gesture (turning the item, showing a detail, putting it on).\n` +
+      `- The product's identity and design are preserved exactly. Hands and skin look natural.\n` +
+      `- 5-second pacing: t=0-1s setup pose, t=1-3.5s the interaction motion (clean and ` +
+      `purposeful), t=3.5-5s held final pose where the product is showcased.\n` +
+      `- No face redesigning, no lip motion, no magical morphs. Real human movement quality.`,
+  },
+  {
+    id: "ambience",
+    category: "action",
+    label: "Действие на фоне",
+    description: "Что-то происходит на фоне (волны, ветер, машины едут). Продукт остаётся в центре.",
+    prompt:
+      `STRICT REQUIREMENTS — these override everything:\n` +
+      `- The camera is COMPLETELY STATIC. No dolly, no pan, no zoom, no tilt.\n` +
+      `- The product, all text, and all logos in the foreground are FROZEN in place. ` +
+      `They don't move at all. The product looks like a still cutout.\n` +
+      `- The BACKGROUND comes to life with one clear ambient action that matches the ` +
+      `scene: ocean waves rolling, tree leaves swaying in wind, cars driving past in ` +
+      `the distance, steam rising from a coffee cup behind the product, fabric blowing, ` +
+      `clouds drifting, water rippling. Pick the action that fits what's already in the source.\n` +
+      `- Background motion is continuous and natural for the full 5 seconds, not a one-shot event.\n` +
+      `- The contrast is stark: foreground product is a perfectly still hero, background is alive.\n` +
+      `- Preserve product identity exactly. No artifacts touching the product.`,
+  },
 ];
 
 export function getAnimationPreset(id: string | undefined | null): AnimationPreset {
   const found = ANIMATION_PRESETS.find((p) => p.id === id);
   return found ?? ANIMATION_PRESETS[0];
 }
+
+export const AMBIENT_PRESETS = ANIMATION_PRESETS.filter((p) => p.category === "ambient");
+export const ACTION_PRESETS = ANIMATION_PRESETS.filter((p) => p.category === "action");
