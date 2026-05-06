@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { users, promoCodes, creatives } from "@/db/schema";
 import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import crypto from "crypto";
-import { isAdmin } from "@/lib/admin-guard";
+import { isAdmin, isAdminOrCurator, getViewerRole } from "@/lib/admin-guard";
 import { recordAdminAction, getRecentAuditLog, getAuditLogForUser } from "@/lib/audit-log";
 import { estimateRevenueKztFromImpulses, avgKztPerImpulse, SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 import { notifyAdmin, fmt } from "@/lib/admin-notify";
@@ -29,9 +29,14 @@ export type DashboardQuery = {
 };
 
 export async function getAdminDashboardData(query: DashboardQuery = {}) {
-  if (!(await isAdmin())) {
+  const role = await getViewerRole();
+  if (role === "none") {
     return { success: false, error: "Access Denied" };
   }
+  // Curators see the same user list but with API spend redacted to zero
+  // — they should not see how much we pay per generation. Personal
+  // contact data (phone, full name) is also redacted below.
+  const isCuratorOnly = role === "curator";
 
   try {
     // ---- Normalize pagination / filters ----
@@ -143,10 +148,15 @@ export async function getAdminDashboardData(query: DashboardQuery = {}) {
         likes: 0,
         dislikes: 0,
       };
+      // Redact for curators: hide API cost (financial info) and personal
+      // contact data (phone, full name). Email stays — needed to identify
+      // the user when giving tokens. createdAt / impulses / activity stats
+      // remain so the curator can do their job.
       return {
         ...u,
+        ...(isCuratorOnly ? { phone: null, name: null } : {}),
         totalGenerations: stats.totalGenerations,
-        totalApiCostKzt: stats.totalApiCostKzt,
+        totalApiCostKzt: isCuratorOnly ? 0 : stats.totalApiCostKzt,
         likes: stats.likes,
         dislikes: stats.dislikes,
         promosUsed: promosByUser.get(u.id) ?? [],
@@ -157,6 +167,7 @@ export async function getAdminDashboardData(query: DashboardQuery = {}) {
       success: true,
       users: enrichedUsers,
       activePromos,
+      role,
       pagination: {
         page,
         pageSize,
@@ -187,9 +198,11 @@ export async function getAdminDashboardData(query: DashboardQuery = {}) {
  * — tiny set) and the top-10 users (hard-capped by LIMIT).
  */
 export async function getAdminStats() {
-  if (!(await isAdmin())) {
+  const role = await getViewerRole();
+  if (role === "none") {
     return { success: false as const, error: "Access Denied" };
   }
+  const isCuratorOnly = role === "curator";
 
   try {
     const now = Date.now();
@@ -314,9 +327,21 @@ export async function getAdminStats() {
       });
     }
 
+    // Curators see activity but never financial figures. Cost/revenue
+    // fields are stripped server-side, and the topUsers/dailySeries
+    // payloads have their per-row cost columns zeroed (the row is still
+    // useful for ordering by activity).
+    const dailySeriesPublic = isCuratorOnly
+      ? dailySeries.map(d => ({ ...d, apiCostKzt: 0 }))
+      : dailySeries;
+    const topUsersPublic = isCuratorOnly
+      ? topUsersRows.map(u => ({ ...u, apiCostKzt: 0 }))
+      : topUsersRows;
+
     return {
       success: true as const,
       generatedAt: new Date().toISOString(),
+      role,
       users: {
         total: usersRow.total,
         today: usersRow.today,
@@ -334,23 +359,27 @@ export async function getAdminStats() {
         month: gensRow.month,
         perUserAvg: usersRow.total > 0 ? gensRow.total / usersRow.total : 0,
       },
-      apiCostsKzt: {
-        total: apiCostTotal,
-        today: apiCostToday[0]?.s ?? 0,
-        week: apiCostWeek[0]?.s ?? 0,
-        month: apiCostMonth[0]?.s ?? 0,
-        perGenAvg: gensRow.total > 0 ? apiCostTotal / gensRow.total : 0,
-      },
-      revenueKztEstimate: {
-        total: revenueTotal,
-        week: revenueWeek,
-        month: revenueMonth,
-        arpu,
-        avgKztPerImpulse: avgKztPerImpulse(),
-        disclaimer: "Оценка: построена по использованным промокодам × ценам тарифов. Подключите orders-таблицу для точного дохода.",
-      },
-      dailySeries,
-      topUsers: topUsersRows,
+      apiCostsKzt: isCuratorOnly
+        ? null
+        : {
+            total: apiCostTotal,
+            today: apiCostToday[0]?.s ?? 0,
+            week: apiCostWeek[0]?.s ?? 0,
+            month: apiCostMonth[0]?.s ?? 0,
+            perGenAvg: gensRow.total > 0 ? apiCostTotal / gensRow.total : 0,
+          },
+      revenueKztEstimate: isCuratorOnly
+        ? null
+        : {
+            total: revenueTotal,
+            week: revenueWeek,
+            month: revenueMonth,
+            arpu,
+            avgKztPerImpulse: avgKztPerImpulse(),
+            disclaimer: "Оценка: построена по использованным промокодам × ценам тарифов. Подключите orders-таблицу для точного дохода.",
+          },
+      dailySeries: dailySeriesPublic,
+      topUsers: topUsersPublic,
     };
   } catch (e: any) {
     return { success: false as const, error: e.message };
@@ -358,7 +387,7 @@ export async function getAdminStats() {
 }
 
 export async function createPromoCode(impulses: number) {
-  if (!(await isAdmin())) {
+  if (!(await isAdminOrCurator())) {
     return { success: false, error: "Access Denied" };
   }
 
@@ -397,7 +426,7 @@ export async function createPromoCode(impulses: number) {
 }
 
 export async function deletePromoCode(code: string) {
-  if (!(await isAdmin())) {
+  if (!(await isAdminOrCurator())) {
     return { success: false, error: "Access Denied" };
   }
 
@@ -422,7 +451,7 @@ export async function deletePromoCode(code: string) {
 }
 
 export async function updateUserImpulses(userId: string, newBalance: number) {
-  if (!(await isAdmin())) {
+  if (!(await isAdminOrCurator())) {
     return { success: false, error: "Access Denied" };
   }
 
@@ -534,12 +563,15 @@ export async function toggleUserBan(userId: string, isBanned: boolean) {
 const HISTORY_PAGE_SIZE_DEFAULT = 50;
 const HISTORY_PAGE_SIZE_MAX = 200;
 
+// Allows admin OR curator. Curator sees the same per-user history but
+// any rendered cost columns are stripped client-side via the role flag
+// returned by getAdminDashboardData.
 export async function getUserHistory(
   userId: string,
   limit: number = HISTORY_PAGE_SIZE_DEFAULT,
   offset: number = 0,
 ) {
-  if (!(await isAdmin())) {
+  if (!(await isAdminOrCurator())) {
     return { success: false as const, error: "Access Denied" };
   }
 
@@ -605,7 +637,7 @@ export async function getAdminAuditLog(limit = 100) {
  * Return the audit trail for a single user (all balance changes, bans).
  */
 export async function getUserAuditLog(userId: string, limit = 50) {
-  if (!(await isAdmin())) {
+  if (!(await isAdminOrCurator())) {
     return { success: false as const, error: "Access Denied" };
   }
   try {
@@ -628,7 +660,7 @@ export async function getUserAuditLog(userId: string, limit = 50) {
  * which customer's file and when.
  */
 export async function adminDownloadCreative(creativeId: string) {
-  if (!(await isAdmin())) {
+  if (!(await isAdminOrCurator())) {
     return { success: false as const, error: "Access Denied" };
   }
   if (typeof creativeId !== "string" || creativeId.trim().length === 0) {
@@ -929,7 +961,7 @@ export async function adminSyncClerkUsers() {
  *   - undecided: number of pairs still awaiting a vote
  */
 export async function getModelStats() {
-  if (!(await isAdmin())) {
+  if (!(await isAdminOrCurator())) {
     return { success: false as const, error: "Access Denied" };
   }
   try {

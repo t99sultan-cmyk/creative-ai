@@ -16,6 +16,7 @@ import {
   ACTION_PRESETS,
   type AnimationPresetId,
 } from "@/lib/models/animation-presets";
+import { HIGGSFIELD_PRESETS, type HiggsfieldPresetId } from "@/lib/models/higgsfield-presets";
 import { CATEGORIES, getCategory, getScene, type CategoryId } from "@/lib/categories";
 import { ManualImageEditor } from "@/components/editor/ManualImageEditor";
 import clsx from "clsx";
@@ -46,6 +47,12 @@ export default function Home() {
   const [categoryId, setCategoryId] = useState<CategoryId>("other");
   // Scene id (within the current category). null = no scene picked.
   const [sceneId, setSceneId] = useState<string | null>(null);
+  // User-facing creative-type toggle. "static" → PNG poster as the
+  // final artifact; "animated" → after the static generation we
+  // auto-open the Target (Higgsfield) animation panel on each variant
+  // so the user is one click away from a video. The image-gen
+  // pipeline itself is the same in both cases.
+  const [creativeType, setCreativeType] = useState<"static" | "animated">("static");
   // Animation removed in this iteration — only static. The constant
   // is kept so we don't have to gut every conditional in the file
   // (TypeScript will tree-shake the dead branches).
@@ -289,11 +296,16 @@ export default function Home() {
   const [animByCreative, setAnimByCreative] = useState<Record<string, AnimState>>({});
   const [presetByCreative, setPresetByCreative] = useState<Record<string, AnimationPresetId>>({});
   const [durationByCreative, setDurationByCreative] = useState<Record<string, 5 | 10>>({});
-  // "ambient" — frame-locked light/atmosphere only.
-  // "promo"   — action preset (5 sec) + auto-chained MMAudio sound effects.
+  // "ambient" — fal.ai Seedance, frame-locked light/atmosphere only.
+  // "promo"   — fal.ai Seedance, action preset (5 sec) + auto-chained MMAudio sound.
+  // "target"  — Higgsfield DoP, cinematic camera moves for target-ad clips.
   // The animation card UI swaps preset picker + button label based on this.
-  type AnimMode = "ambient" | "promo";
+  type AnimMode = "ambient" | "promo" | "target";
   const [modeByCreative, setModeByCreative] = useState<Record<string, AnimMode>>({});
+  // Higgsfield preset selection — separate from `presetByCreative` because
+  // its IDs are a different union (cinematic / push-in / orbit / reveal /
+  // parallax). Default = "cinematic" when target mode is opened.
+  const [higgsPresetByCreative, setHiggsPresetByCreative] = useState<Record<string, HiggsfieldPresetId>>({});
   // Ids that have already kicked off auto-sound after their promo
   // animation completed. Prevents double-firing if the polling effect
   // re-runs while sound is in progress.
@@ -389,9 +401,11 @@ export default function Home() {
   }
 
   // Poll fal.ai status for any in-flight animation requests every 4s.
+  // Skips creatives in "target" mode — those are Higgsfield jobs and
+  // get their own polling effect below.
   useEffect(() => {
     const inflight = Object.entries(animByCreative)
-      .filter(([, st]) => st.kind === "queued" || st.kind === "in_progress")
+      .filter(([cid, st]) => (st.kind === "queued" || st.kind === "in_progress") && modeByCreative[cid] !== "target")
       .map(([cid, st]) => ({ creativeId: cid, requestId: (st as { requestId: string }).requestId }));
     if (inflight.length === 0) return;
     let cancelled = false;
@@ -414,7 +428,38 @@ export default function Home() {
       }
     }, 4000);
     return () => { cancelled = true; clearInterval(t); };
-  }, [animByCreative]);
+  }, [animByCreative, modeByCreative]);
+
+  // Mirror polling effect for Higgsfield. Same interval, different
+  // status endpoint, gated on mode === "target". Kept separate from
+  // the fal effect so each provider can evolve independently (different
+  // status payload shapes, different cancel semantics, etc.).
+  useEffect(() => {
+    const inflight = Object.entries(animByCreative)
+      .filter(([cid, st]) => (st.kind === "queued" || st.kind === "in_progress") && modeByCreative[cid] === "target")
+      .map(([cid, st]) => ({ creativeId: cid, requestId: (st as { requestId: string }).requestId }));
+    if (inflight.length === 0) return;
+    let cancelled = false;
+    const t = setInterval(async () => {
+      for (const { creativeId, requestId } of inflight) {
+        try {
+          const r = await fetch(`/api/higgs/animate/status?id=${encodeURIComponent(requestId)}`);
+          const data = await r.json();
+          if (cancelled) return;
+          if (data.state === "completed" && data.videoUrl) {
+            setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "completed", videoUrl: data.videoUrl } }));
+          } else if (data.state === "failed") {
+            setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: data.error || "Higgsfield error" } }));
+          } else if (data.state === "in_progress" || data.state === "queued") {
+            setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "in_progress", requestId } }));
+          }
+        } catch (e) {
+          console.warn("[higgs-poll]", e);
+        }
+      }
+    }, 5000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [animByCreative, modeByCreative]);
 
   async function startAnimate(creativeId: string) {
     if (!creativeId) return;
@@ -428,6 +473,32 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ creativeId, presetId, durationSec }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.requestId) throw new Error(data?.error || `HTTP ${res.status}`);
+      setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "queued", requestId: data.requestId } }));
+    } catch (e: any) {
+      setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "failed", error: e?.message || "submit failed" } }));
+    }
+  }
+
+  // Target-ad flow via Higgsfield DoP. Cinematic camera moves on the
+  // creative — distinct from Seedance's frame-lock animation. Uses a
+  // different endpoint and status URL; the mode flag routes polling.
+  async function startTarget(creativeId: string) {
+    if (!creativeId) return;
+    const existing = animByCreative[creativeId];
+    if (existing && existing.kind !== "failed") return;
+    const current = higgsPresetByCreative[creativeId] ?? "cinematic";
+    const durationSec = durationByCreative[creativeId] ?? 5;
+    setModeByCreative((p) => ({ ...p, [creativeId]: "target" }));
+    setHiggsPresetByCreative((p) => ({ ...p, [creativeId]: current }));
+    setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "submitting" } }));
+    try {
+      const res = await fetch("/api/higgs/animate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creativeId, presetId: current, durationSec }),
       });
       const data = await res.json();
       if (!res.ok || !data.requestId) throw new Error(data?.error || `HTTP ${res.status}`);
@@ -1172,6 +1243,18 @@ export default function Home() {
           imagen: null,
           variants: data.variants as ImageVariant[],
         });
+        // If the user picked "Анимированный" creative type, pre-open the
+        // Target (Higgsfield) panel on every successful variant — they're
+        // one click away from a video-ad without hunting for the toggle.
+        if (creativeType === "animated") {
+          const targetMap: Record<string, "target"> = {};
+          for (const v of data.variants as ImageVariant[]) {
+            if (v.ok && v.creativeId) targetMap[v.creativeId] = "target";
+          }
+          if (Object.keys(targetMap).length > 0) {
+            setModeByCreative((prev) => ({ ...prev, ...targetMap }));
+          }
+        }
       } else {
         const claudeOk = data.claude && data.claude.code && !data.claude.error;
         const geminiOk = data.gemini && data.gemini.code && !data.gemini.error;
@@ -2068,10 +2151,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Тип креатива. Анимированный режим временно скрыт за
-              disabled-кнопкой с бейджем «На обновлении» — пока обкатываем
-              новые видео-модели (Veo 3 / Kling). Статичный — единственный
-              рабочий путь. */}
+          {/* Тип креатива. Оба варианта сначала генерируют статику; разница
+              в том, что после генерации даёт пользователю. Анимированный
+              авто-открывает Target-панель под каждым вариантом, чтобы
+              сразу собрать видеоролик через Higgsfield. Статичный
+              оставляет PNG-постер как финальный артефакт. */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Video className="w-4 h-4 text-hermes-500" />
@@ -2079,34 +2163,48 @@ export default function Home() {
             </h2>
             <div className="grid grid-cols-2 gap-2">
               <button
-                disabled
-                aria-disabled="true"
-                title="Анимированные креативы временно недоступны — обкатываем новые видео-модели"
-                className="py-3 px-2 rounded-xl border border-neutral-200 bg-neutral-50 text-neutral-400 text-sm font-medium flex flex-col items-center gap-0.5 cursor-not-allowed relative"
+                type="button"
+                aria-pressed={creativeType === "animated"}
+                onClick={() => setCreativeType("animated")}
+                className={clsx(
+                  "py-3 px-2 rounded-xl text-sm font-medium flex flex-col items-center gap-0.5 transition-colors",
+                  creativeType === "animated"
+                    ? "border border-neutral-900 bg-neutral-900 text-white"
+                    : "border border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-400 hover:bg-white",
+                )}
               >
-                <span className="flex items-center gap-1 font-bold">
-                  Анимированный
-                  <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider bg-amber-100 text-amber-700">
-                    Скоро
-                  </span>
-                </span>
-                <span className="text-[10px] font-medium leading-tight text-neutral-400">
-                  На обновлении
+                <span className="font-bold">Анимированный</span>
+                <span className={clsx(
+                  "text-[10px] font-medium leading-tight",
+                  creativeType === "animated" ? "text-white/70" : "text-neutral-400",
+                )}>
+                  Видеоролик для таргета
                 </span>
               </button>
               <button
-                disabled
-                aria-pressed="true"
-                className="py-3 px-2 rounded-xl border border-neutral-900 bg-neutral-900 text-white text-sm font-medium flex flex-col items-center gap-0.5 cursor-default"
+                type="button"
+                aria-pressed={creativeType === "static"}
+                onClick={() => setCreativeType("static")}
+                className={clsx(
+                  "py-3 px-2 rounded-xl text-sm font-medium flex flex-col items-center gap-0.5 transition-colors",
+                  creativeType === "static"
+                    ? "border border-neutral-900 bg-neutral-900 text-white"
+                    : "border border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-400 hover:bg-white",
+                )}
               >
                 <span className="font-bold">Статичный</span>
-                <span className="text-[10px] font-medium leading-tight text-white/70">
+                <span className={clsx(
+                  "text-[10px] font-medium leading-tight",
+                  creativeType === "static" ? "text-white/70" : "text-neutral-400",
+                )}>
                   PNG-постер 4K
                 </span>
               </button>
             </div>
             <p className="text-[10px] text-neutral-400 leading-tight">
-              Анимация вернётся после обновления видео-движка. Сейчас доступна статика — 2 варианта от двух разных ИИ. Выбери лучший — мы учтём твой голос.
+              {creativeType === "animated"
+                ? "Сначала сгенерим 2 статичных варианта — выберешь лучший, потом одной кнопкой превратим в видеоролик через Higgsfield (cinematic камера-моушен)."
+                : "Сейчас доступна статика — 2 варианта от двух разных ИИ. Выбери лучший — мы учтём твой голос."}
             </p>
           </div>
 
@@ -2959,22 +3057,36 @@ export default function Home() {
 
                               const failed = anim?.kind === "failed";
                               const mode: AnimMode = modeByCreative[v.creativeId] ?? "ambient";
-                              const presets = mode === "promo" ? ACTION_PRESETS : AMBIENT_PRESETS;
+                              // Pick which preset list applies to the active mode.
+                              // Target uses Higgsfield presets which have their own
+                              // ID union, so we keep selection state separate.
+                              const animPresets =
+                                mode === "promo" ? ACTION_PRESETS :
+                                mode === "ambient" ? AMBIENT_PRESETS :
+                                null;
                               const stored = presetByCreative[v.creativeId];
-                              // If the stored preset doesn't belong to the current mode's
-                              // list (e.g. user switched ambient→promo), fall back to the
-                              // first preset of the active mode without mutating state.
-                              const selectedPreset = presets.some((p) => p.id === stored)
+                              const selectedAnimPreset = animPresets && animPresets.some((p) => p.id === stored)
                                 ? (stored as AnimationPresetId)
-                                : presets[0].id;
+                                : animPresets?.[0].id;
+                              const storedHiggs = higgsPresetByCreative[v.creativeId];
+                              const selectedHiggsPreset: HiggsfieldPresetId =
+                                HIGGSFIELD_PRESETS.some((p) => p.id === storedHiggs)
+                                  ? storedHiggs
+                                  : "cinematic";
                               const selectedDuration = durationByCreative[v.creativeId] ?? 5;
                               const promoCost = VIDEO_GEN_COST + 5; // animate + MMAudio
                               return (
                                 <>
-                                  {/* Mode toggle: Атмосфера (ambient) ↔ Промо со звуком (action+sound). */}
-                                  <div className="grid grid-cols-2 gap-1 p-0.5 bg-neutral-100 rounded-xl">
-                                    {(["ambient", "promo"] as const).map((mk) => {
+                                  {/* 3-mode toggle: Атмосфера (Seedance ambient) /
+                                      Промо со звуком (Seedance action + MMAudio) /
+                                      Таргет-ролик (Higgsfield DoP). */}
+                                  <div className="grid grid-cols-3 gap-1 p-0.5 bg-neutral-100 rounded-xl">
+                                    {(["ambient", "promo", "target"] as const).map((mk) => {
                                       const active = mode === mk;
+                                      const label =
+                                        mk === "ambient" ? "Атмосфера" :
+                                        mk === "promo"   ? "🎬 Промо" :
+                                        "🎯 Таргет";
                                       return (
                                         <button
                                           key={mk}
@@ -2983,40 +3095,72 @@ export default function Home() {
                                             setModeByCreative((prev) => ({ ...prev, [v.creativeId!]: mk }))
                                           }
                                           className={clsx(
-                                            "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                            "py-1.5 px-1 rounded-lg text-[10px] font-bold transition-colors leading-tight",
                                             active ? "bg-white text-purple-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700",
                                           )}
                                         >
-                                          {mk === "ambient" ? "Атмосфера" : "🎬 Промо со звуком"}
+                                          {label}
                                         </button>
                                       );
                                     })}
                                   </div>
-                                  <div className="grid grid-cols-2 gap-1">
-                                    {presets.map((p) => {
-                                      const active = selectedPreset === p.id;
-                                      return (
-                                        <button
-                                          key={p.id}
-                                          type="button"
-                                          onClick={() =>
-                                            setPresetByCreative((prev) => ({ ...prev, [v.creativeId!]: p.id }))
-                                          }
-                                          title={p.description}
-                                          className={clsx(
-                                            "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
-                                            active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
-                                          )}
-                                        >
-                                          {p.label}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                  {mode === "ambient" ? (
+                                  {/* Preset picker — different list per mode. */}
+                                  {mode === "target" ? (
+                                    <div className="grid grid-cols-2 gap-1">
+                                      {HIGGSFIELD_PRESETS.map((p) => {
+                                        const active = selectedHiggsPreset === p.id;
+                                        return (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() =>
+                                              setHiggsPresetByCreative((prev) => ({ ...prev, [v.creativeId!]: p.id }))
+                                            }
+                                            title={p.description}
+                                            className={clsx(
+                                              "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                              active ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700 hover:bg-rose-100",
+                                            )}
+                                          >
+                                            {p.label}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : animPresets ? (
+                                    <div className="grid grid-cols-2 gap-1">
+                                      {animPresets.map((p) => {
+                                        const active = selectedAnimPreset === p.id;
+                                        return (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() =>
+                                              setPresetByCreative((prev) => ({ ...prev, [v.creativeId!]: p.id }))
+                                            }
+                                            title={p.description}
+                                            className={clsx(
+                                              "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                              active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
+                                            )}
+                                          >
+                                            {p.label}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : null}
+                                  {/* Duration picker — ambient and target support 5/10,
+                                      promo is locked at 5 sec (paired with sound). */}
+                                  {mode === "promo" ? (
+                                    <p className="text-[10px] text-neutral-500 leading-tight px-1">
+                                      5 сек · видео + звук одной кнопкой
+                                    </p>
+                                  ) : (
                                     <div className="grid grid-cols-2 gap-1">
                                       {([5, 10] as const).map((d) => {
                                         const active = selectedDuration === d;
+                                        const isTarget = mode === "target";
                                         return (
                                           <button
                                             key={d}
@@ -3026,7 +3170,9 @@ export default function Home() {
                                             }
                                             className={clsx(
                                               "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
-                                              active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
+                                              active
+                                                ? (isTarget ? "bg-rose-600 text-white" : "bg-purple-600 text-white")
+                                                : (isTarget ? "bg-rose-50 text-rose-700 hover:bg-rose-100" : "bg-purple-50 text-purple-700 hover:bg-purple-100"),
                                             )}
                                           >
                                             {d} сек
@@ -3034,12 +3180,9 @@ export default function Home() {
                                         );
                                       })}
                                     </div>
-                                  ) : (
-                                    <p className="text-[10px] text-neutral-500 leading-tight px-1">
-                                      5 сек · видео + звук одной кнопкой
-                                    </p>
                                   )}
-                                  {mode === "ambient" ? (
+                                  {/* Action button — 3 branches. */}
+                                  {mode === "ambient" && (
                                     <button
                                       onClick={() => startAnimate(v.creativeId!)}
                                       className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
@@ -3047,13 +3190,23 @@ export default function Home() {
                                       <Video className="w-3.5 h-3.5" />
                                       {failed ? "Ошибка — повторить" : `Анимировать ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
                                     </button>
-                                  ) : (
+                                  )}
+                                  {mode === "promo" && (
                                     <button
                                       onClick={() => startPromo(v.creativeId!)}
                                       className="w-full bg-gradient-to-r from-emerald-600 to-purple-600 hover:from-emerald-700 hover:to-purple-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
                                     >
                                       <Sparkles className="w-3.5 h-3.5" />
                                       {failed ? "Ошибка — повторить" : `Промо со звуком (${promoCost}⚡)`}
+                                    </button>
+                                  )}
+                                  {mode === "target" && (
+                                    <button
+                                      onClick={() => startTarget(v.creativeId!)}
+                                      className="w-full bg-gradient-to-r from-rose-600 to-amber-500 hover:from-rose-700 hover:to-amber-600 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                      <Video className="w-3.5 h-3.5" />
+                                      {failed ? "Ошибка — повторить" : `Таргет-ролик ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
                                     </button>
                                   )}
                                 </>

@@ -82,7 +82,7 @@ function SyncClerkButton({ onSynced }: { onSynced: () => void }) {
   );
 }
 
-function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => void, onViewHistory: (userId: string) => void }) {
+function UserRow({ u, onRefresh, onViewHistory, isCuratorView = false }: { u: any, onRefresh: () => void, onViewHistory: (userId: string) => void, isCuratorView?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [newBalance, setNewBalance] = useState(u.impulses);
   const [saving, setSaving] = useState(false);
@@ -207,11 +207,13 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
       <td className="p-4 text-neutral-500 text-xs text-center border-l border-neutral-100">
          {u.totalGenerations}
       </td>
-      <td className="p-4 border-l border-neutral-100">
-         <span className={`font-bold font-mono text-xs ${u.totalApiCostKzt > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
-            {u.totalApiCostKzt > 0 ? `${u.totalApiCostKzt.toFixed(2)} ₸` : '0 ₸'}
-         </span>
-      </td>
+      {!isCuratorView && (
+        <td className="p-4 border-l border-neutral-100">
+           <span className={`font-bold font-mono text-xs ${u.totalApiCostKzt > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+              {u.totalApiCostKzt > 0 ? `${u.totalApiCostKzt.toFixed(2)} ₸` : '0 ₸'}
+           </span>
+        </td>
+      )}
       <td className="p-4 border-l border-neutral-100">
          <div className="flex flex-col text-xs font-bold gap-1">
              {u.likes > 0 && <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded w-max">👍 {u.likes}</span>}
@@ -241,22 +243,27 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
          <div className="text-neutral-500 font-medium">
             {u.createdAt ? new Date(u.createdAt).toLocaleString("ru-RU", { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
          </div>
-         {u.phone ? (
-            <a href={`tel:${u.phone}`} className="mt-1 inline-block font-mono text-neutral-700 hover:text-orange-600 transition-colors">
-               {u.phone}
-            </a>
-         ) : (
-            <div className="mt-1 text-neutral-300 italic">нет телефона</div>
-         )}
-         {u.telegramUsername && (
-            <a
-               href={`https://t.me/${u.telegramUsername}`}
-               target="_blank"
-               rel="noreferrer"
-               className="mt-1 block text-[#2AABEE] hover:underline font-medium"
-            >
-               @{u.telegramUsername}
-            </a>
+         {/* Curator view hides personal contact data — phone & Telegram. */}
+         {!isCuratorView && (
+           <>
+             {u.phone ? (
+                <a href={`tel:${u.phone}`} className="mt-1 inline-block font-mono text-neutral-700 hover:text-orange-600 transition-colors">
+                   {u.phone}
+                </a>
+             ) : (
+                <div className="mt-1 text-neutral-300 italic">нет телефона</div>
+             )}
+             {u.telegramUsername && (
+                <a
+                   href={`https://t.me/${u.telegramUsername}`}
+                   target="_blank"
+                   rel="noreferrer"
+                   className="mt-1 block text-[#2AABEE] hover:underline font-medium"
+                >
+                   @{u.telegramUsername}
+                </a>
+             )}
+           </>
          )}
       </td>
       <td className="p-4 text-right">
@@ -268,22 +275,28 @@ function UserRow({ u, onRefresh, onViewHistory }: { u: any, onRefresh: () => voi
             <HistoryIcon className="w-3.5 h-3.5 mr-1" /> История
           </button>
 
-          <button
-            onClick={handleImpersonate}
-            disabled={saving || u.isBanned}
-            className="text-xs w-full justify-center px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Войти как этот пользователь"
-          >
-            <UserCogIcon className="w-3.5 h-3.5 mr-1" /> Войти как
-          </button>
+          {/* Impersonate + Ban — admin only. Curator can manage tokens
+              and see history but not act as another user or block them. */}
+          {!isCuratorView && (
+            <>
+              <button
+                onClick={handleImpersonate}
+                disabled={saving || u.isBanned}
+                className="text-xs w-full justify-center px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Войти как этот пользователь"
+              >
+                <UserCogIcon className="w-3.5 h-3.5 mr-1" /> Войти как
+              </button>
 
-          <button
-            onClick={handleToggleBan}
-            disabled={saving}
-            className={`text-xs w-full justify-center px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors ${u.isBanned ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
-          >
-            {u.isBanned ? <><CheckCircle2Icon className="w-3.5 h-3.5 mr-1" /> Разбан</> : <><BanIcon className="w-3.5 h-3.5 mr-1" /> Забанить</>}
-          </button>
+              <button
+                onClick={handleToggleBan}
+                disabled={saving}
+                className={`text-xs w-full justify-center px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors ${u.isBanned ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+              >
+                {u.isBanned ? <><CheckCircle2Icon className="w-3.5 h-3.5 mr-1" /> Разбан</> : <><BanIcon className="w-3.5 h-3.5 mr-1" /> Забанить</>}
+              </button>
+            </>
+          )}
         </div>
       </td>
     </tr>
@@ -356,6 +369,20 @@ function Sparkline({
 
 export default function AdminPage() {
   const router = useRouter();
+
+  // Mounted at both /admin (full admin view) and /curator (redacted
+  // view for the curator role — cost/revenue widgets hidden, admin-only
+  // buttons hidden, personal-data fields blanked). The view mode is
+  // driven by URL pathname, NOT the actual user role — so an admin who
+  // opens /curator sees the curator UI as a preview.
+  // Initial value SSR-safe: defaults to "admin", flips on mount once
+  // we can read window.location.
+  const [viewMode, setViewMode] = useState<"admin" | "curator">("admin");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setViewMode(window.location.pathname.startsWith("/curator") ? "curator" : "admin");
+  }, []);
+  const isCuratorView = viewMode === "curator";
 
   // Main data
   const [loading, setLoading] = useState(true);
@@ -582,18 +609,25 @@ export default function AdminPage() {
         <header className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-neutral-200">
           <div>
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-rose-600">
-              AICreative Admin Portal (CRM)
+              {isCuratorView ? "AICreative — Кабинет куратора" : "AICreative Admin Portal (CRM)"}
             </h1>
-            <p className="text-neutral-500">Управление пользователями, промокодами и историей</p>
+            <p className="text-neutral-500">
+              {isCuratorView
+                ? "Пользователи, промокоды и активность команды"
+                : "Управление пользователями, промокодами и историей"}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={openAuditLog}
-              className="px-4 py-2 rounded-xl border border-neutral-200 font-medium hover:bg-neutral-100 transition-colors flex items-center gap-2 text-sm"
-              title="Журнал действий админов"
-            >
-              <ShieldAlertIcon className="w-4 h-4" /> Audit log
-            </button>
+            {/* Audit log — admin only (sensitive trail of mutations). */}
+            {!isCuratorView && (
+              <button
+                onClick={openAuditLog}
+                className="px-4 py-2 rounded-xl border border-neutral-200 font-medium hover:bg-neutral-100 transition-colors flex items-center gap-2 text-sm"
+                title="Журнал действий админов"
+              >
+                <ShieldAlertIcon className="w-4 h-4" /> Audit log
+              </button>
+            )}
             <button
               onClick={() => { fetchStats(); fetchData(); }}
               className="px-4 py-2 rounded-xl border border-neutral-200 font-medium hover:bg-neutral-100 transition-colors text-sm"
@@ -634,33 +668,41 @@ export default function AdminPage() {
                 icon={ZapIcon}
                 accent="orange"
               />
-              <StatCard
-                label="API-расход (30д)"
-                value={formatKzt(stats.apiCostsKzt.month)}
-                sub={`${stats.apiCostsKzt.perGenAvg.toFixed(1)} ₸ / ген · ${formatKzt(stats.apiCostsKzt.total)} всего`}
-                icon={DollarSignIcon}
-                accent="rose"
-              />
-              <StatCard
-                label="Доход (оценка, 30д)"
-                value={formatKzt(stats.revenueKztEstimate.month)}
-                sub={`Платящих: ${stats.users.paying} · Всего: ${formatKzt(stats.revenueKztEstimate.total)}`}
-                icon={TrendingUpIcon}
-                accent="green"
-              />
-              <StatCard
-                label="ARPU"
-                value={formatKzt(stats.revenueKztEstimate.arpu)}
-                sub={`~${stats.revenueKztEstimate.avgKztPerImpulse} ₸ за 1 ⚡ (средняя)`}
-                icon={TrendingUpIcon}
-                accent="indigo"
-              />
+              {!isCuratorView && stats.apiCostsKzt && (
+                <StatCard
+                  label="API-расход (30д)"
+                  value={formatKzt(stats.apiCostsKzt.month)}
+                  sub={`${stats.apiCostsKzt.perGenAvg.toFixed(1)} ₸ / ген · ${formatKzt(stats.apiCostsKzt.total)} всего`}
+                  icon={DollarSignIcon}
+                  accent="rose"
+                />
+              )}
+              {!isCuratorView && stats.revenueKztEstimate && (
+                <>
+                  <StatCard
+                    label="Доход (оценка, 30д)"
+                    value={formatKzt(stats.revenueKztEstimate.month)}
+                    sub={`Платящих: ${stats.users.paying} · Всего: ${formatKzt(stats.revenueKztEstimate.total)}`}
+                    icon={TrendingUpIcon}
+                    accent="green"
+                  />
+                  <StatCard
+                    label="ARPU"
+                    value={formatKzt(stats.revenueKztEstimate.arpu)}
+                    sub={`~${stats.revenueKztEstimate.avgKztPerImpulse} ₸ за 1 ⚡ (средняя)`}
+                    icon={TrendingUpIcon}
+                    accent="indigo"
+                  />
+                </>
+              )}
             </div>
 
-            {/* Revenue disclaimer */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-900">
-              <strong>⚠️ Доход — оценка:</strong> {stats.revenueKztEstimate.disclaimer}
-            </div>
+            {/* Revenue disclaimer — admin only. */}
+            {!isCuratorView && stats.revenueKztEstimate && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-900">
+                <strong>⚠️ Доход — оценка:</strong> {stats.revenueKztEstimate.disclaimer}
+              </div>
+            )}
 
             {/* 14-day sparklines + Top users */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -678,13 +720,15 @@ export default function AdminPage() {
                 </div>
                 <Sparkline series={stats.dailySeries} accessor={(d: any) => d.gens} color="bg-orange-400" />
               </div>
-              <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-sm font-bold text-neutral-700">API-расход в день (14д)</h3>
-                  <span className="text-xs text-neutral-400">макс: {formatKzt(Math.max(0, ...stats.dailySeries.map((d: any) => d.apiCostKzt)))}</span>
+              {!isCuratorView && (
+                <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-sm font-bold text-neutral-700">API-расход в день (14д)</h3>
+                    <span className="text-xs text-neutral-400">макс: {formatKzt(Math.max(0, ...stats.dailySeries.map((d: any) => d.apiCostKzt)))}</span>
+                  </div>
+                  <Sparkline series={stats.dailySeries} accessor={(d: any) => d.apiCostKzt} color="bg-rose-400" />
                 </div>
-                <Sparkline series={stats.dailySeries} accessor={(d: any) => d.apiCostKzt} color="bg-rose-400" />
-              </div>
+              )}
             </div>
 
             {/* Top users */}
@@ -698,7 +742,7 @@ export default function AdminPage() {
                         <th className="text-left pb-2 font-bold">#</th>
                         <th className="text-left pb-2 font-bold">Email</th>
                         <th className="text-right pb-2 font-bold">Ген.</th>
-                        <th className="text-right pb-2 font-bold">API-расход</th>
+                        {!isCuratorView && <th className="text-right pb-2 font-bold">API-расход</th>}
                         <th className="text-right pb-2 font-bold">Баланс</th>
                       </tr>
                     </thead>
@@ -708,7 +752,7 @@ export default function AdminPage() {
                           <td className="py-2 text-neutral-400 font-mono">{i + 1}</td>
                           <td className="py-2 font-medium text-neutral-800 break-all">{u.email}</td>
                           <td className="py-2 text-right font-bold">{u.gens}</td>
-                          <td className="py-2 text-right font-mono text-rose-500">{formatKzt(u.apiCostKzt)}</td>
+                          {!isCuratorView && <td className="py-2 text-right font-mono text-rose-500">{formatKzt(u.apiCostKzt)}</td>}
                           <td className="py-2 text-right font-bold text-orange-600">{u.impulses} ⚡</td>
                         </tr>
                       ))}
@@ -727,6 +771,17 @@ export default function AdminPage() {
               <h2 className="text-xl font-bold mb-4">🏭 Локали & Пакеты</h2>
 
               <div className="space-y-3">
+                {/* Quick "creator team" promo: 20⚡ for our internal creator
+                    team. Curators use this most often, so it's first. */}
+                <button
+                  disabled={generating}
+                  onClick={() => handleGeneratePromo(20)}
+                  className="w-full flex justify-between items-center bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-4 py-3 rounded-xl transition-colors disabled:opacity-50 border border-emerald-200"
+                  title="Промокод на 20 импульсов — для нашей команды креаторов"
+                >
+                  <span>👨‍🎨 Команда креаторов</span>
+                  <span>20 ⚡</span>
+                </button>
                 <button
                   disabled={generating}
                   onClick={() => handleGeneratePromo(45)}
@@ -791,10 +846,11 @@ export default function AdminPage() {
               <div className="p-6 border-b border-neutral-100 flex flex-col gap-4">
                 <div className="flex flex-wrap justify-between items-center gap-2">
                   <h2 className="text-xl font-bold">
-                    👥 База Пользователей CRM
+                    👥 База Пользователей {isCuratorView ? "" : "CRM"}
                     <span className="ml-2 text-sm font-mono text-neutral-400 font-normal">({totalCount})</span>
                   </h2>
-                  <SyncClerkButton onSynced={fetchData} />
+                  {/* Sync from Clerk — admin only (mutates DB schema). */}
+                  {!isCuratorView && <SyncClerkButton onSynced={fetchData} />}
                 </div>
 
                 {/* Search + filters */}
@@ -848,7 +904,7 @@ export default function AdminPage() {
                           Сделал Креативов {sortByGenerations ? '⬇️' : ''}
                         </span>
                       </th>
-                      <th className="p-4 font-bold border-l border-neutral-100">Расход API ₸</th>
+                      {!isCuratorView && <th className="p-4 font-bold border-l border-neutral-100">Расход API ₸</th>}
                       <th className="p-4 font-bold border-l border-neutral-100">Оценки (👍/👎)</th>
                       <th className="p-4 font-bold border-l border-neutral-100">Оплаты / Пакеты</th>
                       <th className="p-4 font-bold border-l border-neutral-100">Регистрация</th>
@@ -858,7 +914,7 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-neutral-100">
                     {sortedUsers.length === 0 && !loading && (
                       <tr>
-                        <td colSpan={8} className="p-8 text-center text-neutral-400">
+                        <td colSpan={isCuratorView ? 7 : 8} className="p-8 text-center text-neutral-400">
                           {searchQuery || statusFilter !== "all"
                             ? "Ничего не найдено. Поменяй фильтры."
                             : "Нет пользователей."}
@@ -866,7 +922,7 @@ export default function AdminPage() {
                       </tr>
                     )}
                     {sortedUsers.map((u: any) => (
-                      <UserRow key={u.id} u={u} onRefresh={fetchData} onViewHistory={handleViewHistory} />
+                      <UserRow key={u.id} u={u} onRefresh={fetchData} onViewHistory={handleViewHistory} isCuratorView={isCuratorView} />
                     ))}
                   </tbody>
                 </table>
@@ -973,7 +1029,7 @@ export default function AdminPage() {
                             )}
                             <span className="bg-neutral-100 px-2 py-1 rounded">Формат: {item.format}</span>
                             <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded">Токены: {item.cost} ⚡</span>
-                            {item.apiCostKzt > 0 && (
+                            {!isCuratorView && item.apiCostKzt > 0 && (
                                <span className="bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100">
                                   Расход: {item.apiCostKzt.toFixed(2)} ₸
                                </span>

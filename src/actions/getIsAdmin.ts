@@ -1,6 +1,6 @@
 "use server";
 
-import { isAdmin } from "@/lib/admin-guard";
+import { isAdmin, getViewerRole, type ViewerRole } from "@/lib/admin-guard";
 
 /**
  * Client-callable boolean check: is the currently authenticated Clerk
@@ -19,4 +19,14 @@ import { isAdmin } from "@/lib/admin-guard";
  */
 export async function getIsAdmin(): Promise<boolean> {
   return isAdmin();
+}
+
+/**
+ * Returns the caller's effective role on shared admin/curator surfaces.
+ * Used by the dashboard client to conditionally render finance/admin-only
+ * sections. Curators see the same page layout as admins, with cost and
+ * revenue widgets hidden and personal-data columns redacted.
+ */
+export async function getMyRole(): Promise<ViewerRole> {
+  return getViewerRole();
 }
