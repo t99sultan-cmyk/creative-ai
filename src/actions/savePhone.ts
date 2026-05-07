@@ -8,10 +8,9 @@ import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 /**
  * Save the onboarding contacts the user provided on the welcome screen.
  *
- * `phone` is required — it's our primary support channel and also the
- * user's WhatsApp handle (true for essentially every KZ mobile number).
- * `telegramUsername` is optional: if given, the support team can reach
- * them on Telegram for onboarding tips and material.
+ * `phone` is required — captured for support call-back and SMS, never
+ * shown publicly. `telegramUsername` is optional: if given, the support
+ * team can reach them on Telegram for onboarding tips and material.
  *
  * Also flips `welcomeShown=true` so the welcome screen only renders once.
  */
