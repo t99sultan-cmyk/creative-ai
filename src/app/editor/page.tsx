@@ -132,8 +132,16 @@ export default function Home() {
   // "не похоже на то, что я загрузил" complaints.
 
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0); 
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingText, setLoadingText] = useState("Инициируем сервера...");
+  // Wall-clock timestamp captured when generation starts, used to render
+  // a friendlier "~Xс осталось" ETA than the abstract percentage. Median
+  // GPT Image 2 generation runs ~45s end-to-end on our setup; we pad to
+  // 50s for the display so the timer hits zero around when the variant
+  // typically appears (slight underestimate feels better than overshoot).
+  const [loadingStartedAt, setLoadingStartedAt] = useState<number | null>(null);
+  const [loadingEtaSec, setLoadingEtaSec] = useState<number | null>(null);
+  const EXPECTED_LOADING_SEC = 50;
   const [isRecording, setIsRecording] = useState(false);
   const [showVideoInstruction, setShowVideoInstruction] = useState(false);
   
@@ -178,6 +186,11 @@ export default function Home() {
   } | null>(null);
 
   const [mobileTab, setMobileTab] = useState<'controls' | 'canvas'>('controls');
+  // Track if the user has opened the TZ helper at least once. First-time
+  // visitors get it auto-expanded — they often don't notice the accordion
+  // and end up writing 3-word prompts. After their first interaction we
+  // flip this flag so subsequent visits respect their preference.
+  const [tzHelperEverOpened, setTzHelperEverOpened] = useState(false);
   const [feedback, setFeedback] = useState<'like'|'dislike'|null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
@@ -205,6 +218,63 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // ---- LocalStorage draft (May 2026) ----
+  // Saves the user's in-progress brief (prompt + format) to localStorage
+  // on every change, restores it on mount. Protects against accidental
+  // refresh / tab-close losing 5 minutes of writing. NOT product photos —
+  // those are large base64 strings that exceed localStorage quota fast.
+  // Format is the only secondary field worth persisting; everything else
+  // re-derives from the photo if the user re-uploads.
+  const DRAFT_KEY = "aicreative-editor-draft-v1";
+  // Restore on mount — only once, so we don't fight re-renders.
+  const draftRestored = useRef(false);
+  useEffect(() => {
+    if (draftRestored.current) return;
+    draftRestored.current = true;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as {
+        prompt?: string;
+        format?: Format;
+        tzHelperEverOpened?: boolean;
+      };
+      if (draft.prompt && draft.prompt.length > 0) setPrompt(draft.prompt);
+      if (draft.format) setFormat(draft.format);
+      if (draft.tzHelperEverOpened) setTzHelperEverOpened(true);
+    } catch {
+      // Corrupt/old draft — drop it silently. localStorage isn't critical.
+    }
+  }, []);
+  // Save on prompt/format change. Debounce isn't strictly needed —
+  // localStorage writes are synchronous and fast on this scale.
+  useEffect(() => {
+    if (!draftRestored.current) return; // wait for restore to finish
+    try {
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ prompt, format, tzHelperEverOpened }),
+      );
+    } catch {
+      // Quota / private mode — ignore.
+    }
+  }, [prompt, format, tzHelperEverOpened]);
+
+  // First-visit auto-open of the TZ helper. Without this, new users see
+  // a giant empty textarea, type three words, hit Generate, get garbage.
+  // The helper accordion is the cure but its current default-closed
+  // state hides it. We open it once for new users; after their first
+  // explicit toggle (handled where setTzHelperOpen is called) we set
+  // tzHelperEverOpened=true and respect their preference forever.
+  useEffect(() => {
+    if (!draftRestored.current) return;
+    if (!tzHelperEverOpened) {
+      // Slight delay so it animates in, doesn't pop instantly on mount.
+      const t = setTimeout(() => setTzHelperOpen(true), 600);
+      return () => clearTimeout(t);
+    }
+  }, [tzHelperEverOpened]);
+
   // Admin check: drives whether variant cards reveal their underlying
   // model name (Gemini 3 Pro Image / GPT Image 2) or stay anonymous
   // ("Вариант 1" / "Вариант 2") so users compare blind. Defaults to
@@ -226,6 +296,9 @@ export default function Home() {
   // Russian brief for the image-gen models. Keeps prompts consistent
   // ("реклама ___, главное ___, аудитория ___, стиль ___") without
   // making the user remember the structure each time.
+  // Default closed — but if the user is a first-time visitor (no draft
+  // restored, tzHelperEverOpened still false after mount), an effect
+  // below auto-opens it so they don't miss the wizard.
   const [tzHelperOpen, setTzHelperOpen] = useState(false);
   const [tzSubject, setTzSubject] = useState("");
   const [tzBenefit, setTzBenefit] = useState("");
@@ -1015,14 +1088,16 @@ export default function Home() {
     let timer: NodeJS.Timeout;
     if (isLoading) {
       const texts = buildLoadingTexts(isAnimated, referenceImages.length > 0, productImages.length > 0);
-      
+      const startedAt = Date.now();
+      setLoadingStartedAt(startedAt);
       setLoadingProgress(0);
       setLoadingText(texts[0]);
-      
+      setLoadingEtaSec(EXPECTED_LOADING_SEC);
+
       timer = setInterval(() => {
         setLoadingProgress(prev => {
           const next = prev + Math.floor(Math.random() * 5) + 1;
-          
+
           if (next >= 15 && next < 35) setLoadingText(texts[1]);
           else if (next >= 35 && next < 55) setLoadingText(texts[2]);
           else if (next >= 55 && next < 75) setLoadingText(texts[3]);
@@ -1030,7 +1105,15 @@ export default function Home() {
 
           return next < 95 ? next : 95;
         });
+        // Update ETA from real wall-clock time, not from progress %.
+        // Floors at 0 — keeps showing 0 if the API is slow today
+        // rather than going negative.
+        const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+        setLoadingEtaSec(Math.max(0, EXPECTED_LOADING_SEC - elapsedSec));
       }, 1000);
+    } else {
+      setLoadingStartedAt(null);
+      setLoadingEtaSec(null);
     }
     return () => clearInterval(timer);
   }, [isLoading]);
@@ -1079,15 +1162,19 @@ export default function Home() {
     e.target.value = '';
   };
 
-  const handleProductSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Pure file-processing path — accepts a File directly so it can be
+  // called from both the <input> change event and the drag-and-drop
+  // drop event. Keeps the original UX (upload → polish → analyze) but
+  // works regardless of how the file got into the page.
+  const ingestProductFile = async (file: File) => {
     if (productImages.length >= MAX_IMAGES) {
       setError(`Можно загрузить максимум ${MAX_IMAGES} медиа/фото объектов.`);
       return;
     }
-
+    if (!file.type.startsWith("image/")) {
+      setError("Поддерживаются только изображения (JPG, PNG, WebP).");
+      return;
+    }
     try {
       const webpDataUrl = await optimizeImageToWebP(file);
       const target = { file, dataUrl: webpDataUrl };
@@ -1109,7 +1196,25 @@ export default function Home() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  // Thin wrapper around ingestProductFile for the <input type="file">.
+  // Resets the input value at the end so re-uploading the same file
+  // re-triggers the change event (browsers dedupe identical filenames).
+  const handleProductSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await ingestProductFile(file);
     e.target.value = "";
+  };
+
+  // Drag-and-drop entry point. Accepts the first dropped image file
+  // and ignores the rest (we only handle one at a time, but multi-drop
+  // is on the roadmap once we figure out the polish-queue ergonomics).
+  const handleProductDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) await ingestProductFile(file);
   };
 
   // Background polish — runs Nano Banana studio enhance on a product
@@ -1177,6 +1282,11 @@ export default function Home() {
     }
     setError("");
     setIsLoading(true);
+    // Mobile: switch to the canvas tab IMMEDIATELY so the user sees the
+    // loading state on the result area instead of staring at the form.
+    // Previously this happened only AFTER generation completed — the
+    // 30-60s wait felt like nothing was happening.
+    setMobileTab("canvas");
 
     const refBase64 = referenceImages.map(img => img.dataUrl);
     const prodBase64 = productImages.map(img => img.dataUrl);
@@ -1749,13 +1859,13 @@ export default function Home() {
                             {/* Top Bar: Format, Date & Delete */}
                             <div className="flex justify-between items-center p-3 border-b border-neutral-100 bg-white/50 backdrop-blur-md">
                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="bg-neutral-100/80 text-neutral-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-neutral-200/50">
+                                  <span className="bg-neutral-100/80 text-neutral-600 font-bold px-1.5 py-0.5 rounded text-xs uppercase border border-neutral-200/50">
                                      {item.format || '9:16'}
                                   </span>
                                   {isDownloaded ? (
                                     <div className="flex items-center gap-1 min-w-max">
                                       <span 
-                                        className="bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-green-200 flex items-center gap-0.5 cursor-pointer hover:bg-green-200 transition-colors"
+                                        className="bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded text-xs uppercase border border-green-200 flex items-center gap-0.5 cursor-pointer hover:bg-green-200 transition-colors"
                                         onClick={(e) => { e.stopPropagation(); window.location.href = `/api/download?creativeId=${item.id}`; }}
                                       >
                                         <Download className="w-3 h-3" /> Скачано
@@ -1782,13 +1892,13 @@ export default function Home() {
                                             localStorage.setItem('downloadedCreatives', JSON.stringify(arr));
                                          }
                                       }}
-                                      className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-blue-200 flex items-center gap-0.5 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm"
+                                      className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-xs uppercase border border-blue-200 flex items-center gap-0.5 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm"
                                     >
                                       <span>✅ Скачать видео</span>
                                     </span>
                                   ) : renderJobs[item.id] ? (
                                     <div className="flex items-center gap-1 min-w-max">
-                                      <span className="bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-amber-200 flex items-center gap-1">
+                                      <span className="bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded text-xs uppercase border border-amber-200 flex items-center gap-1">
                                         <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
                                         Сборка: {Math.min(renderJobs[item.id].totalFrames, Math.floor(((Date.now() - renderJobs[item.id].startTime) / 1000 / (renderJobs[item.id].totalFrames === 450 ? 100 : 60)) * renderJobs[item.id].totalFrames))} / {renderJobs[item.id].totalFrames}
                                       </span>
@@ -1803,7 +1913,7 @@ export default function Home() {
                                     </div>
                                   ) : (backgroundStatuses[item.id] && (backgroundStatuses[item.id] === 'queued' || backgroundStatuses[item.id] === 'rendering' || backgroundStatuses[item.id].startsWith('processing'))) ? (
                                     <div className="flex items-center gap-1 min-w-max">
-                                      <span className="bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-amber-200 flex items-center gap-1 min-w-max">
+                                      <span className="bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded text-xs uppercase border border-amber-200 flex items-center gap-1 min-w-max">
                                         <Loader2 className="w-3 h-3 animate-spin shrink-0"/> 
                                         В очереди
                                       </span>
@@ -1817,11 +1927,11 @@ export default function Home() {
                                       </button>
                                     </div>
                                   ) : backgroundStatuses[item.id] === 'error' ? (
-                                    <span className="bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-red-200 flex items-center gap-0.5">
+                                    <span className="bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded text-xs uppercase border border-red-200 flex items-center gap-0.5">
                                       Тайм-аут
                                     </span>
                                   ) : (
-                                    <span className="bg-orange-50 text-orange-600 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border border-orange-200 flex items-center gap-0.5">
+                                    <span className="bg-orange-50 text-orange-600 font-bold px-1.5 py-0.5 rounded text-xs uppercase border border-orange-200 flex items-center gap-0.5">
                                       Новый
                                     </span>
                                   )}
@@ -1888,7 +1998,7 @@ export default function Home() {
                                       sandbox="allow-scripts"
                                     />
                                   ) : (
-                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-400">
+                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
                                       Нет превью
                                     </div>
                                   )}
@@ -1898,7 +2008,7 @@ export default function Home() {
                                {/* RENDER PROGRESS OVERLAY (Gallery) */}
                                {renderJobs[item.id] && (
                                   <div className="absolute inset-x-4 bottom-4 z-30 bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-2xl border border-neutral-200/60 flex flex-col gap-1.5">
-                                      <div className="flex justify-between items-center text-[10px] font-black text-neutral-800 uppercase">
+                                      <div className="flex justify-between items-center text-xs font-black text-neutral-800 uppercase">
                                           <span>Сборка кадров</span>
                                           <span className="text-hermes-500 font-mono">
                                             {Math.min(renderJobs[item.id].totalFrames, Math.floor(((Date.now() - renderJobs[item.id].startTime) / 1000 / (renderJobs[item.id].totalFrames === 450 ? 100 : 60)) * renderJobs[item.id].totalFrames))} / {renderJobs[item.id].totalFrames}
@@ -2025,7 +2135,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="font-bold text-lg tracking-tight">Creative AI</h1>
-              <p className="text-[11px] text-neutral-500 font-medium">Умный генератор рекламы</p>
+              <p className="text-xs text-neutral-500 font-medium">Умный генератор рекламы</p>
             </div>
           </div>
           
@@ -2043,7 +2153,7 @@ export default function Home() {
               <h3 className="text-xs font-bold text-hermes-800 uppercase tracking-wider">Активация промокода</h3>
               <Link
                 href="/account"
-                className="text-[10px] font-bold text-hermes-600 hover:text-hermes-700 underline"
+                className="text-xs font-bold text-hermes-600 hover:text-hermes-700 underline"
               >
                 Открыть кабинет →
               </Link>
@@ -2090,7 +2200,7 @@ export default function Home() {
                </div>
                <div className="flex-1">
                  <h4 className="text-xs font-bold text-amber-900 mb-0.5">Режим Ремикса Активирован</h4>
-                 <p className="text-[10px] text-amber-800 leading-tight">Прошлый креатив загружен в память ИИ. Измените настройки ниже, перепишите ТЗ и нажмите "Создать".</p>
+                 <p className="text-xs text-amber-800 leading-tight">Прошлый креатив загружен в память ИИ. Измените настройки ниже, перепишите ТЗ и нажмите "Создать".</p>
                </div>
                <button onClick={() => setRemixSourceCode(null)} className="shrink-0 p-1 hover:bg-amber-200/50 rounded-md transition-colors" title="Отменить ремикс">
                  <X className="w-4 h-4 text-amber-600" />
@@ -2113,7 +2223,7 @@ export default function Home() {
                   disabled={isLoading}
                   onClick={() => setFormat(f)}
                   className={clsx(
-                    "py-2.5 px-1 rounded-xl border text-[11px] font-bold transition-all duration-200 flex flex-col items-center gap-1.5",
+                    "py-2.5 px-1 rounded-xl border text-xs font-bold transition-all duration-200 flex flex-col items-center gap-1.5",
                     format === f
                       ? "bg-neutral-900 border-neutral-900 text-white shadow-md shadow-neutral-900/10"
                       : "bg-white border-neutral-200 text-neutral-600",
@@ -2202,7 +2312,12 @@ export default function Home() {
                 })}
                 
                 {productImages.length < MAX_IMAGES && (
-                   <label className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center transition-all", isLoading ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-hermes-500 hover:bg-hermes-50 text-neutral-400 hover:text-hermes-500")}>
+                   <label
+                     className={clsx("w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center transition-all", isLoading ? "border-neutral-200 opacity-50 cursor-not-allowed text-neutral-300 bg-neutral-50" : "cursor-pointer border-neutral-300 hover:border-hermes-500 hover:bg-hermes-50 text-neutral-400 hover:text-hermes-500")}
+                     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                     onDrop={isLoading ? undefined : handleProductDrop}
+                     title="Кликни или перетащи сюда фото товара"
+                   >
                      <Upload className="w-5 h-5 mb-1 text-inherit" />
                      <span className="text-[9px] font-semibold uppercase">Загрузить</span>
                      <input type="file" accept="image/*" className="hidden" onChange={handleProductSelect} disabled={isLoading}/>
@@ -2217,13 +2332,13 @@ export default function Home() {
                 overlay; this strip is specifically the "ИИ читает фото
                 и пишет ТЗ" signal. */}
             {analyzeState.kind === "analyzing" && (
-              <div className="rounded-lg bg-sky-50 border border-sky-200 px-2.5 py-2 flex items-center gap-2 text-[11px] font-bold text-sky-700">
+              <div className="rounded-lg bg-sky-50 border border-sky-200 px-2.5 py-2 flex items-center gap-2 text-xs font-bold text-sky-700">
                 <Loader2 className="w-3 h-3 animate-spin shrink-0" />
                 <span>ИИ изучает фото и пишет ТЗ...</span>
               </div>
             )}
             {analyzeState.kind === "failed" && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-[11px] text-amber-700 leading-snug">
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-xs text-amber-700 leading-snug">
                 Не получилось разобрать фото — заполни ТЗ ниже вручную.
               </div>
             )}
@@ -2253,7 +2368,7 @@ export default function Home() {
                           <ImageIcon className="w-4 h-4 text-hermes-500" />
                           Как показать товар?
                         </h2>
-                        <span className="text-[10px] text-neutral-400 font-medium">(необязательно)</span>
+                        <span className="text-xs text-neutral-400 font-medium">(необязательно)</span>
                       </div>
                       <select
                         value={categoryId}
@@ -2298,7 +2413,7 @@ export default function Home() {
                                 )}
                               </div>
                               <div className="p-2 bg-white">
-                                <p className="text-[11px] font-bold text-neutral-800 leading-tight">{s.label}</p>
+                                <p className="text-xs font-bold text-neutral-800 leading-tight">{s.label}</p>
                                 <p className="text-[9px] text-neutral-500 mt-0.5 leading-tight">{s.subtitle}</p>
                               </div>
                             </button>
@@ -2309,7 +2424,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setSceneId(null)}
-                          className="text-[10px] font-semibold text-neutral-500 hover:text-neutral-700 underline underline-offset-2"
+                          className="text-xs font-semibold text-neutral-500 hover:text-neutral-700 underline underline-offset-2"
                         >
                           Снять выбор сцены
                         </button>
@@ -2348,6 +2463,33 @@ export default function Home() {
 
           {/* Prompt + Clear Button */}
           <div className="space-y-3">
+            {/* Empty-state hint — only when textarea is empty AND the
+                user hasn't ever opened the TZ wizard. The most common
+                first-time mistake is typing 3 words and hitting Generate.
+                The wizard above writes a proper brief from 5 quick fields
+                via Gemini — most users don't notice it. */}
+            {!prompt.trim() && !tzHelperOpen && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2 text-xs leading-snug">
+                <Lightbulb className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-amber-900 mb-0.5">Не знаешь, что писать?</p>
+                  <p className="text-amber-800">
+                    Жми{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTzHelperOpen(true);
+                        setTzHelperEverOpened(true);
+                      }}
+                      className="font-bold underline decoration-amber-600 decoration-1 underline-offset-2 hover:text-amber-900"
+                    >
+                      «TZ-помощник»
+                    </button>{" "}
+                    выше — ИИ напишет ТЗ за тебя по 4 коротким вопросам.
+                  </p>
+                </div>
+              </div>
+            )}
             <h2 className="text-sm font-semibold flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-hermes-500" />
@@ -2356,7 +2498,7 @@ export default function Home() {
               <button
                 onClick={handleClearAll}
                 disabled={isLoading}
-                className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-neutral-400 bg-neutral-100 rounded-md hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-neutral-400 bg-neutral-100 rounded-md hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
                 title="Очистить текстовое ТЗ и картинки"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -2377,20 +2519,20 @@ export default function Home() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 flex items-start gap-2">
                 <span className="text-base leading-none mt-0.5">🎯</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
+                  <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
                     Распознали продукт
                   </p>
                   <p className="text-sm font-bold text-emerald-900 leading-snug">
                     {analyzeState.product || "Продукт не определён"}
                   </p>
-                  <p className="text-[10px] text-emerald-700/80 leading-tight mt-1">
+                  <p className="text-xs text-emerald-700/80 leading-tight mt-1">
                     Предварительное ТЗ загружено ниже — отредактируй и нажми «Создать»
                   </p>
                   {analyzeState.brief && (
                     <button
                       type="button"
                       onClick={() => setPrompt(analyzeState.brief)}
-                      className="text-[10px] font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-900 mt-1.5"
+                      className="text-xs font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-900 mt-1.5"
                     >
                       Восстановить ТЗ от ИИ
                     </button>
@@ -2399,7 +2541,7 @@ export default function Home() {
               </div>
             )}
             {analyzeState.kind === "failed" && (
-              <p className="text-[10px] text-amber-700 leading-tight">
+              <p className="text-xs text-amber-700 leading-tight">
                 ⚠️ Не удалось распознать продукт автоматически — заполни ТЗ вручную ниже.
               </p>
             )}
@@ -2410,7 +2552,10 @@ export default function Home() {
             <div className="rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden">
               <button
                 type="button"
-                onClick={() => setTzHelperOpen((v) => !v)}
+                onClick={() => {
+                  setTzHelperOpen((v) => !v);
+                  setTzHelperEverOpened(true);
+                }}
                 className="w-full px-3 py-2.5 text-xs font-bold text-neutral-700 hover:bg-neutral-100 flex items-center gap-2 transition-colors"
               >
                 <Sparkles className="w-3.5 h-3.5 text-hermes-500" />
@@ -2420,7 +2565,7 @@ export default function Home() {
               {tzHelperOpen && (
                 <div className="px-3 pb-3 pt-1 space-y-2.5 border-t border-neutral-200 bg-white">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-500 block mb-1">
                       1. Что рекламируем?
                     </label>
                     <input
@@ -2432,7 +2577,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-500 block mb-1">
                       2. Главная выгода / посыл
                     </label>
                     <input
@@ -2444,7 +2589,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-500 block mb-1">
                       3. Целевая аудитория
                     </label>
                     <input
@@ -2456,7 +2601,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-500 block mb-1">
                       4. Стиль и тон
                     </label>
                     <input
@@ -2468,7 +2613,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-500 block mb-1">
                       5. Город или страна <span className="font-medium normal-case text-neutral-400">(рынок креатива)</span>
                     </label>
                     <input
@@ -2478,7 +2623,7 @@ export default function Home() {
                       placeholder="Алматы / Москва / Бишкек / Минск..."
                       className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hermes-500 focus:ring-1 focus:ring-hermes-500"
                     />
-                    <p className="text-[10px] text-neutral-400 mt-1 leading-tight">
+                    <p className="text-xs text-neutral-400 mt-1 leading-tight">
                       ИИ подберёт валюту и культурный контекст под этот рынок.
                     </p>
                   </div>
@@ -2501,7 +2646,7 @@ export default function Home() {
                     )}
                   </button>
                   {tzError && (
-                    <p className="text-[10px] text-red-600 font-medium mt-1 leading-tight">
+                    <p className="text-xs text-red-600 font-medium mt-1 leading-tight">
                       {tzError}
                     </p>
                   )}
@@ -2523,6 +2668,17 @@ export default function Home() {
               placeholder="Опишите, что вы хотите... Например: 'Минималистичный рекламный постер с зелеными акцентами для курса по Upwork.'"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
+              // Cmd/Ctrl+Enter inside the textarea triggers generation —
+              // standard "submit" shortcut familiar from Gmail, Slack,
+              // ChatGPT. Avoids hunting for the button on a long form.
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  if (!isLoading && prompt.trim()) {
+                    void handleGenerate();
+                  }
+                }
+              }}
             />
           </div>
 
@@ -2553,7 +2709,7 @@ export default function Home() {
                    <Sparkles className="w-5 h-5 text-white" />
                    Использовать для Ремикса
                  </span>
-                 <span className="text-[10px] uppercase font-bold opacity-90">(Разблокировать настройки)</span>
+                 <span className="text-xs uppercase font-bold opacity-90">(Разблокировать настройки)</span>
               </button>
 
               <button
@@ -2580,7 +2736,7 @@ export default function Home() {
               if (!noImg && cc >= 15) return null;
               if (cc === 0) return null;
               return (
-                <div className="flex gap-2 p-2.5 mb-2 rounded-lg bg-yellow-50 border border-yellow-200 text-[11px] leading-snug text-yellow-900">
+                <div className="flex gap-2 p-2.5 mb-2 rounded-lg bg-yellow-50 border border-yellow-200 text-xs leading-snug text-yellow-900">
                   <Lightbulb className="w-3.5 h-3.5 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <span>
                     <strong>ТЗ слишком общее.</strong> Добавь нишу, аудиторию,
@@ -2608,6 +2764,16 @@ export default function Home() {
                     <Loader2 className="w-4 h-4 animate-spin opacity-70" />
                     <span className="text-xs opacity-70 uppercase tracking-widest font-bold">
                       СБОРКА... {loadingProgress}%
+                      {loadingEtaSec !== null && loadingEtaSec > 0 && (
+                        <span className="ml-2 normal-case tracking-normal">
+                          · ~{loadingEtaSec}с осталось
+                        </span>
+                      )}
+                      {loadingEtaSec === 0 && (
+                        <span className="ml-2 normal-case tracking-normal">
+                          · вот-вот будет
+                        </span>
+                      )}
                     </span>
                   </div>
                   <span className="text-[13px]">{loadingText}</span>
@@ -2618,7 +2784,7 @@ export default function Home() {
                     {remixSourceCode ? <Sparkles className="w-5 h-5"/> : <Sparkles className="w-5 h-5" />}
                     {remixSourceCode ? "Создать Ремикс" : "Создать Креатив"}
                   </span>
-                  <span className="text-[10px] uppercase font-bold opacity-80 flex items-center justify-center gap-1">
+                  <span className="text-xs uppercase font-bold opacity-80 flex items-center justify-center gap-1">
                     (Спишется {currentCost} ⚡ — за 2 варианта)
                   </span>
                 </span>
@@ -2646,7 +2812,7 @@ export default function Home() {
 
       {/* Main Canvas Area */}
       <section className={clsx(
-        "flex-1 relative flex-col items-center justify-start p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-[300px] md:pb-12 pt-8 md:pt-8 w-full min-h-screen",
+        "flex-1 relative flex-col items-center justify-start p-4 md:p-8 bg-[#E5E5E5] custom-grid-pattern overflow-y-auto pb-[120px] md:pb-12 pt-8 md:pt-8 w-full min-h-screen",
         mobileTab === 'canvas' ? "flex" : "hidden md:flex"
       )}>
 
@@ -2702,7 +2868,7 @@ export default function Home() {
                  </div>
                )}
                {isRecording && (
-                 <p className="text-[10px] sm:text-xs font-medium text-neutral-500 mt-3 text-center normal-case leading-snug px-2 drop-shadow-sm max-w-sm mx-auto opacity-80">
+                 <p className="text-xs sm:text-xs font-medium text-neutral-500 mt-3 text-center normal-case leading-snug px-2 drop-shadow-sm max-w-sm mx-auto opacity-80">
                    Рендеринг запущен в облаке. Можете закрыть вкладку или свернуть приложение — готовое видео появится в "Мои Креативы", и вы скачаете его позже.
                  </p>
                )}
@@ -2725,10 +2891,10 @@ export default function Home() {
               return (
                 <div key={m} className="flex flex-col gap-3">
                   <div className="flex items-center gap-2">
-                    <span className={clsx("text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded text-white", accent)}>
+                    <span className={clsx("text-xs font-black uppercase tracking-wider px-2 py-1 rounded text-white", accent)}>
                       {label}
                     </span>
-                    <span className="text-[11px] text-neutral-500 font-medium">
+                    <span className="text-xs text-neutral-500 font-medium">
                       {row.filter((v) => v.ok).length} / {row.length} ok
                     </span>
                   </div>
@@ -2750,7 +2916,7 @@ export default function Home() {
                               return (
                                 <div className="p-4 flex flex-col items-center justify-center text-center">
                                   <p className="text-sm font-bold text-red-600 mb-1">Ошибка</p>
-                                  <p className="text-[10px] text-neutral-500 leading-snug">
+                                  <p className="text-xs text-neutral-500 leading-snug">
                                     {v.error?.slice(0, 200) || "Без подробностей."}
                                   </p>
                                 </div>
@@ -2862,7 +3028,7 @@ export default function Home() {
                                       </button>
                                     </div>
                                     {refine.kind === "failed" && (
-                                      <p className="text-[10px] text-red-600 leading-tight">
+                                      <p className="text-xs text-red-600 leading-tight">
                                         {refine.error.slice(0, 120)}
                                       </p>
                                     )}
@@ -3016,7 +3182,7 @@ export default function Home() {
                                             setModeByCreative((prev) => ({ ...prev, [v.creativeId!]: mk }))
                                           }
                                           className={clsx(
-                                            "py-1.5 px-1 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                            "py-1.5 px-1 rounded-lg text-xs font-bold transition-colors leading-tight",
                                             active ? "bg-white text-purple-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700",
                                           )}
                                         >
@@ -3039,7 +3205,7 @@ export default function Home() {
                                             }
                                             title={p.description}
                                             className={clsx(
-                                              "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                              "py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors leading-tight",
                                               active ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700 hover:bg-rose-100",
                                             )}
                                           >
@@ -3061,7 +3227,7 @@ export default function Home() {
                                             }
                                             title={p.description}
                                             className={clsx(
-                                              "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                              "py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors leading-tight",
                                               active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
                                             )}
                                           >
@@ -3074,7 +3240,7 @@ export default function Home() {
                                   {/* Duration picker — ambient and target support 5/10,
                                       promo is locked at 5 sec (paired with sound). */}
                                   {mode === "promo" ? (
-                                    <p className="text-[10px] text-neutral-500 leading-tight px-1">
+                                    <p className="text-xs text-neutral-500 leading-tight px-1">
                                       5 сек · видео + звук одной кнопкой
                                     </p>
                                   ) : (
@@ -3095,7 +3261,7 @@ export default function Home() {
                                               setDurationByCreative((prev) => ({ ...prev, [v.creativeId!]: d }))
                                             }
                                             className={clsx(
-                                              "py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-colors leading-tight",
+                                              "py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors leading-tight",
                                               active
                                                 ? (isTarget ? "bg-rose-600 text-white" : "bg-purple-600 text-white")
                                                 : (isTarget ? "bg-rose-50 text-rose-700 hover:bg-rose-100" : "bg-purple-50 text-purple-700 hover:bg-purple-100"),
@@ -3125,7 +3291,7 @@ export default function Home() {
                                       placeholder="Своё описание (необязательно): «лёгкий flicker экрана», «дождь сильнее»…"
                                       maxLength={240}
                                       rows={2}
-                                      className="w-full text-[10px] px-2 py-1.5 rounded-lg border border-neutral-200 bg-white text-neutral-700 placeholder:text-neutral-400 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 focus:border-purple-400 leading-snug"
+                                      className="w-full text-xs px-2 py-1.5 rounded-lg border border-neutral-200 bg-white text-neutral-700 placeholder:text-neutral-400 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 focus:border-purple-400 leading-snug"
                                     />
                                   )}
                                   {/* Action button — 3 branches. */}
@@ -3215,9 +3381,9 @@ export default function Home() {
               if (!sib) {
                 return (
                   <div key={m} className="bg-white rounded-3xl border-2 border-dashed border-red-200 p-6 flex flex-col items-center justify-center gap-2 min-h-[400px]">
-                    <span className={clsx("text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded text-white", accent)}>{label}</span>
+                    <span className={clsx("text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded text-white", accent)}>{label}</span>
                     <p className="text-sm font-bold text-red-600 mt-2">Эта модель упала</p>
-                    <p className="text-[11px] text-neutral-500 text-center leading-snug max-w-[260px]">
+                    <p className="text-xs text-neutral-500 text-center leading-snug max-w-[260px]">
                       {sibErr || "Без подробностей."} Импульсы за неудавшийся вариант возвращены.
                     </p>
                   </div>
@@ -3230,7 +3396,7 @@ export default function Home() {
                   className="bg-white rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.25)] overflow-hidden flex flex-col"
                 >
                   <div className="px-4 py-2.5 flex items-center justify-between border-b border-neutral-100">
-                    <span className={clsx("text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded text-white", accent)}>
+                    <span className={clsx("text-xs font-black uppercase tracking-wider px-2 py-1 rounded text-white", accent)}>
                       {label}
                     </span>
                   </div>
@@ -3363,7 +3529,7 @@ export default function Home() {
                     Veo 3 рендерит видео (30-90 сек)...
                   </span>
                 </div>
-                <p className="text-[10px] text-purple-600/80 leading-tight">
+                <p className="text-xs text-purple-600/80 leading-tight">
                   Можешь не ждать — продолжай работать. Видео появится в «Моих креативах» когда будет готово.
                 </p>
               </div>
@@ -3389,12 +3555,12 @@ export default function Home() {
             ) : (
               <div className="w-full bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-2">
                 <p className="text-xs font-bold text-red-700">Veo 3 не справился</p>
-                <p className="text-[11px] text-red-600 leading-snug">
+                <p className="text-xs text-red-600 leading-snug">
                   {videoJob.error || "Без подробностей."} Импульсы возвращены.
                 </p>
                 <button
                   onClick={() => setVideoJob(null)}
-                  className="text-[11px] font-bold text-red-700 underline"
+                  className="text-xs font-bold text-red-700 underline"
                 >
                   Попробовать ещё раз
                 </button>
@@ -3419,7 +3585,7 @@ export default function Home() {
              )}
              {feedback === 'dislike' && !feedbackSubmitted && (
                <div className="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
-                 <p className="text-[11px] font-semibold text-neutral-600">Что испортило результат?</p>
+                 <p className="text-xs font-semibold text-neutral-600">Что испортило результат?</p>
                  <div className="flex flex-wrap gap-1.5">
                    {[
                      "Текст налазит",
@@ -3439,7 +3605,7 @@ export default function Home() {
                          // setState is async.
                          setTimeout(() => submitFeedback(reason), 0);
                        }}
-                       className="text-[11px] bg-neutral-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-neutral-200 text-neutral-700 px-2.5 py-1 rounded-full font-semibold transition-colors"
+                       className="text-xs bg-neutral-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-neutral-200 text-neutral-700 px-2.5 py-1 rounded-full font-semibold transition-colors"
                      >
                        {reason}
                      </button>
@@ -3464,7 +3630,7 @@ export default function Home() {
           <div className={clsx("p-2 rounded-xl transition-all", mobileTab === 'controls' ? "bg-neutral-100" : "")}>
              <Sparkles className="w-6 h-6" />
           </div>
-          <span className="text-[10px] font-bold">Настройки</span>
+          <span className="text-xs font-bold">Настройки</span>
         </button>
 
         {/* Central FAB Generate Button */}
@@ -3522,7 +3688,7 @@ export default function Home() {
              <Frame className="w-6 h-6" />
              {code && mobileTab !== 'canvas' && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-hermes-500 rounded-full border-2 border-white" />}
           </div>
-          <span className="text-[10px] font-bold">Холст</span>
+          <span className="text-xs font-bold">Холст</span>
         </button>
       </div>
       
