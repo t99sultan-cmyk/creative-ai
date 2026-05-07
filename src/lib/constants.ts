@@ -12,6 +12,6 @@
 export const SUPPORT_CONTACTS = {
   /** WhatsApp number in E.164 format (no plus, no spaces). */
   WA_NUMBER_E164: "77765282788",
-  /** Telegram username, no @. */
-  TG_USERNAME: "ai_creativekz",
+  /** Telegram username, no @. Receives payment receipts and questions. */
+  TG_USERNAME: "voise_kz",
 } as const;
