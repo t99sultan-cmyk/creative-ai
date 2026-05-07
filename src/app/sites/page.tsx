@@ -22,6 +22,12 @@ import {
   Zap,
 } from "lucide-react";
 import { SITE_GEN_COST } from "@/lib/pricing";
+import { THEMES } from "@/lib/landing-themes";
+import { LandingNavbar } from "@/components/landing/LandingNavbar";
+import { BrandTrustBar } from "@/components/landing/BrandTrustBar";
+import { ProductStack } from "@/components/landing/ProductStack";
+import { PricingSection } from "@/components/landing/PricingSection";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
 /**
  * /sites — full marketing landing for the Sites generator. Mirrors the
@@ -79,39 +85,27 @@ export default function SitesLanding() {
 
   return (
     <main className="min-h-screen bg-white text-neutral-900 font-sans overflow-x-hidden">
-      {/* ─── Sticky Header ─── */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-white/80 border-b border-neutral-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-neutral-500 hover:text-neutral-900 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">AICreative</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-hermes-500" />
-            <span className="font-black text-base sm:text-lg">Сайты</span>
-            <span className="hidden sm:inline ml-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-              Beta
-            </span>
-          </div>
-          <Link
-            href="/sites/new"
-            className="text-xs font-bold bg-neutral-900 hover:bg-black text-white px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block"
-          >
-            Создать
-          </Link>
-          <Link href="/sites/new" className="text-xs font-bold text-neutral-500 sm:hidden">→</Link>
-        </div>
-      </header>
+      {/* Shared landing navbar — sky theme */}
+      <LandingNavbar
+        theme={THEMES.sites}
+        anchors={[
+          { href: "#how", label: "Как работает" },
+          { href: "#pricing", label: "Тарифы" },
+          { href: "#faq", label: "FAQ" },
+        ]}
+        ctaLabel="Создать сайт"
+      />
+      <div className="h-16" aria-hidden />
 
       {/* ── 1. HERO ─────────────────────────────────────────────── */}
       <section className="relative pt-16 pb-24 px-4 overflow-hidden">
         <div className="absolute inset-0 -z-10 pointer-events-none">
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-hermes-500/10 rounded-full blur-3xl" />
+          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-3xl" />
           <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-amber-300/20 rounded-full blur-3xl" />
         </div>
 
         <div className="max-w-5xl mx-auto text-center">
-          <motion.span {...REVEAL} className="inline-block text-[10px] sm:text-xs font-bold uppercase tracking-[0.25em] text-hermes-600 mb-6">
+          <motion.span {...REVEAL} className="inline-block text-[10px] sm:text-xs font-bold uppercase tracking-[0.25em] text-sky-600 mb-6">
             🌐 Создание сайтов · Beta
           </motion.span>
 
@@ -122,7 +116,7 @@ export default function SitesLanding() {
           >
             Продающий лендинг
             <br />
-            за <span className="text-hermes-500">минуту</span>
+            за <span className="text-sky-500">минуту</span>
           </motion.h1>
 
           <motion.p
@@ -142,7 +136,7 @@ export default function SitesLanding() {
           >
             <Link
               href="/sites/new"
-              className="group bg-gradient-to-r from-hermes-500 to-orange-500 hover:from-hermes-600 hover:to-orange-600 text-white font-bold text-base px-8 py-4 rounded-2xl shadow-lg shadow-hermes-500/30 flex items-center gap-2 transition-all hover:shadow-hermes-500/50 hover:scale-[1.02] active:scale-[0.98]"
+              className="group bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-600 hover:to-blue-600 text-white font-bold text-base px-8 py-4 rounded-2xl shadow-lg shadow-sky-500/30 flex items-center gap-2 transition-all hover:shadow-sky-500/50 hover:scale-[1.02] active:scale-[0.98]"
             >
               <Sparkles className="w-5 h-5" />
               Создать сайт
@@ -167,7 +161,7 @@ export default function SitesLanding() {
             transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
             className="mt-16 relative"
           >
-            <div className="max-w-4xl mx-auto rounded-3xl overflow-hidden bg-gradient-to-br from-hermes-50 via-amber-50 to-orange-50 border border-neutral-200 shadow-2xl">
+            <div className="max-w-4xl mx-auto rounded-3xl overflow-hidden bg-gradient-to-br from-sky-50 via-amber-50 to-blue-50 border border-neutral-200 shadow-2xl">
               <div className="aspect-[16/10] relative p-6 sm:p-12">
                 <div className="h-full flex flex-col gap-3">
                   <div className="flex items-center gap-2">
@@ -179,7 +173,7 @@ export default function SitesLanding() {
                     </div>
                   </div>
                   <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                    <div className="h-2 sm:h-3 w-32 sm:w-44 rounded-full bg-hermes-500/70" />
+                    <div className="h-2 sm:h-3 w-32 sm:w-44 rounded-full bg-sky-500/70" />
                     <div className="h-6 sm:h-12 w-3/4 rounded-lg bg-neutral-900" />
                     <div className="h-3 sm:h-5 w-1/2 rounded-md bg-neutral-300" />
                     <div className="grid grid-cols-3 gap-3 mt-4 max-w-2xl w-full">
@@ -187,7 +181,7 @@ export default function SitesLanding() {
                       <div className="aspect-square rounded-lg sm:rounded-xl bg-white/80 border border-white shadow-sm" />
                       <div className="aspect-square rounded-lg sm:rounded-xl bg-white/80 border border-white shadow-sm" />
                     </div>
-                    <div className="h-8 sm:h-12 w-32 sm:w-44 rounded-full bg-gradient-to-r from-hermes-500 to-orange-500 mt-4 sm:mt-6" />
+                    <div className="h-8 sm:h-12 w-32 sm:w-44 rounded-full bg-gradient-to-r from-sky-500 to-blue-500 mt-4 sm:mt-6" />
                   </div>
                 </div>
               </div>
@@ -195,6 +189,9 @@ export default function SitesLanding() {
           </motion.div>
         </div>
       </section>
+
+      {/* Shared brand-trust bar (logos) */}
+      <BrandTrustBar />
 
       {/* ── 2. STATS BAR ───────────────────────────────────────── */}
       <section className="py-8 px-4 border-y border-neutral-100 bg-neutral-50/40">
@@ -265,7 +262,7 @@ export default function SitesLanding() {
       <section id="how" className="py-20 px-4 border-t border-neutral-100 bg-gradient-to-b from-neutral-50/40 to-white">
         <div className="max-w-6xl mx-auto">
           <motion.div {...REVEAL} className="text-center mb-12">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-hermes-600 mb-3 block">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-sky-600 mb-3 block">
               Как работает
             </span>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-4">
@@ -287,10 +284,10 @@ export default function SitesLanding() {
                 key={i}
                 {...REVEAL}
                 transition={{ duration: 0.4, delay: i * 0.06 }}
-                className="bg-white rounded-2xl border border-neutral-200 p-5 hover:border-hermes-500/40 hover:shadow-lg transition-all relative overflow-hidden"
+                className="bg-white rounded-2xl border border-neutral-200 p-5 hover:border-sky-500/40 hover:shadow-lg transition-all relative overflow-hidden"
               >
-                <div className="text-4xl font-black text-hermes-500/20 mb-2">{s.step}</div>
-                <div className="w-10 h-10 rounded-xl bg-hermes-50 text-hermes-600 flex items-center justify-center mb-3">
+                <div className="text-4xl font-black text-sky-500/20 mb-2">{s.step}</div>
+                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-3">
                   <s.icon className="w-5 h-5" />
                 </div>
                 <h4 className="text-base font-black mb-2">{s.title}</h4>
@@ -305,11 +302,11 @@ export default function SitesLanding() {
       <section className="py-20 px-4 border-t border-neutral-100">
         <div className="max-w-6xl mx-auto">
           <motion.div {...REVEAL} className="text-center mb-16">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-hermes-600 mb-3 block">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-sky-600 mb-3 block">
               Что внутри
             </span>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-4">
-              Не «генератор шаблонов» — <span className="text-hermes-500">ассистент-команда</span>
+              Не «генератор шаблонов» — <span className="text-sky-500">ассистент-команда</span>
             </h2>
             <p className="text-neutral-600 text-base sm:text-lg max-w-2xl mx-auto">
               Копирайтер + арт-директор + верстальщик + издатель — за 30⚡ и одну минуту.
@@ -318,7 +315,7 @@ export default function SitesLanding() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {[
-              { icon: Zap, title: "Готовый продающий копирайт", text: "Заголовок-хук + подзаголовок с цифрой/срочностью + CTA в повелительном — а не плейсхолдеры «Lorem ipsum» под перепись.", accent: "bg-hermes-500" },
+              { icon: Zap, title: "Готовый продающий копирайт", text: "Заголовок-хук + подзаголовок с цифрой/срочностью + CTA в повелительном — а не плейсхолдеры «Lorem ipsum» под перепись.", accent: "bg-sky-500" },
               { icon: Layers, title: "Claude Opus 4.7", text: "Лучшая LLM 2026 года для HTML и копирайта работает над твоим ТЗ. Один результат, top-tier качество.", accent: "bg-violet-500" },
               { icon: ImageIcon, title: "Картинки твои или ИИ", text: "Загрузи фото товара — Nano Banana доводит до студийного света. Или ИИ нарисует с нуля по описанию: hero, фичи, соц-проф.", accent: "bg-emerald-500" },
               { icon: Share2, title: "Публикация одной кнопкой", text: "URL aicreative.kz/s/abc на нашем домене. Без VPS, без SSL-плясок, без покупки доменов на 5 лет вперёд. Скачивание HTML — тоже одной кнопкой.", accent: "bg-rose-500" },
@@ -329,7 +326,7 @@ export default function SitesLanding() {
                 key={i}
                 {...REVEAL}
                 transition={{ duration: 0.4, delay: i * 0.04 }}
-                className="bg-white rounded-2xl border border-neutral-200 p-6 hover:border-hermes-500/40 hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                className="bg-white rounded-2xl border border-neutral-200 p-6 hover:border-sky-500/40 hover:shadow-lg hover:-translate-y-0.5 transition-all"
               >
                 <div className={`w-11 h-11 rounded-xl ${b.accent} flex items-center justify-center mb-4`}>
                   <b.icon className="w-5 h-5 text-white" />
@@ -342,10 +339,13 @@ export default function SitesLanding() {
         </div>
       </section>
 
+      {/* Shared 4-products navigation block */}
+      <ProductStack currentProduct="sites" />
+
       {/* ── 6. UPCOMING ANIMATION / VIDEO / MULTI-PHOTO ────────── */}
       <section className="py-20 px-4 border-t border-neutral-100 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white relative overflow-hidden">
         <div className="absolute inset-0 -z-10 pointer-events-none">
-          <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[400px] h-[400px] bg-hermes-500/20 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[400px] h-[400px] bg-sky-500/20 rounded-full blur-3xl" />
           <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[300px] h-[300px] bg-amber-400/15 rounded-full blur-3xl" />
         </div>
         <div className="max-w-5xl mx-auto">
@@ -386,7 +386,7 @@ export default function SitesLanding() {
                 transition={{ duration: 0.4, delay: i * 0.08 }}
                 className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 hover:border-amber-400/40 hover:bg-white/10 transition-all"
               >
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-4">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-blue-500 flex items-center justify-center mb-4">
                   <b.icon className="w-5 h-5 text-white" />
                 </div>
                 <h3 className="text-lg font-black mb-2">{b.title}</h3>
@@ -411,7 +411,7 @@ export default function SitesLanding() {
       <section className="py-20 px-4 border-t border-neutral-100">
         <div className="max-w-6xl mx-auto">
           <motion.div {...REVEAL} className="text-center mb-12">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-hermes-600 mb-3 block">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-sky-600 mb-3 block">
               Для кого
             </span>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-4">
@@ -421,7 +421,7 @@ export default function SitesLanding() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: Target, persona: "Таргетолог", text: "Делаешь A/B-тест за час, не за две недели. Заливаешь оба варианта в Meta Ads, берёшь победителя.", color: "from-hermes-50 to-orange-50 border-hermes-200/50" },
+              { icon: Target, persona: "Таргетолог", text: "Делаешь A/B-тест за час, не за две недели. Заливаешь оба варианта в Meta Ads, берёшь победителя.", color: "from-sky-50 to-blue-50 border-sky-200/50" },
               { icon: TrendingUp, persona: "Селлер на маркетплейсах", text: "Внешний лендинг для перевода трафика с Kaspi/WB на свой канал/Telegram. Без своего сайта, без хостинга.", color: "from-violet-50 to-fuchsia-50 border-violet-200/50" },
               { icon: Users, persona: "Малый бизнес", text: "Лендинг под услугу или товар без агентства. От идеи в голове до публикации — за один обед.", color: "from-emerald-50 to-teal-50 border-emerald-200/50" },
               { icon: Rocket, persona: "Агентство / SMM", text: "Делаешь клиенту лендинг под акцию за минуту. Берёшь свою наценку. Объём и скорость = выручка.", color: "from-rose-50 to-pink-50 border-rose-200/50" },
@@ -445,11 +445,11 @@ export default function SitesLanding() {
       <section className="py-20 px-4 border-t border-neutral-100 bg-neutral-50/40">
         <div className="max-w-5xl mx-auto">
           <motion.div {...REVEAL} className="text-center mb-12">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-hermes-600 mb-3 block">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-sky-600 mb-3 block">
               Сравнение
             </span>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-4">
-              Старая модель vs <span className="text-hermes-500">AICreative</span>
+              Старая модель vs <span className="text-sky-500">AICreative</span>
             </h2>
           </motion.div>
 
@@ -463,7 +463,7 @@ export default function SitesLanding() {
               <div className="p-4 sm:p-6 bg-neutral-100 font-bold text-xs sm:text-sm uppercase tracking-wider text-neutral-500 text-center border-l border-neutral-200">
                 Фриланс / агентство
               </div>
-              <div className="p-4 sm:p-6 bg-gradient-to-br from-hermes-500 to-orange-500 font-black text-xs sm:text-sm uppercase tracking-wider text-white text-center">
+              <div className="p-4 sm:p-6 bg-gradient-to-br from-sky-500 to-blue-500 font-black text-xs sm:text-sm uppercase tracking-wider text-white text-center">
                 AICreative
               </div>
 
@@ -482,7 +482,7 @@ export default function SitesLanding() {
                   <div className={`p-4 sm:p-5 text-neutral-500 text-center border-l border-neutral-200 ${i % 2 === 0 ? "bg-neutral-50" : "bg-white"}`}>
                     {r.a}
                   </div>
-                  <div className={`p-4 sm:p-5 text-neutral-900 text-center font-bold border-l border-neutral-200 ${i % 2 === 0 ? "bg-hermes-50/40" : "bg-white"}`}>
+                  <div className={`p-4 sm:p-5 text-neutral-900 text-center font-bold border-l border-neutral-200 ${i % 2 === 0 ? "bg-sky-50/40" : "bg-white"}`}>
                     {r.b}
                   </div>
                 </div>
@@ -492,11 +492,16 @@ export default function SitesLanding() {
         </div>
       </section>
 
+      {/* Shared pricing — single source of truth across all 4 landings */}
+      <PricingSection theme={THEMES.sites} />
+
       {/* ── 9. FAQ ─────────────────────────────────────────────── */}
+      <div id="faq" />
+
       <section className="py-20 px-4 border-t border-neutral-100">
         <div className="max-w-3xl mx-auto">
           <motion.div {...REVEAL} className="text-center mb-12">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-hermes-600 mb-3 block">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-sky-600 mb-3 block">
               FAQ
             </span>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-4">
@@ -546,9 +551,9 @@ export default function SitesLanding() {
       </section>
 
       {/* ── 10. FINAL CTA ──────────────────────────────────────── */}
-      <section className="py-24 px-4 border-t border-neutral-100 bg-gradient-to-br from-hermes-50 via-orange-50 to-amber-50 relative overflow-hidden">
+      <section className="py-24 px-4 border-t border-neutral-100 bg-gradient-to-br from-sky-50 via-blue-50 to-amber-50 relative overflow-hidden">
         <div className="absolute inset-0 -z-10 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-hermes-500/10 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-sky-500/10 rounded-full blur-3xl" />
         </div>
         <div className="max-w-3xl mx-auto text-center">
           <motion.h2 {...REVEAL} className="text-3xl sm:text-5xl font-black tracking-tight mb-4">
@@ -599,12 +604,14 @@ export default function SitesLanding() {
               Карточки товара →
             </Link>
             {" · "}
-            <Link href="/editor" className="font-bold text-hermes-600 hover:text-hermes-800 underline">
+            <Link href="/editor" className="font-bold text-sky-600 hover:text-sky-800 underline">
               Креативы для таргета →
             </Link>
           </motion.p>
         </div>
       </section>
+      {/* Shared footer */}
+      <LandingFooter />
     </main>
   );
 }

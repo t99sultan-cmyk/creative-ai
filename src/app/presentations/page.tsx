@@ -23,6 +23,12 @@ import {
   Zap,
 } from "lucide-react";
 import { PRESENTATION_GEN_COST } from "@/lib/pricing";
+import { THEMES } from "@/lib/landing-themes";
+import { LandingNavbar } from "@/components/landing/LandingNavbar";
+import { BrandTrustBar } from "@/components/landing/BrandTrustBar";
+import { ProductStack } from "@/components/landing/ProductStack";
+import { PricingSection } from "@/components/landing/PricingSection";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
 const REVEAL = {
   initial: { opacity: 0, y: 14 },
@@ -63,28 +69,16 @@ export default function PresentationsLanding() {
 
   return (
     <main className="min-h-screen bg-white text-neutral-900 font-sans overflow-x-hidden">
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-white/80 border-b border-neutral-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-neutral-500 hover:text-neutral-900 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">AICreative</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <PieChart className="w-5 h-5 text-violet-500" />
-            <span className="font-black text-base sm:text-lg">Презентации</span>
-            <span className="hidden sm:inline ml-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-              Beta
-            </span>
-          </div>
-          <Link
-            href="/presentations/new"
-            className="text-xs font-bold bg-neutral-900 hover:bg-black text-white px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block"
-          >
-            Создать
-          </Link>
-          <Link href="/presentations/new" className="text-xs font-bold text-neutral-500 sm:hidden">→</Link>
-        </div>
-      </header>
+      <LandingNavbar
+        theme={THEMES.presentations}
+        anchors={[
+          { href: "#how", label: "Как работает" },
+          { href: "#pricing", label: "Тарифы" },
+          { href: "#faq", label: "FAQ" },
+        ]}
+        ctaLabel="Создать слайды"
+      />
+      <div className="h-16" aria-hidden />
 
       {/* ── 1. HERO ─────────────────────────────────────────────── */}
       <section className="relative pt-16 pb-24 px-4 overflow-hidden">
@@ -186,6 +180,8 @@ export default function PresentationsLanding() {
           </motion.div>
         </div>
       </section>
+
+      <BrandTrustBar />
 
       {/* ── 2. STATS BAR ───────────────────────────────────────── */}
       <section className="py-8 px-4 border-y border-neutral-100 bg-neutral-50/40">
@@ -326,6 +322,8 @@ export default function PresentationsLanding() {
         </div>
       </section>
 
+      <ProductStack currentProduct="presentations" />
+
       {/* ── 6. UPCOMING ANIMATION / VIDEO / MULTI-PHOTO ────────── */}
       <section className="py-20 px-4 border-t border-neutral-100 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white relative overflow-hidden">
         <div className="absolute inset-0 -z-10 pointer-events-none">
@@ -464,7 +462,11 @@ export default function PresentationsLanding() {
         </div>
       </section>
 
+      <PricingSection theme={THEMES.presentations} />
+
       {/* ── 9. FAQ ─────────────────────────────────────────────── */}
+      <div id="faq" />
+
       <section className="py-20 px-4 border-t border-neutral-100">
         <div className="max-w-3xl mx-auto">
           <motion.div {...REVEAL} className="text-center mb-12">
@@ -577,6 +579,7 @@ export default function PresentationsLanding() {
           </motion.p>
         </div>
       </section>
+      <LandingFooter />
     </main>
   );
 }

@@ -21,6 +21,12 @@ import {
   Wand2,
   Zap,
 } from "lucide-react";
+import { THEMES } from "@/lib/landing-themes";
+import { LandingNavbar } from "@/components/landing/LandingNavbar";
+import { BrandTrustBar } from "@/components/landing/BrandTrustBar";
+import { ProductStack } from "@/components/landing/ProductStack";
+import { PricingSection } from "@/components/landing/PricingSection";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
 /**
  * /products — full marketing landing for the marketplace product-card
@@ -72,28 +78,16 @@ export default function ProductsLanding() {
 
   return (
     <main className="min-h-screen bg-white text-neutral-900 font-sans overflow-x-hidden">
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-white/80 border-b border-neutral-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-neutral-500 hover:text-neutral-900 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">AICreative</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-emerald-500" />
-            <span className="font-black text-base sm:text-lg">Карточки товара</span>
-            <span className="hidden sm:inline ml-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-              Beta
-            </span>
-          </div>
-          <Link
-            href="/products/new"
-            className="text-xs font-bold bg-neutral-900 hover:bg-black text-white px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block"
-          >
-            Создать
-          </Link>
-          <Link href="/products/new" className="text-xs font-bold text-neutral-500 sm:hidden">→</Link>
-        </div>
-      </header>
+      <LandingNavbar
+        theme={THEMES.products}
+        anchors={[
+          { href: "#how", label: "Как работает" },
+          { href: "#pricing", label: "Тарифы" },
+          { href: "#faq", label: "FAQ" },
+        ]}
+        ctaLabel="Создать карточки"
+      />
+      <div className="h-16" aria-hidden />
 
       {/* ── 1. HERO ─────────────────────────────────────────────── */}
       <section className="relative pt-16 pb-24 px-4 overflow-hidden">
@@ -199,6 +193,8 @@ export default function ProductsLanding() {
           </motion.div>
         </div>
       </section>
+
+      <BrandTrustBar />
 
       {/* ── 2. STATS BAR ───────────────────────────────────────── */}
       <section className="py-8 px-4 border-y border-neutral-100 bg-neutral-50/40">
@@ -339,6 +335,8 @@ export default function ProductsLanding() {
         </div>
       </section>
 
+      <ProductStack currentProduct="products" />
+
       {/* ── 6. UPCOMING ────────────────────────────────────────── */}
       <section className="py-20 px-4 border-t border-neutral-100 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white relative overflow-hidden">
         <div className="absolute inset-0 -z-10 pointer-events-none">
@@ -477,7 +475,11 @@ export default function ProductsLanding() {
         </div>
       </section>
 
+      <PricingSection theme={THEMES.products} />
+
       {/* ── 9. FAQ ─────────────────────────────────────────────── */}
+      <div id="faq" />
+
       <section className="py-20 px-4 border-t border-neutral-100">
         <div className="max-w-3xl mx-auto">
           <motion.div {...REVEAL} className="text-center mb-12">
@@ -590,6 +592,7 @@ export default function ProductsLanding() {
           </motion.p>
         </div>
       </section>
+      <LandingFooter />
     </main>
   );
 }
