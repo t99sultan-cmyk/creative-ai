@@ -5,19 +5,17 @@ import { auth } from "@clerk/nextjs/server";
 /**
  * Builds a detailed structured Russian advertising brief from the
  * 4-question helper in the editor + (optionally) the uploaded product
- * photo and the chosen scene preset. When a photo is present we use
- * a multimodal Gemini call so the brief is grounded in what's actually
- * visible — colors, materials, packaging, environment — instead of
- * being a text-only guess.
+ * photo and the chosen scene preset. When a photo is present we send
+ * it as an `image_url` part to GPT so the brief is grounded in what's
+ * actually visible — colors, materials, packaging, environment —
+ * instead of being a text-only guess.
  *
- * The output is a multi-section TZ that drops straight into the prompt
- * textarea and gets sent to image-gen models (Gemini 3 Pro Image /
- * GPT Image 2). Modern image-gen models handle structured prompts
- * well, so we explicitly spell out: exact headline text, subheadline /
- * price callout, CTA copy, palette, layout, product treatment.
+ * Switched from Gemini to OpenAI GPT-5 — Gemini's preview models were
+ * 503-ing too often in production. GPT-5 is more stable for this
+ * structured-output workload and supports vision in the same call.
  */
 
-const SYSTEM_PROMPT = `You are a senior art director writing a DETAILED, SELLING brief for a paid-social ad creative (Instagram, TikTok, Kaspi feed). Your output goes straight into an AI image generator (Gemini 3 Pro Image / GPT Image 2) — they execute every word.
+const SYSTEM_PROMPT = `You are a senior art director writing a DETAILED, SELLING brief for a paid-social ad creative (Instagram, TikTok, Kaspi feed). Your output goes straight into an AI image generator (GPT Image 2) — it executes every word.
 
 OUTPUT RULES (non-negotiable):
 - Output is ONE Russian brief, 500-900 characters total. Shorter than 500 = failure.
@@ -60,10 +58,10 @@ interface TzBriefInput {
   /** Optional city or country the creative targets (free text). */
   cityCountry?: string;
   /**
-   * Optional product/subject photo as data: URL. When present, the call
-   * switches to multimodal Gemini and the brief is grounded in what's
-   * actually visible. Strongly recommended whenever the user has
-   * uploaded a photo — drastically improves brief quality.
+   * Optional product/subject photo as data: URL. When present, the
+   * call sends the photo as a vision input to GPT-5 and the brief is
+   * grounded in what's actually visible. Strongly recommended whenever
+   * the user has uploaded a photo — drastically improves brief quality.
    */
   photoDataUrl?: string;
   /**
@@ -74,29 +72,14 @@ interface TzBriefInput {
   sceneHint?: string;
 }
 
-/**
- * Strip the data: URL prefix and return { mime, base64 }. Returns null
- * if the input doesn't look like a valid base64 data URL.
- */
-function parseDataUrl(dataUrl: string): { mime: string; base64: string } | null {
-  if (!dataUrl.startsWith("data:")) return null;
-  const comma = dataUrl.indexOf(",");
-  if (comma < 0) return null;
-  const header = dataUrl.slice(5, comma); // after "data:"
-  const base64 = dataUrl.slice(comma + 1);
-  if (!base64) return null;
-  const mime = header.split(";")[0] || "image/png";
-  return { mime, base64 };
-}
-
 export async function generateTzBrief(
   input: TzBriefInput,
 ): Promise<{ success: true; brief: string } | { success: false; error: string }> {
   const { userId } = await auth();
   if (!userId) return { success: false, error: "Необходима авторизация." };
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return { success: false, error: "Конфигурация: GEMINI_API_KEY отсутствует." };
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return { success: false, error: "Конфигурация: OPENAI_API_KEY отсутствует." };
 
   const filled = [
     input.subject?.trim(),
@@ -125,43 +108,48 @@ export async function generateTzBrief(
       ? `\nК сообщению прикреплено реальное фото товара/субъекта — ПРОДУКТ секция должна точно описать что на нём видно (цвет, материал, упаковка, окружение).`
       : "");
 
-  // Build the message parts. Vision call when photo provided, text-only otherwise.
-  const photo = input.photoDataUrl ? parseDataUrl(input.photoDataUrl) : null;
-  const userParts: Array<Record<string, unknown>> = [{ text: userMessage }];
-  if (photo) {
-    userParts.push({ inlineData: { mimeType: photo.mime, data: photo.base64 } });
+  // OpenAI Chat Completions message parts. When a photo is provided
+  // we send a multi-part user message: text + image_url. The data URL
+  // can be passed directly to GPT-5 vision.
+  const userContent: Array<Record<string, unknown>> = [{ type: "text", text: userMessage }];
+  if (input.photoDataUrl) {
+    userContent.push({
+      type: "image_url",
+      image_url: { url: input.photoDataUrl },
+    });
   }
 
-  // Three Gemini attempts before giving up:
-  //   1-2. gemini-3-pro-preview (primary, best quality)
-  //   3.   gemini-3.1-pro-preview (fallback, often has spare capacity
-  //        when 3-pro spikes)
-  // Vision calls are slower, so timeout is bumped to 25s when a photo
-  // is present. Plain text stays at 15s.
-  const MODELS = ["gemini-3-pro-preview", "gemini-3.1-pro-preview"];
+  // Two GPT-5 attempts then one fallback to GPT-4o (older but very
+  // stable) before giving up. Vision calls are slower, so timeout
+  // bumps to 30s when a photo is present.
+  const MODELS = ["gpt-5", "gpt-4o"];
   const BACKOFFS_MS = [800, 2500, 5000];
-  const TIMEOUT_MS = photo ? 25_000 : 15_000;
+  const TIMEOUT_MS = input.photoDataUrl ? 30_000 : 20_000;
 
   let lastError = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     const model = attempt < 2 ? MODELS[0] : MODELS[1];
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            contents: [{ role: "user", parts: userParts }],
-            generationConfig: { maxOutputTokens: 1500, temperature: 0.85 },
-          }),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
         },
-      );
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userContent },
+          ],
+          max_completion_tokens: 1500,
+          temperature: 0.85,
+        }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
       if (res.status === 503 || res.status === 429 || res.status >= 500) {
         const text = await res.text().catch(() => "");
-        lastError = `Gemini ${res.status} (${model})`;
+        lastError = `OpenAI ${res.status} (${model})`;
         console.warn(`[generateTzBrief] ${lastError}, retrying in ${BACKOFFS_MS[attempt]}ms:`, text.slice(0, 200));
         if (attempt < 2) {
           await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt]));
@@ -169,19 +157,19 @@ export async function generateTzBrief(
         }
         return {
           success: false,
-          error: "Серверы Gemini перегружены, попробуй ещё раз через минуту",
+          error: "Серверы OpenAI перегружены, попробуй ещё раз через минуту",
         };
       }
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        console.error("[generateTzBrief] gemini error:", res.status, text.slice(0, 300));
-        return { success: false, error: `Gemini вернул ${res.status}` };
+        console.error("[generateTzBrief] openai error:", res.status, text.slice(0, 300));
+        return { success: false, error: `OpenAI вернул ${res.status}` };
       }
       const data = await res.json();
-      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const raw = data?.choices?.[0]?.message?.content || "";
       const brief = raw.replace(/^["«»\s]+|["«»\s]+$/g, "").trim();
       if (!brief) {
-        return { success: false, error: "Пустой ответ от Gemini" };
+        return { success: false, error: "Пустой ответ от OpenAI" };
       }
       return { success: true, brief: brief.slice(0, 1000) };
     } catch (err: any) {
