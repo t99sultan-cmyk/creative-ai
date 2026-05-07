@@ -200,7 +200,7 @@ export default function LandingPage() {
                <motion.h1
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
+                  transition={{ delay: 0.05 }}
                   className="text-[2rem] sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.15] sm:leading-[1.1] text-transparent bg-clip-text bg-gradient-to-br from-neutral-900 to-neutral-600"
                >
                  ИИ делает продающие креативы за{" "}
@@ -219,19 +219,19 @@ export default function LandingPage() {
                  <span className="text-[1.6rem] sm:text-4xl md:text-5xl lg:text-6xl text-neutral-900">Без дизайнера. Без съёмок.</span>
                </motion.h1>
 
-               <motion.p 
+               <motion.p
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
+                  transition={{ delay: 0.1 }}
                   className="text-lg md:text-xl text-neutral-600 max-w-xl leading-relaxed"
                >
                  Перестаньте сливать бюджет на тесты. Просто дайте ИИ референс стиля, и он соберёт конверсионный <strong>рекламный креатив</strong> — постер или motion-анимацию для Reels/Stories/Kaspi — с <strong className="text-green-700 bg-green-100 px-2 py-0.5 rounded border border-green-200 ml-1 inline-block">CTR до 47%</strong>. Уже 2400+ маркетологов и селлеров используют AICreative.
                </motion.p>
 
-               <motion.div 
+               <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
+                  transition={{ delay: 0.15 }}
                   className="flex flex-col sm:flex-row gap-4 mt-4"
                >
                   {isSignedIn ? (
@@ -276,7 +276,7 @@ export default function LandingPage() {
                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 }}
+                  transition={{ delay: 0.2 }}
                >
                   <DeadlineBanner variant="hero-inline" />
                </motion.div>
@@ -284,7 +284,7 @@ export default function LandingPage() {
                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
+                  transition={{ delay: 0.25 }}
                   className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:text-sm text-neutral-500 font-medium"
                >
                   <span className="flex items-center gap-1"><Check className="w-4 h-4 text-hermes-500" /> Без карты</span>
@@ -295,11 +295,15 @@ export default function LandingPage() {
                </motion.div>
 
                {/* TRUST STATS */}
+               {/* Trust-stats row. On mobile we deprioritize it — first
+                   screen stays focused on h1 + CTA + countdown. The same
+                   stats are visible by scrolling one screen-height down,
+                   right below the brand-trust bar (clients) section. */}
                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 }}
-                  className="grid grid-cols-3 gap-3 sm:gap-6 pt-8 mt-4 border-t border-neutral-100"
+                  className="hidden sm:grid grid-cols-3 gap-6 pt-8 mt-4 border-t border-neutral-100"
                >
                   <div>
                      <div className="text-2xl sm:text-3xl font-black text-neutral-900 tabular-nums">
@@ -322,24 +326,46 @@ export default function LandingPage() {
                </motion.div>
             </div>
 
-            {/* HERO VISUAL */}
+            {/* HERO VISUAL — autoplay video loop of a real generated
+                creative (not an interface screenshot). Showing the OUTPUT
+                product instead of the tool converts better: visitors see
+                what they'll get, not what they'll click. The video is
+                muted + playsInline so iOS autoplays it without user action.
+
+                Fallback: poster + the original PNG behind it for
+                extra-slow connections. */}
             <motion.div
-               initial={{ opacity: 0, scale: 0.95, filter: "blur(20px)" }}
-               animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-               transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               transition={{ duration: 0.6, ease: "easeOut", delay: 0.15 }}
                className="relative lg:h-[700px] flex items-center justify-center z-0"
             >
-               {/* Decorative Ring */}
-               <div className="absolute inset-0 bg-gradient-to-tr from-hermes-500/20 to-amber-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
-               <Image
-                  src="/hero_visual_light.png"
-                  alt="AICreative — интерфейс генератора ИИ-креативов"
-                  width={1200}
-                  height={900}
-                  priority
-                  sizes="(max-width: 1024px) 90vw, 600px"
-                  className="relative z-10 w-full h-auto drop-shadow-[0_0_50px_rgba(243,112,33,0.3)] hover:scale-[1.02] transition-transform duration-700"
-               />
+               {/* Decorative ring — softer than before, less GPU work on mobile */}
+               <div className="absolute inset-0 bg-gradient-to-tr from-hermes-500/15 to-amber-500/15 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '5s' }} />
+
+               {/* Phone-like frame around the vertical video. Sets a max
+                   height so on mobile the video doesn't dominate the
+                   first scroll-screen and push everything else off. */}
+               <div className="relative z-10 mx-auto w-[260px] sm:w-[300px] lg:w-[340px] aspect-[9/16] rounded-[2.5rem] bg-neutral-900 p-2 shadow-[0_20px_80px_-20px_rgba(243,112,33,0.45)]">
+                 <video
+                   src="/auto.mp4"
+                   poster="/hero_visual_light.png"
+                   autoPlay
+                   loop
+                   muted
+                   playsInline
+                   preload="metadata"
+                   aria-label="Пример креатива, сгенерированного AICreative за 60 секунд"
+                   className="w-full h-full rounded-[2rem] object-cover bg-black"
+                 />
+                 {/* Subtle outline to feel like a phone bezel */}
+                 <div className="absolute inset-0 rounded-[2.5rem] ring-1 ring-white/10 pointer-events-none" />
+                 {/* "На таргете +82% CTR" caption pinned bottom — anchors
+                     the abstract visual to a concrete proof number. */}
+                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white shadow-lg shadow-black/10 text-[11px] font-bold text-neutral-700 ring-1 ring-neutral-200 whitespace-nowrap">
+                   <span className="text-green-600">+82%</span> CTR в Reels
+                 </div>
+               </div>
             </motion.div>
          </div>
       </section>
@@ -541,6 +567,113 @@ export default function LandingPage() {
                ))}
             </div>
          </div>
+      </section>
+
+      {/* COMPARISON — positions AICreative vs the three alternatives
+          marketers in KZ realistically consider: Canva (template tool),
+          Фрилансер (custom but slow/expensive), Midjourney (high-end AI
+          but no copy/no localized format). Reads after "Как работает"
+          so visitors move from "understanding the flow" → "is it really
+          better than what I already use" with the answer right there. */}
+      <section className="py-20 md:py-24 relative border-t border-neutral-100 bg-white">
+        <div className="max-w-6xl mx-auto px-4">
+          <Reveal>
+            <div className="text-center mb-12">
+              <span className="inline-block text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-hermes-600 mb-3">
+                Почему AICreative
+              </span>
+              <h2 className="text-3xl md:text-5xl font-extrabold text-neutral-900 mb-4">
+                vs Canva, Midjourney, Фрилансер
+              </h2>
+              <p className="text-neutral-600 text-base sm:text-lg max-w-2xl mx-auto">
+                Что вы получите за 60 секунд и одну подписку — и чего не получите от альтернатив.
+              </p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <div className="overflow-x-auto -mx-4 px-4">
+              <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
+                <thead>
+                  <tr>
+                    <th className="text-left py-4 pr-4 font-bold text-neutral-500 uppercase tracking-wider text-xs"></th>
+                    <th className="py-4 px-3 text-center bg-gradient-to-br from-hermes-500 to-amber-500 text-white font-black text-base sm:text-lg rounded-t-2xl">
+                      AICreative
+                    </th>
+                    <th className="py-4 px-3 text-center font-bold text-neutral-700 bg-neutral-50 rounded-t-2xl">Canva</th>
+                    <th className="py-4 px-3 text-center font-bold text-neutral-700 bg-neutral-50 rounded-t-2xl">Midjourney</th>
+                    <th className="py-4 px-3 text-center font-bold text-neutral-700 bg-neutral-50 rounded-t-2xl">Фрилансер</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {
+                      label: "Время до готового креатива",
+                      ours: "~60 сек",
+                      canva: "30-60 мин",
+                      mj: "15-30 мин",
+                      free: "3-7 дней",
+                    },
+                    {
+                      label: "Стоимость одного",
+                      ours: "~150-200 ₸",
+                      canva: "0 ₸ (но твой час)",
+                      mj: "~80 ₸ только картинка",
+                      free: "10-50 тыс ₸",
+                    },
+                    {
+                      label: "Пишет продающую копию",
+                      ours: "✓ ИИ под аудиторию",
+                      canva: "—",
+                      mj: "—",
+                      free: "± зависит от фрилансера",
+                    },
+                    {
+                      label: "Понимает Kaspi / Reels",
+                      ours: "✓ форматы и брифы",
+                      canva: "± шаблоны",
+                      mj: "—",
+                      free: "± если объяснишь",
+                    },
+                    {
+                      label: "Анимация + звук",
+                      ours: "✓ одной кнопкой",
+                      canva: "± ручная сборка",
+                      mj: "—",
+                      free: "+ моушен-дизайнер",
+                    },
+                    {
+                      label: "Поддержка на русском",
+                      ours: "✓ Telegram, KZT",
+                      canva: "± английская",
+                      mj: "— только английская",
+                      free: "✓ если на связи",
+                    },
+                  ].map((row, i, arr) => (
+                    <tr key={i}>
+                      <td className={`py-3 pr-4 font-semibold text-neutral-700 align-top ${i === arr.length - 1 ? "" : "border-b border-neutral-100"}`}>
+                        {row.label}
+                      </td>
+                      <td className={`py-3 px-3 text-center font-bold text-neutral-900 bg-hermes-50/40 ${i === arr.length - 1 ? "rounded-b-2xl" : "border-b border-hermes-100/60"}`}>
+                        {row.ours}
+                      </td>
+                      <td className={`py-3 px-3 text-center text-neutral-500 ${i === arr.length - 1 ? "" : "border-b border-neutral-100"}`}>{row.canva}</td>
+                      <td className={`py-3 px-3 text-center text-neutral-500 ${i === arr.length - 1 ? "" : "border-b border-neutral-100"}`}>{row.mj}</td>
+                      <td className={`py-3 px-3 text-center text-neutral-500 ${i === arr.length - 1 ? "" : "border-b border-neutral-100"}`}>{row.free}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.2}>
+            <p className="text-center text-xs sm:text-sm text-neutral-400 mt-6 max-w-3xl mx-auto leading-relaxed">
+              Сравнение основано на типичном кейсе: один статичный или анимированный креатив 1080×1080 (или 9:16) с
+              продающей копией, фото товара и CTA. Цены округлены, время — медианное по отзывам пользователей.
+            </p>
+          </Reveal>
+        </div>
       </section>
 
       {/* PRODUCT-STACK — 4 products entry points (creatives + cards + sites + decks) */}
@@ -1098,13 +1231,28 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* STICKY MOBILE CTA — hidden in maintenance mode (no sign-up to push). */}
+      {/* STICKY MOBILE CTA — hidden in maintenance mode (no sign-up to push).
+          Two-column layout (urgency-text + CTA-button) instead of a plain
+          "Начать бесплатно" button. The "7 импульсов" hook is the strongest
+          we have on the landing — repeating it inside the sticky bar makes
+          the bar a constant reminder of what's at stake, not just a "go
+          sign up" tail. */}
       {!isSignedIn && registrationOpen && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-neutral-200 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
           <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
-            <button className="w-full bg-hermes-500 hover:bg-hermes-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-hermes-500/30 transition-colors">
-              Начать бесплатно
-              <Sparkles className="w-4 h-4" />
+            <button className="w-full flex items-center gap-3 active:scale-[0.98] transition-transform">
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-hermes-600 leading-none mb-0.5">
+                  🔥 Бесплатный старт
+                </div>
+                <div className="text-sm font-black text-neutral-900 leading-tight">
+                  7 импульсов в подарок · без карты
+                </div>
+              </div>
+              <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-sm px-4 py-3 rounded-xl shadow-md shadow-hermes-500/40">
+                Попробовать
+                <ArrowRight className="w-4 h-4" />
+              </span>
             </button>
           </SignInButton>
         </div>

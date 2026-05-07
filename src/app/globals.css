@@ -98,3 +98,24 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1aa;
 }
+
+/* prefers-reduced-motion override.
+ *
+ * Users who set "reduce motion" in their OS settings (common for
+ * vestibular disorders, motion sensitivity, or low-end devices) get
+ * near-instant transitions and no scroll-triggered reveals — the page
+ * still works, just without the cinematic flourish.
+ *
+ * Targets framer-motion via its inline transform/transition styles
+ * plus our own .animate-pulse decorations. Important + duration-zero
+ * is intentional: framer-motion writes inline styles every frame, so
+ * we can only override via !important at the CSS layer.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
