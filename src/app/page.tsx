@@ -543,6 +543,192 @@ export default function LandingPage() {
          </div>
       </section>
 
+      {/* PRODUCT-STACK — 4 products entry points (creatives + cards + sites + decks) */}
+      <section className="py-24 relative border-t border-neutral-100 bg-gradient-to-b from-white via-neutral-50/40 to-white">
+         <div className="max-w-7xl mx-auto px-4">
+            <Reveal>
+               <div className="text-center mb-12">
+                  <span className="inline-block text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-hermes-600 mb-3">
+                     Полный креативный стек
+                  </span>
+                  <h2 className="text-3xl md:text-5xl font-extrabold text-neutral-900 mb-4">
+                     <span className="text-hermes-600">4 продукта</span> для всех каналов продаж
+                  </h2>
+                  <p className="text-neutral-600 text-base sm:text-lg max-w-2xl mx-auto">
+                     ИИ создаёт всё что нужно для продаж: креативы для таргета,
+                     карточки для маркетплейсов, продающие сайты, питч-презентации.
+                  </p>
+               </div>
+            </Reveal>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-7xl mx-auto">
+               {/* Creatives card — links to /editor */}
+               <Reveal delay={0.05}>
+                  <Link
+                     href="/editor"
+                     className="group block rounded-3xl border border-neutral-200 bg-white shadow-xl shadow-pink-500/5 overflow-hidden hover:shadow-pink-500/15 hover:border-pink-500/30 hover:-translate-y-1 transition-all"
+                  >
+                     <div className="aspect-[16/10] bg-gradient-to-br from-pink-50 via-rose-50 to-amber-50 relative overflow-hidden">
+                        <div className="absolute inset-5 flex flex-col items-center justify-center gap-2">
+                           <div className="aspect-square w-2/3 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-500 shadow-md flex items-center justify-center">
+                              <div className="text-white text-xs font-black tracking-wider">CREATIVE</div>
+                           </div>
+                           <div className="flex gap-1 mt-1">
+                              <div className="w-2 h-2 rounded-full bg-white/70 border border-white shadow-sm" />
+                              <div className="w-2 h-2 rounded-full bg-white/70 border border-white shadow-sm" />
+                           </div>
+                        </div>
+                     </div>
+                     <div className="p-5 sm:p-6">
+                        <div className="flex items-center gap-3 mb-2">
+                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                              Live
+                           </span>
+                           <span className="text-[10px] font-bold uppercase tracking-wider text-pink-600">
+                              4 ⚡
+                           </span>
+                        </div>
+                        <h3 className="text-xl sm:text-2xl font-black text-neutral-900 mb-2">
+                           Креативы
+                        </h3>
+                        <p className="text-neutral-600 text-sm leading-relaxed mb-4">
+                           Постеры и motion-креативы для Instagram, TikTok, Kaspi-таргета.
+                        </p>
+                        <div className="inline-flex items-center gap-1.5 text-sm font-bold text-pink-600 group-hover:text-pink-700 transition-colors">
+                           Открыть редактор
+                           <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                        </div>
+                     </div>
+                  </Link>
+               </Reveal>
+
+               {/* Product cards — Kaspi/WB */}
+               <Reveal delay={0.1}>
+                  <Link
+                     href="/products"
+                     className="group block rounded-3xl border border-neutral-200 bg-white shadow-xl shadow-emerald-500/5 overflow-hidden hover:shadow-emerald-500/15 hover:border-emerald-500/30 hover:-translate-y-1 transition-all"
+                  >
+                     <div className="aspect-[16/10] bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative overflow-hidden">
+                        <div className="absolute inset-5 grid grid-cols-3 gap-1.5 content-center">
+                           <div className="aspect-square col-span-2 row-span-2 rounded-xl bg-white border-2 border-emerald-300 shadow-md" />
+                           <div className="aspect-square rounded-lg bg-white border border-neutral-200 shadow-sm" />
+                           <div className="aspect-square rounded-lg bg-emerald-100 border border-emerald-200 shadow-sm" />
+                           <div className="aspect-square rounded-lg bg-white border border-neutral-200 shadow-sm" />
+                           <div className="aspect-square rounded-lg bg-white border border-neutral-200 shadow-sm" />
+                           <div className="aspect-square rounded-lg bg-white border border-neutral-200 shadow-sm" />
+                        </div>
+                     </div>
+                     <div className="p-5 sm:p-6">
+                        <div className="flex items-center gap-3 mb-2">
+                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                              Beta
+                           </span>
+                           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                              30 ⚡
+                           </span>
+                        </div>
+                        <h3 className="text-xl sm:text-2xl font-black text-neutral-900 mb-2">
+                           Карточки товара
+                        </h3>
+                        <p className="text-neutral-600 text-sm leading-relaxed mb-4">
+                           6 карточек под Kaspi и WB: hero + 4 lifestyle + специфика.
+                        </p>
+                        <div className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-600 group-hover:text-emerald-700 transition-colors">
+                           Создать комплект
+                           <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                        </div>
+                     </div>
+                  </Link>
+               </Reveal>
+
+               {/* Sites */}
+               <Reveal delay={0.15}>
+                  <Link
+                     href="/sites"
+                     className="group block rounded-3xl border border-neutral-200 bg-white shadow-xl shadow-hermes-500/5 overflow-hidden hover:shadow-hermes-500/15 hover:border-hermes-500/30 hover:-translate-y-1 transition-all"
+                  >
+                     <div className="aspect-[16/10] bg-gradient-to-br from-hermes-50 via-amber-50 to-orange-50 relative overflow-hidden">
+                        <div className="absolute inset-5 flex flex-col gap-1.5">
+                           <div className="h-1.5 w-12 rounded-full bg-hermes-500/60" />
+                           <div className="h-2.5 w-3/4 rounded-md bg-neutral-900/80" />
+                           <div className="h-1 w-1/2 rounded-md bg-neutral-300" />
+                           <div className="grid grid-cols-3 gap-1.5 mt-3">
+                              <div className="aspect-square rounded-md bg-white/80 border border-white shadow-sm" />
+                              <div className="aspect-square rounded-md bg-white/80 border border-white shadow-sm" />
+                              <div className="aspect-square rounded-md bg-white/80 border border-white shadow-sm" />
+                           </div>
+                           <div className="mt-auto h-5 w-20 rounded-full bg-gradient-to-r from-hermes-500 to-orange-500" />
+                        </div>
+                     </div>
+                     <div className="p-5 sm:p-6">
+                        <div className="flex items-center gap-3 mb-2">
+                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                              Beta
+                           </span>
+                           <span className="text-[10px] font-bold uppercase tracking-wider text-hermes-600">
+                              30 ⚡
+                           </span>
+                        </div>
+                        <h3 className="text-xl sm:text-2xl font-black text-neutral-900 mb-2">
+                           Сайты
+                        </h3>
+                        <p className="text-neutral-600 text-sm leading-relaxed mb-4">
+                           Single-page landing с hero, фичами, CTA. Публикация на нашем домене.
+                        </p>
+                        <div className="inline-flex items-center gap-1.5 text-sm font-bold text-hermes-600 group-hover:text-hermes-700 transition-colors">
+                           Создать сайт
+                           <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                        </div>
+                     </div>
+                  </Link>
+               </Reveal>
+
+               {/* Presentations */}
+               <Reveal delay={0.2}>
+                  <Link
+                     href="/presentations"
+                     className="group block rounded-3xl border border-neutral-200 bg-white shadow-xl shadow-violet-500/5 overflow-hidden hover:shadow-violet-500/15 hover:border-violet-500/30 hover:-translate-y-1 transition-all"
+                  >
+                     <div className="aspect-[16/10] bg-gradient-to-br from-violet-50 via-fuchsia-50 to-rose-50 relative overflow-hidden">
+                        <div className="absolute inset-5 flex flex-col gap-2">
+                           <div className="flex items-center gap-1.5">
+                              <div className="h-1 w-6 rounded-full bg-violet-500/60" />
+                              <div className="h-1 w-3 rounded-full bg-violet-500/30" />
+                              <div className="h-1 w-3 rounded-full bg-violet-500/30" />
+                           </div>
+                           <div className="flex-1 grid grid-cols-2 gap-2">
+                              <div className="aspect-video rounded-lg bg-white/80 border border-white shadow-sm" />
+                              <div className="aspect-video rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-sm" />
+                              <div className="aspect-video rounded-lg bg-gradient-to-br from-fuchsia-500 to-rose-500 shadow-sm" />
+                              <div className="aspect-video rounded-lg bg-white/80 border border-white shadow-sm" />
+                           </div>
+                        </div>
+                     </div>
+                     <div className="p-5 sm:p-6">
+                        <div className="flex items-center gap-3 mb-2">
+                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                              Beta
+                           </span>
+                           <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600">
+                              30 ⚡
+                           </span>
+                        </div>
+                        <h3 className="text-xl sm:text-2xl font-black text-neutral-900 mb-2">
+                           Презентации
+                        </h3>
+                        <p className="text-neutral-600 text-sm leading-relaxed mb-4">
+                           HTML-слайды из 7 слайдов. Открывается по ссылке, листается стрелками.
+                        </p>
+                        <div className="inline-flex items-center gap-1.5 text-sm font-bold text-violet-600 group-hover:text-violet-700 transition-colors">
+                           Создать слайды
+                           <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                        </div>
+                     </div>
+                  </Link>
+               </Reveal>
+            </div>
+         </div>
+      </section>
+
       {/* CASES AND REVIEWS */}
       <section className="py-24 relative">
          <div className="max-w-7xl mx-auto px-4">

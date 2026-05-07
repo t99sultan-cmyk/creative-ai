@@ -89,6 +89,85 @@ export const VISION_REFINE_COST = 2;
  */
 export const CANVAS_GENERATE_COST = 10;
 
+/**
+ * Variable-length AI products: sites, presentations (HTML-slides),
+ * marketplace product cards. Each follows the same pricing shape:
+ *
+ *   total = BASE + (extraElements × PER_ELEMENT)
+ *
+ * Where BASE covers the default element count (chosen on the wizard
+ * slider's default position) and each element above the default adds
+ * a linear surcharge.
+ *
+ * From-scratch generation = 1 variant (Claude Opus 4.7 only — picked as
+ * the strongest for HTML/copy quality). v1 supported 2 (Claude + Gemini)
+ * for blind A/B comparison; we collapsed to 1 to halve API cost and
+ * simplify the UX.
+ *
+ * Refine of a single block/slide/card = REFINE_BLOCK_COST. Cheap so
+ * users iterate to perfection without sticker shock.
+ *
+ * Default element counts (where BASE applies):
+ *   sites          → 6 sections   (slider 3-12)
+ *   presentations  → 10 slides    (slider 5-25)
+ *   products       → 6 cards      (slider 3-12)
+ *
+ * Real API cost per default generation (1 variant, default count):
+ *   1× Claude Opus HTML    ≈ $0.05
+ *   N× Gemini 3 Pro Image  @ $0.04 each
+ * Sites/products at 6 elements → 0.05 + 6×0.04 ≈ $0.29 ≈ 140 ₸
+ * Presentations at 10        → 0.05 + 10×0.04 ≈ $0.45 ≈ 215 ₸
+ *
+ * BASE is set so default-count generation has a healthy margin even
+ * for presentations (highest API cost).
+ */
+export const SITE_GEN_COST = 30;
+export const PRESENTATION_GEN_COST = 30;
+export const PRODUCTS_GEN_COST = 30;
+
+/**
+ * Linear surcharge per extra element above the default count.
+ * Each extra slide / section / card adds ~$0.04 in API cost (image
+ * gen). +3⚡ ≈ +150 ₸ retail → 70%+ margin on the marginal cost.
+ */
+export const PER_ELEMENT_COST = 3;
+
+/**
+ * Default element counts — the slider's pre-selected position when
+ * the wizard opens. Pricing helper below uses these to compute the
+ * extra-element surcharge.
+ */
+export const SITE_DEFAULT_SECTIONS = 6;
+export const PRESENTATION_DEFAULT_SLIDES = 10;
+export const PRODUCTS_DEFAULT_CARDS = 6;
+
+/**
+ * Refine cost — touch up one block/slide/card with a free-text
+ * instruction ("поменяй заголовок на X", "сделай фон тёмнее"). Only
+ * the targeted block regenerates; the rest stays. Mirrors the existing
+ * VISION_REFINE_COST for the creatives editor.
+ */
+export const REFINE_BLOCK_COST = 5;
+
+/**
+ * Compute the total impulse cost for a generation, given:
+ *   - product (sites/presentations/products)
+ *   - element count chosen by the user
+ * Returns BASE + extra-element surcharge.
+ */
+export function computeProductGenCost(
+  product: "site" | "presentation" | "product-cards",
+  count: number,
+): number {
+  const config = {
+    site: { base: SITE_GEN_COST, def: SITE_DEFAULT_SECTIONS },
+    presentation: { base: PRESENTATION_GEN_COST, def: PRESENTATION_DEFAULT_SLIDES },
+    "product-cards": { base: PRODUCTS_GEN_COST, def: PRODUCTS_DEFAULT_CARDS },
+  }[product];
+  const extra = Math.max(0, count - config.def);
+  return config.base + extra * PER_ELEMENT_COST;
+}
+
 export type PricingTier = {
   name: string;
   desc: string;
@@ -101,19 +180,18 @@ export type PricingTier = {
   action: "buy" | "free";
 };
 
-// Sanity math — why these numbers:
-// 1 dual-static = 6 импульсов (Claude+Gemini параллельно).
-// 1 dual-animated = 8 импульсов.
-// 1 refine ("Улучшить") = 2 импульса доплатой.
-// Implied per-impulse price at tier (unchanged):
-//   Старт:   2 490 / 45   = 55.3 ₸ / импульс  → ~7 dual-static в месяц
-//   Креатор: 7 980 / 150  = 53.2 ₸ / импульс  → ~25 dual-static в месяц
-//   Студия: 24 700 / 520  = 47.5 ₸ / импульс  (~14% scale discount) → ~86 dual-static
-//   Бизнес: 49 980 / 1200 = 41.7 ₸ / импульс  (~25% scale discount) → ~200 dual-static
-// Real API cost (Claude Opus + Gemini 3.1 + Cloud Run) is ~280-360 ₸ per
-// dual-static, ~340-420 ₸ per dual-animated. Tier margins still cover
-// infra+support but margin сжимается с ~40% до ~20% — компенсируем
-// объёмом и тем что dual-сравнение продаёт качество.
+// Sanity math — v2 single-model pipeline:
+// 1 креатив (GPT Image 2) = 4⚡  (was 8 with dual Gemini+GPT)
+// 1 сайт / презентация / карточки (Claude) = 30⚡ base + 3⚡/extra element
+// 1 видео (Seedance) = 50⚡, 1 refine = 2-5⚡
+// Per-impulse price (unchanged):
+//   Старт:   2 490 / 45   = 55.3 ₸ / импульс
+//   Креатор: 7 980 / 150  = 53.2 ₸ / импульс
+//   Студия: 24 700 / 520  = 47.5 ₸ / импульс  (~14% scale discount)
+//   Бизнес: 49 980 / 1200 = 41.7 ₸ / импульс  (~25% scale discount)
+// Real API cost (single-model GPT Image 2) is ~$0.04 ≈ 20 ₸ per
+// креатив. Margin ~85%. Sites/presentations/products at default count
+// ≈ $0.30 ≈ 150 ₸ → 80% margin at retail 30⚡ × 52 = 1560 ₸.
 export const PRICING_TIERS: PricingTier[] = [
   {
     name: "Старт",
@@ -122,9 +200,9 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~2 490 ₸ / месяц",
     impulses: 45,
     features: [
-      "~7 dual-сравнений (Claude vs Gemini)",
-      "ИЛИ ~5 анимированных dual",
-      "Кнопка «Улучшить» (vision-loop)",
+      "~10 креативов в месяц (4⚡ каждый)",
+      "ИЛИ 1 сайт (30⚡) + 5 креативов",
+      "Кнопка «Улучшить» (vision-loop, 2⚡)",
       "Качество 4K, без водяных знаков",
       "Обновление каждый месяц",
     ],
@@ -138,40 +216,40 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~7 980 ₸ / месяц",
     impulses: 150,
     features: [
-      "~25 dual-сравнений (Claude+Gemini)",
-      "ИЛИ ~18 анимированных dual",
+      "~37 креативов в месяц",
+      "ИЛИ 5 сайтов / презентаций (по 30⚡)",
       "Всё из Старта",
       "Все форматы (9:16, 1:1, 16:9)",
-      "Библиотека шаблонов",
+      "Видео-анимация 5/10 сек (50⚡)",
     ],
     btn: "Выбрать Креатор",
     action: "buy",
   },
   {
     name: "Студия",
-    desc: "Для A/B тестов и масштабных кампаний",
+    desc: "Для команд и масштабных кампаний",
     isHit: true,
     priceKzt: 24700,
     priceLabel: "~24 700 ₸ / месяц",
     impulses: 520,
     features: [
-      "~86 dual-сравнений или ~65 анимированных",
+      "~130 креативов или 17 сайтов в месяц",
       "Всё из Креатора",
       "Приоритет в очереди (в 3× быстрее)",
+      "Карточки товара для Kaspi/WB",
       "Согласованность стиля между креативами",
-      "Расширенная статистика по моделям",
     ],
     btn: "Купить Студию",
     action: "buy",
   },
   {
     name: "Бизнес",
-    desc: "Для агентств и команд",
+    desc: "Для агентств и больших команд",
     priceKzt: 49980,
     priceLabel: "~49 980 ₸ / месяц",
     impulses: 1200,
     features: [
-      "~200 dual-сравнений или ~150 анимированных",
+      "~300 креативов или 40 сайтов в месяц",
       "Всё из Студии",
       "Управление командой (до 5 пользователей)",
       "Бренд-кит: единый стиль для всей команды",

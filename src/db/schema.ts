@@ -84,9 +84,39 @@ export const adminAuditLog = pgTable("admin_audit_log", {
 
 export const promoCodes = pgTable("promo_code", {
   code: text("code").primaryKey(), // e.g. "KASPI-XYZ123"
-  impulses: integer("impulses").notNull(), 
+  impulses: integer("impulses").notNull(),
   isUsed: boolean("is_used").default(false).notNull(),
   usedBy: text("used_by").references(() => users.id),
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+/**
+ * Published pages — sites and HTML-slide presentations the user has
+ * opted to publish under aicreative.kz/{s,p}/{slug}.
+ *
+ * Replaces the in-memory store from v1 (which lived only in dev process
+ * memory and disappeared on Vercel cold start). DB persistence makes
+ * publish work across restarts and serverless cold starts.
+ *
+ * `kind` discriminates between site (/s/{slug}) and presentation
+ * (/p/{slug}). `slug` is short URL-safe (7 chars from a-z0-9).
+ *
+ * No FK to a `creative_id` yet — generations don't persist to creatives
+ * table during the new product flow (sites/presentations/products write
+ * straight to this table when user clicks Publish).
+ */
+export const publishedPages = pgTable("published_page", {
+  slug: text("slug").primaryKey(), // short slug, used in /s/{slug} or /p/{slug}
+  kind: text("kind").notNull(), // "site" | "presentation"
+  html: text("html").notNull(), // full HTML document
+  userId: text("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  /**
+   * Soft-unpublish. When set, the page is hidden from public /s/{slug}
+   * and /p/{slug} routes (they 404 with the standard Not Found shell).
+   * The row stays for moderation/audit and can be restored by clearing
+   * this column.
+   */
+  unpublishedAt: timestamp("unpublished_at"),
 });

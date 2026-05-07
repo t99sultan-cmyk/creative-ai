@@ -5,6 +5,19 @@
  * NOT bearer). Both pieces come from .env.local — temporary keys for
  * the integration test phase, will be rotated once the flow is approved.
  *
+ * ⚠️ SECURITY — KEY ROTATION REQUIRED:
+ * The Higgsfield API_KEY + API_SECRET were exposed in chat conversation
+ * during initial integration setup. They MUST be rotated before
+ * production launch:
+ *   1. Generate new credentials in Higgsfield dashboard
+ *   2. Update HIGGSFIELD_API_KEY + HIGGSFIELD_API_SECRET on Vercel
+ *      (Settings → Environment Variables → Production)
+ *   3. Update .env.local for local dev
+ *   4. Old keys auto-revoke after rotation in Higgsfield UI
+ *
+ * Until rotated, treat these as compromised — anyone with chat history
+ * access can call Higgsfield on our account budget.
+ *
  * Async/queue pattern (mirrors fal.ai):
  *   submit() → returns request_id immediately
  *   check()  → polls /requests/{id}/status until completed/failed

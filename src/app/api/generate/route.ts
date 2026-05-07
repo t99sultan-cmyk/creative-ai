@@ -21,7 +21,10 @@ import {
   unwrapHtml,
 } from "@/lib/generation-models";
 import { callGptImage } from "@/lib/models/gpt-image";
-import { callGemini3ProImage } from "@/lib/models/gemini-3-pro-image";
+// Gemini 3 Pro Image dropped from /api/generate — single GPT Image 2
+// path only. Helper file is still imported by /api/generate-site,
+// /api/generate-presentation, /api/generate-products (image gen for
+// new product wizards), so we don't delete it.
 import { getScene } from "@/lib/categories";
 
 export const maxDuration = 300;
@@ -257,8 +260,14 @@ export async function POST(req: Request) {
         }
       }
 
+      // v2: single image-gen model (GPT Image 2 only). Gemini 3 Pro
+      // Image was dropped from the static path per product spec — the
+      // dual-variant A/B picker confused users more than it helped, and
+      // GPT Image 2's text rendering and brand consistency proved more
+      // reliable in our internal tests. Result: one variant per click,
+      // no "Вариант 1 / Вариант 2" labels.
       type Variant = {
-        model: "gemini-3-pro-image" | "gpt-image-2";
+        model: "gpt-image-2";
         ok: boolean;
         creativeId?: string;
         imageBase64?: string;
@@ -267,27 +276,11 @@ export async function POST(req: Request) {
         error?: string;
       };
 
-      // Reference images (style anchors). Both models receive them —
-      // Gemini Pro inlines them as additional parts, GPT Image 2 sends
-      // them as `image[]` multipart entries. We cap at 3 refs to keep
-      // payloads sane and the model focused.
+      // Reference images (style anchors). GPT Image 2 receives them as
+      // `image[]` multipart entries. Capped at 3 refs.
       const referenceImagesBase64: string[] = (refs ?? []).slice(0, 3);
 
       const tasks: Array<{ model: Variant["model"]; promise: Promise<unknown> }> = [];
-      for (let i = 0; i < variantCount; i++) {
-        tasks.push({
-          model: "gemini-3-pro-image",
-          promise: callGemini3ProImage({
-            prompt: enrichedPrompt,
-            productImageBase64,
-            productImageMime,
-            referenceImagesBase64,
-            regionHint: cityHint,
-            format: format as "9:16" | "1:1",
-            sceneActive: !!scene,
-          }),
-        });
-      }
       for (let i = 0; i < variantCount; i++) {
         tasks.push({
           model: "gpt-image-2",
@@ -406,10 +399,9 @@ export async function POST(req: Request) {
             const summary = failed
               .map((v) => `${v.model}: ${fmt.short(v.error ?? "?", 120)}`)
               .join(" | ");
-            const okPerModel = (m: Variant["model"]) =>
-              variants.filter((v) => v.model === m && v.ok).length;
+            const okGpt = variants.filter((v) => v.ok).length;
             notifyAdmin(
-              `⚠️ *Image-gen partial fail*\n\n*Юзер:* \`${fmt.esc(userId)}\`\n*Модели:* NB-Pro ${okPerModel("gemini-3-pro-image")}/${variantCount}, GPT2 ${okPerModel("gpt-image-2")}/${variantCount}\n*Ошибки:* ${fmt.esc(fmt.short(summary, 350))}\n*Возврат:* ${partialRefunded} имп.`,
+              `⚠️ *Image-gen partial fail*\n\n*Юзер:* \`${fmt.esc(userId)}\`\n*GPT Image 2:* ${okGpt}/${variantCount}\n*Ошибки:* ${fmt.esc(fmt.short(summary, 350))}\n*Возврат:* ${partialRefunded} имп.`,
             );
           }
         } catch (e) {

@@ -30,6 +30,7 @@ import { cancelGeneration } from "@/actions/generationActions";
 import { buildLoadingTexts, optimizeImageToWebP } from "@/lib/editor-utils";
 import { VideoRecordingModal } from "@/components/editor/VideoRecordingModal";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { BalanceChip } from "@/app/editor/components/BalanceChip";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
@@ -173,6 +174,11 @@ export default function Home() {
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeKey, setIframeKey] = useState(0);
+  // 4 = max product photos per generation. Cap chosen empirically:
+  // Gemini 3 Pro Image accepts up to ~5 inline images in the request,
+  // GPT Image 2 multipart accepts more but starts to ignore extras.
+  // 4 covers 95% of seller use cases (front + back + side + lifestyle)
+  // without inflating prompt-token cost or hitting upload size limits.
   const MAX_IMAGES = 4;
 
   const [impulses, setImpulses] = useState<number | null>(null);
@@ -2016,39 +2022,12 @@ export default function Home() {
             </div>
           </div>
           
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Баланс</span>
-              <div className="flex items-center gap-2">
-                {/* Balance badge — clicks open the promo input inline (quick path).
-                    For full flow (history, account info) use the Личный кабинет link below. */}
-                <button
-                  onClick={() => setShowPromoInput(!showPromoInput)}
-                  className="flex items-center gap-1.5 bg-hermes-50 text-hermes-700 px-3 py-1.5 rounded-lg border border-hermes-200 hover:bg-hermes-100 hover:border-hermes-300 transition-colors"
-                  title="Нажмите чтобы ввести промокод"
-                >
-                  <span className="font-extrabold text-sm">{impulses === null ? "..." : impulses}</span>
-                  <span className="text-sm">⚡</span>
-                </button>
-                <Link href="/#pricing" className="px-3 py-1.5 bg-[#f14635] text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center shadow-sm whitespace-nowrap">
-                  {impulses !== null && impulses >= 10 ? 'Докупить (Kaspi)' : 'Купить (Kaspi)'}
-                </Link>
-              </div>
-              <div className="flex items-center gap-3 mt-2">
-                <Link
-                  href="/account"
-                  className="text-[10px] uppercase font-bold text-hermes-600 hover:text-hermes-700 underline flex items-center gap-1"
-                  title="Промокоды, история пополнений, ваш баланс"
-                >
-                  🎁 Промокод / Кабинет
-                </Link>
-                <button
-                  onClick={() => setShowHistory(true)}
-                  className="text-[10px] uppercase font-bold text-neutral-500 hover:text-hermes-600 underline"
-                >
-                  Мои креативы ({historyItems.length})
-                </button>
-              </div>
-            </div>
+            <BalanceChip
+              impulses={impulses}
+              historyCount={historyItems.length}
+              onPromoClick={() => setShowPromoInput(!showPromoInput)}
+              onHistoryClick={() => setShowHistory(true)}
+            />
         </div>
 
         {showPromoInput && (
@@ -2782,25 +2761,17 @@ export default function Home() {
         )}
 
         {pair && pair.variants ? (
-          // ---- IMAGE VARIANTS GRID (2 models × N variants) ----
-          // Two rows. Models stay anonymous to the user as
-          // "Вариант 1" / "Вариант 2" so the pair-vote (markAsBest)
-          // is blind — that gives us honest model winrate telemetry.
-          // Admins see the underlying model name appended for QA.
-          <div className="relative z-10 mt-16 md:mt-0 w-full max-w-[1300px] grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            {(["gemini-3-pro-image", "gpt-image-2"] as const).map((m, modelIdx) => {
+          // ---- IMAGE VARIANTS GRID (single GPT Image 2 only) ----
+          // v2: Gemini 3 Pro Image dropped — single GPT Image 2 path.
+          // No "Вариант 1 / Вариант 2" labels; the result stands alone.
+          // Admins still see the technical model name appended for QA.
+          <div className="relative z-10 mt-16 md:mt-0 w-full max-w-[800px] grid grid-cols-1 gap-4 md:gap-6">
+            {(["gpt-image-2"] as const).map((m) => {
               const row = pair.variants!.filter((v) => v.model === m);
               if (row.length === 0) return null;
-              const variantNumber = modelIdx + 1;
-              const technicalName =
-                m === "gemini-3-pro-image" ? "Gemini 3 Pro Image (Google)" :
-                "GPT Image 2 (OpenAI)";
-              const label = isAdminUser
-                ? `Вариант ${variantNumber} · ${technicalName}`
-                : `Вариант ${variantNumber}`;
-              const accent =
-                m === "gemini-3-pro-image" ? "bg-amber-500" :
-                "bg-blue-500";
+              const technicalName = "GPT Image 2 (OpenAI)";
+              const label = isAdminUser ? `Результат · ${technicalName}` : "Результат";
+              const accent = "bg-neutral-900";
               return (
                 <div key={m} className="flex flex-col gap-3">
                   <div className="flex items-center gap-2">
@@ -3158,6 +3129,10 @@ export default function Home() {
                                     </p>
                                   ) : (
                                     <div className="grid grid-cols-2 gap-1">
+                                      {/* Duration toggle — Seedance v1 Pro caps at 10 sec
+                                          natively. 15-sec option will return when we
+                                          integrate a longer-duration model (Sora 2 / Veo 3
+                                          extended) — pending Q3-2026 roadmap item. */}
                                       {([5, 10] as const).map((d) => {
                                         const active = selectedDuration === d;
                                         const isTarget = mode === "target";

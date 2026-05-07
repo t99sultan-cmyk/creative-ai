@@ -35,10 +35,12 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const creativeId = typeof body?.creativeId === "string" ? body.creativeId : null;
     const presetId = typeof body?.presetId === "string" ? body.presetId : null;
-    // 10-sec costs about 2× the 5-sec on Seedance — but the impulse
-    // charge is the same flat VIDEO_GEN_COST for both for now. Tune
-    // later if margins suffer.
-    const durationSec: 5 | 10 = body?.durationSec === 10 ? 10 : 5;
+    // Duration: 5 / 10 / 15 sec. Seedance v1 Pro caps at 10 sec
+    // natively, so 15-sec requests clamp to 10 for now (longer-duration
+    // model integration pending). Impulse charge stays flat at
+    // VIDEO_GEN_COST across all durations until we tune margins.
+    const requestedDuration = body?.durationSec === 15 ? 15 : body?.durationSec === 10 ? 10 : 5;
+    const durationSec: 5 | 10 = requestedDuration === 5 ? 5 : 10;
     if (!creativeId) {
       return new Response(JSON.stringify({ error: "creativeId обязателен" }), { status: 400 });
     }
