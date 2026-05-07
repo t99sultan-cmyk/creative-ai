@@ -8,7 +8,49 @@ import { Reveal } from "./Reveal";
 import { PRICING_TIERS } from "@/lib/pricing";
 import { trackInitiateCheckout } from "@/lib/fb-pixel";
 import { isRegistrationOpen } from "@/lib/flags";
-import { LandingTheme } from "@/lib/landing-themes";
+import { LandingTheme, LandingProduct } from "@/lib/landing-themes";
+
+/**
+ * Product-specific pricing intro line. Each landing only mentions the
+ * cost of ITS product — no cross-product comparisons (the user wants
+ * each landing to feel single-product focused).
+ */
+const COST_HINT: Record<LandingProduct, string> = {
+  creatives: "1 креатив = 4 ⚡ · 1 видео = 50 ⚡ · «Улучшить» = +2 ⚡",
+  sites: "1 сайт = 30 ⚡ · улучшение блока = 5 ⚡",
+  products: "1 набор карточек = 30 ⚡ · улучшение карточки = 5 ⚡",
+  presentations: "1 презентация = 30 ⚡ · улучшение слайда = 5 ⚡",
+};
+
+const PRODUCT_LABEL_GENITIVE_PLURAL: Record<LandingProduct, string> = {
+  creatives: "креативов",
+  sites: "сайтов",
+  products: "наборов карточек",
+  presentations: "презентаций",
+};
+
+/**
+ * For non-creatives landings we re-derive a clean per-product feature
+ * list — the original PRICING_TIERS features mention all four products
+ * ("~37 креативов или 5 сайтов"), which contradicts the single-product
+ * focus of these landings. We compute counts from `tier.impulses` and
+ * the flat 30⚡ per non-creatives generation.
+ */
+function buildProductSpecificFeatures(
+  tier: { impulses: number; isHit?: boolean },
+  product: LandingProduct,
+): string[] {
+  if (product === "creatives") return []; // creatives uses original features
+  const count = Math.max(1, Math.floor(tier.impulses / 30));
+  const label = PRODUCT_LABEL_GENITIVE_PLURAL[product];
+  return [
+    `~${count} ${label} в месяц (по 30 ⚡)`,
+    `«Улучшить» любой блок за 5 ⚡`,
+    `Качество premium, без водяных знаков`,
+    `Обновление баланса каждый месяц`,
+    tier.isHit ? "Приоритет в очереди (быстрее)" : "Поддержка по email",
+  ];
+}
 
 /**
  * Shared pricing section for all 4 marketing landings. Themed by the
@@ -38,11 +80,7 @@ export function PricingSection({ theme }: { theme: LandingTheme }) {
             <p className="text-base sm:text-lg text-neutral-600 leading-relaxed">
               Импульсы обновляются каждый месяц. Неиспользованные не переносятся.
               <br className="hidden sm:inline" />
-              <span className="font-semibold text-neutral-800">креатив = 4 ⚡</span>
-              <span className="mx-2 text-neutral-300">·</span>
-              <span className="font-semibold text-neutral-800">сайт / презентация / карточки = 30 ⚡</span>
-              <span className="mx-2 text-neutral-300">·</span>
-              <span className="font-semibold text-neutral-800">видео = 50 ⚡</span>
+              <span className="font-semibold text-neutral-800">{COST_HINT[theme.product]}</span>
             </p>
           </div>
         </Reveal>
@@ -105,7 +143,10 @@ export function PricingSection({ theme }: { theme: LandingTheme }) {
                   </div>
 
                   <ul className="space-y-4 mb-8 flex-grow">
-                    {tier.features.map((feat, i) => (
+                    {(theme.product === "creatives"
+                      ? tier.features
+                      : buildProductSpecificFeatures(tier, theme.product)
+                    ).map((feat, i) => (
                       <li key={i} className="flex gap-3 text-sm text-neutral-600">
                         <CheckCircle2 className={`w-5 h-5 ${theme.accentText} shrink-0`} />
                         {feat}

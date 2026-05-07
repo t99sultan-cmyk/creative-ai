@@ -34,15 +34,18 @@ export function BrandTrustBar() {
             Нам доверяют команды
           </p>
         </Reveal>
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
-          {CLIENT_LOGOS.map((name, i) => (
-            <Reveal key={name} delay={i * 0.04}>
-              <span className="text-sm sm:text-base font-bold text-neutral-400 hover:text-neutral-600 transition-colors tracking-wide">
+        <Reveal>
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+            {CLIENT_LOGOS.map((name) => (
+              <span
+                key={name}
+                className="text-sm sm:text-base font-bold text-neutral-400 hover:text-neutral-600 transition-colors tracking-wide"
+              >
                 {name}
               </span>
-            </Reveal>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Reveal>
       </div>
     </section>
   );

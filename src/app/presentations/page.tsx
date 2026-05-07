@@ -26,7 +26,6 @@ import { PRESENTATION_GEN_COST } from "@/lib/pricing";
 import { THEMES } from "@/lib/landing-themes";
 import { LandingNavbar } from "@/components/landing/LandingNavbar";
 import { BrandTrustBar } from "@/components/landing/BrandTrustBar";
-import { ProductStack } from "@/components/landing/ProductStack";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
@@ -322,8 +321,6 @@ export default function PresentationsLanding() {
         </div>
       </section>
 
-      <ProductStack currentProduct="presentations" />
-
       {/* ── 6. UPCOMING ANIMATION / VIDEO / MULTI-PHOTO ────────── */}
       <section className="py-20 px-4 border-t border-neutral-100 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white relative overflow-hidden">
         <div className="absolute inset-0 -z-10 pointer-events-none">
@@ -559,24 +556,6 @@ export default function PresentationsLanding() {
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </Link>
           </motion.div>
-          <motion.p
-            {...REVEAL}
-            transition={{ duration: 0.4, delay: 0.25 }}
-            className="mt-6 text-xs text-neutral-400"
-          >
-            Также доступно:{" "}
-            <Link href="/sites" className="font-bold text-hermes-600 hover:text-hermes-800 underline">
-              Сайты →
-            </Link>
-            {" · "}
-            <Link href="/products" className="font-bold text-emerald-600 hover:text-emerald-800 underline">
-              Карточки товара →
-            </Link>
-            {" · "}
-            <Link href="/editor" className="font-bold text-hermes-600 hover:text-hermes-800 underline">
-              Креативы для таргета →
-            </Link>
-          </motion.p>
         </div>
       </section>
       <LandingFooter />

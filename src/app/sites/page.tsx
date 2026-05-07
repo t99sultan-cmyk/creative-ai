@@ -25,7 +25,6 @@ import { SITE_GEN_COST } from "@/lib/pricing";
 import { THEMES } from "@/lib/landing-themes";
 import { LandingNavbar } from "@/components/landing/LandingNavbar";
 import { BrandTrustBar } from "@/components/landing/BrandTrustBar";
-import { ProductStack } from "@/components/landing/ProductStack";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
@@ -161,27 +160,27 @@ export default function SitesLanding() {
             transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
             className="mt-16 relative"
           >
-            <div className="max-w-4xl mx-auto rounded-3xl overflow-hidden bg-gradient-to-br from-sky-50 via-amber-50 to-blue-50 border border-neutral-200 shadow-2xl">
+            <div className="max-w-4xl mx-auto rounded-3xl overflow-hidden bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50 border border-neutral-200 shadow-2xl">
               <div className="aspect-[16/10] relative p-6 sm:p-12">
                 <div className="h-full flex flex-col gap-3">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-rose-400" />
                     <div className="w-2 h-2 rounded-full bg-amber-400" />
                     <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <div className="ml-3 px-3 py-1 rounded-md bg-white/80 border border-white text-[10px] sm:text-xs text-neutral-500 font-mono">
+                    <div className="ml-3 px-3 py-1 rounded-md bg-white border border-neutral-200 text-[10px] sm:text-xs text-neutral-500 font-mono">
                       aicreative.kz/s/your-landing
                     </div>
                   </div>
                   <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                    <div className="h-2 sm:h-3 w-32 sm:w-44 rounded-full bg-sky-500/70" />
+                    <div className="h-2 sm:h-3 w-32 sm:w-44 rounded-full bg-sky-500" />
                     <div className="h-6 sm:h-12 w-3/4 rounded-lg bg-neutral-900" />
                     <div className="h-3 sm:h-5 w-1/2 rounded-md bg-neutral-300" />
                     <div className="grid grid-cols-3 gap-3 mt-4 max-w-2xl w-full">
-                      <div className="aspect-square rounded-lg sm:rounded-xl bg-white/80 border border-white shadow-sm" />
-                      <div className="aspect-square rounded-lg sm:rounded-xl bg-white/80 border border-white shadow-sm" />
-                      <div className="aspect-square rounded-lg sm:rounded-xl bg-white/80 border border-white shadow-sm" />
+                      <div className="aspect-square rounded-lg sm:rounded-xl bg-gradient-to-br from-sky-100 to-blue-200 border border-white shadow-sm" />
+                      <div className="aspect-square rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-100 to-indigo-200 border border-white shadow-sm" />
+                      <div className="aspect-square rounded-lg sm:rounded-xl bg-gradient-to-br from-indigo-100 to-sky-200 border border-white shadow-sm" />
                     </div>
-                    <div className="h-8 sm:h-12 w-32 sm:w-44 rounded-full bg-gradient-to-r from-sky-500 to-blue-500 mt-4 sm:mt-6" />
+                    <div className="h-8 sm:h-12 w-32 sm:w-44 rounded-full bg-gradient-to-r from-sky-500 to-blue-500 mt-4 sm:mt-6 shadow-md" />
                   </div>
                 </div>
               </div>
@@ -338,9 +337,6 @@ export default function SitesLanding() {
           </div>
         </div>
       </section>
-
-      {/* Shared 4-products navigation block */}
-      <ProductStack currentProduct="sites" />
 
       {/* ── 6. UPCOMING ANIMATION / VIDEO / MULTI-PHOTO ────────── */}
       <section className="py-20 px-4 border-t border-neutral-100 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white relative overflow-hidden">
@@ -551,7 +547,7 @@ export default function SitesLanding() {
       </section>
 
       {/* ── 10. FINAL CTA ──────────────────────────────────────── */}
-      <section className="py-24 px-4 border-t border-neutral-100 bg-gradient-to-br from-sky-50 via-blue-50 to-amber-50 relative overflow-hidden">
+      <section className="py-24 px-4 border-t border-neutral-100 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50 relative overflow-hidden">
         <div className="absolute inset-0 -z-10 pointer-events-none">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-sky-500/10 rounded-full blur-3xl" />
         </div>
@@ -590,24 +586,6 @@ export default function SitesLanding() {
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </Link>
           </motion.div>
-          <motion.p
-            {...REVEAL}
-            transition={{ duration: 0.4, delay: 0.25 }}
-            className="mt-6 text-xs text-neutral-400"
-          >
-            Также доступно:{" "}
-            <Link href="/presentations" className="font-bold text-violet-600 hover:text-violet-800 underline">
-              Презентации →
-            </Link>
-            {" · "}
-            <Link href="/products" className="font-bold text-emerald-600 hover:text-emerald-800 underline">
-              Карточки товара →
-            </Link>
-            {" · "}
-            <Link href="/editor" className="font-bold text-sky-600 hover:text-sky-800 underline">
-              Креативы для таргета →
-            </Link>
-          </motion.p>
         </div>
       </section>
       {/* Shared footer */}
