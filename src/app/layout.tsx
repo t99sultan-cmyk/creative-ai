@@ -5,6 +5,7 @@ import { ruRU } from '@clerk/localizations';
 import { MetaPixel } from '@/components/MetaPixel';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { RegistrationTracker } from '@/components/RegistrationTracker';
+import { InAppBrowserBanner } from '@/components/InAppBrowserBanner';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'], variable: '--font-inter' });
@@ -102,6 +103,11 @@ export default function RootLayout({
               full app (users often land on /editor right after Clerk's
               redirect). */}
           <RegistrationTracker />
+          {/* Top banner shown only inside in-app browsers (Instagram,
+              TikTok, Threads, etc.) — Google blocks OAuth there with
+              error 403 disallowed_useragent. We catch the user before
+              they hit that wall and tell them to open in Safari/Chrome. */}
+          <InAppBrowserBanner />
           {children}
         </body>
       </html>
