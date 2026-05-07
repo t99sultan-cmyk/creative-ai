@@ -81,31 +81,33 @@ export function InAppBrowserBanner() {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-[60] bg-amber-50 border-b border-amber-300 shadow-sm"
+      className="fixed top-0 left-0 right-0 z-[60] bg-red-600 text-white shadow-lg shadow-red-900/30"
       role="alert"
       aria-live="polite"
     >
-      <div className="max-w-3xl mx-auto px-4 py-3 flex items-start gap-3">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center text-base font-bold shadow-sm">
-          ⚠
+      <div className="max-w-3xl mx-auto px-4 py-3.5 flex items-start gap-3">
+        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-white text-red-600 flex items-center justify-center text-lg font-black shadow-sm">
+          !
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-amber-900 leading-tight">
-            Открой сайт в Safari или Chrome
+          <p className="text-sm sm:text-base font-black leading-tight">
+            Регистрация через Google не работает в {appName}
           </p>
-          <p className="text-xs text-amber-800 mt-0.5 leading-snug">
-            Google не разрешает регистрацию из браузера {appName}. Скопируй ссылку и открой её в обычном браузере телефона.
+          <p className="text-xs sm:text-sm text-white/90 mt-1 leading-snug">
+            <strong>Решение 1:</strong> регистрируйся через <strong>email</strong> — он работает прямо здесь, ничего открывать не надо.
+            <br />
+            <strong>Решение 2:</strong> открой сайт в Safari/Chrome — там Google-вход тоже работает.
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-2">
             <button
               onClick={copyUrl}
-              className="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs sm:text-sm font-bold bg-white text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors active:scale-[0.97]"
             >
-              {copied ? "✓ Скопировано" : "Скопировать ссылку"}
+              {copied ? "✓ Ссылка скопирована" : "Скопировать ссылку"}
             </button>
             <button
               onClick={dismiss}
-              className="text-xs font-bold text-amber-900 hover:text-amber-700 px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs sm:text-sm font-bold text-white/80 hover:text-white px-3 py-2 rounded-lg transition-colors"
             >
               Понятно, скрыть
             </button>
