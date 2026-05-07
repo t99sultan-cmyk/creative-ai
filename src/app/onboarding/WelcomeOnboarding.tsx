@@ -17,7 +17,6 @@ import {
   Clock,
   Download,
   Send,
-  MessageCircle,
   Link as LinkIcon,
   AlertCircle,
   Gift,
@@ -66,9 +65,8 @@ export function WelcomeOnboarding() {
   }
 
   const siteUrl = "https://aicreative.kz";
-  const { WA_NUMBER_E164, TG_USERNAME } = SUPPORT_CONTACTS;
+  const { TG_USERNAME } = SUPPORT_CONTACTS;
   const greeting = "Привет! Я только что зарегистрировался на AICreative 🎉";
-  const waHref = `https://wa.me/${WA_NUMBER_E164}?text=${encodeURIComponent(greeting)}`;
   const tgHref = `https://t.me/${TG_USERNAME}?text=${encodeURIComponent(greeting)}`;
 
   async function copyLink() {
@@ -300,7 +298,7 @@ export function WelcomeOnboarding() {
               htmlFor="phone"
               className="flex items-center justify-between text-[11px] font-bold text-neutral-700 mb-1.5 px-1"
             >
-              <span>Телефон / WhatsApp</span>
+              <span>Телефон</span>
               <span className="text-red-500 font-black uppercase tracking-wider">
                 обязательно
               </span>
@@ -434,16 +432,7 @@ export function WelcomeOnboarding() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <a
-                href={waHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/30 text-[#25D366] transition-colors"
-              >
-                <MessageCircle className="w-5 h-5" />
-                <span className="text-[11px] font-bold">WhatsApp</span>
-              </a>
+            <div className="grid grid-cols-2 gap-2">
               <a
                 href={tgHref}
                 target="_blank"

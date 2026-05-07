@@ -64,8 +64,7 @@ export function LandingFooter({
           </h4>
           <ul className="space-y-2 text-sm text-neutral-600">
             <li><a href="mailto:hello@aicreative.kz" className="hover:text-neutral-900 transition-colors">hello@aicreative.kz</a></li>
-            <li><a href="https://t.me/aicreative_kz" target="_blank" rel="noopener" className="hover:text-neutral-900 transition-colors">Telegram</a></li>
-            <li><a href="https://wa.me/77000000000" target="_blank" rel="noopener" className="hover:text-neutral-900 transition-colors">WhatsApp</a></li>
+            <li><a href="https://t.me/voise_kz" target="_blank" rel="noopener" className="hover:text-neutral-900 transition-colors">Telegram</a></li>
           </ul>
         </div>
       </div>

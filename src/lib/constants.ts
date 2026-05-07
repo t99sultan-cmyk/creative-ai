@@ -10,8 +10,8 @@
  * step). Update here only — both surfaces import this object.
  */
 export const SUPPORT_CONTACTS = {
-  /** WhatsApp number in E.164 format (no plus, no spaces). */
-  WA_NUMBER_E164: "77765282788",
-  /** Telegram username, no @. Receives payment receipts and questions. */
+  /** Telegram username, no @. Receives payment receipts and support
+   *  questions. WhatsApp was dropped — Telegram is the only inbound
+   *  channel now. */
   TG_USERNAME: "voise_kz",
 } as const;

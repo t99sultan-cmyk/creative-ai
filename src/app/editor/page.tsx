@@ -2631,7 +2631,7 @@ export default function Home() {
               sidebar so the user always has a one-tap path to
               human help. */}
           <a
-            href="https://t.me/aicreative_support"
+            href="https://t.me/voise_kz"
             target="_blank"
             rel="noreferrer noopener"
             className="mt-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#2AABEE]/10 hover:bg-[#2AABEE]/15 border border-[#2AABEE]/30 text-[#2AABEE] font-bold text-xs transition-colors"

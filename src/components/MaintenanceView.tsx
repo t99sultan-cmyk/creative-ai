@@ -49,7 +49,7 @@ export function MaintenanceView() {
 
           <div className="flex flex-col gap-3">
             <a
-              href="https://t.me/aicreative_support"
+              href="https://t.me/voise_kz"
               target="_blank"
               rel="noreferrer"
               className="w-full bg-hermes-500 hover:bg-hermes-600 text-white rounded-2xl py-4 font-bold transition-all shadow-md flex items-center justify-center gap-2"

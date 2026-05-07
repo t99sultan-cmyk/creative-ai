@@ -234,7 +234,7 @@ export default function AccountPage() {
               <Link href="/#pricing" className="font-bold text-hermes-600 hover:underline">
                 Выберите пакет и оплатите Kaspi
               </Link>{" "}
-              — промокод придёт в WhatsApp от менеджера.
+              — промокод придёт в Telegram от менеджера.
             </p>
           </div>
         </section>

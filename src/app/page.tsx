@@ -899,7 +899,7 @@ export default function LandingPage() {
              <div className="mt-12 text-center bg-orange-400/10 border border-amber-500/20 rounded-2xl p-8 backdrop-blur-xl">
                 <h3 className="text-xl font-bold text-neutral-900 mb-2">Остались вопросы?</h3>
                 <p className="text-neutral-600 mb-6">Наша поддержка на связи 24/7 и готова помочь с генерациями.</p>
-                <a href="https://t.me/aicreative_support" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#2AABEE] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity">
+                <a href="https://t.me/voise_kz" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#2AABEE] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity">
                    <MessageSquare className="w-5 h-5" /> Задать вопрос в Telegram
                 </a>
              </div>
@@ -1030,7 +1030,7 @@ export default function LandingPage() {
                 <li><Link href="/privacy" className="hover:text-neutral-900 transition-colors">Политика конфиденциальности</Link></li>
                 <li><Link href="/terms" className="hover:text-neutral-900 transition-colors">Публичная оферта</Link></li>
                 <li><a href="mailto:support@aicreative.kz" className="hover:text-neutral-900 transition-colors">support@aicreative.kz</a></li>
-                <li><a href="https://t.me/aicreative_support" target="_blank" rel="noreferrer" className="hover:text-neutral-900 transition-colors">Telegram-поддержка</a></li>
+                <li><a href="https://t.me/voise_kz" target="_blank" rel="noreferrer" className="hover:text-neutral-900 transition-colors">Telegram-поддержка</a></li>
               </ul>
             </div>
           </div>

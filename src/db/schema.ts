@@ -10,7 +10,7 @@ export const users = pgTable("user", {
   // both values.
   impulses: integer("impulses").default(7),
   image: text("image"),
-  phone: text("phone"), // Phone number collected during onboarding (also used as WhatsApp contact)
+  phone: text("phone"), // Phone number collected during onboarding
   // Optional Telegram handle (without the @). Collected on the welcome
   // screen so the team can reach out with onboarding material, tips, and
   // support messages. Nullable — users who don't have or don't want to
