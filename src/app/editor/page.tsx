@@ -48,12 +48,22 @@ export default function Home() {
   const [categoryId, setCategoryId] = useState<CategoryId>("other");
   // Scene id (within the current category). null = no scene picked.
   const [sceneId, setSceneId] = useState<string | null>(null);
+  // Static-only flow (May 2026): the "Анимированный" entry point was
+  // dropped per product spec. Animation is now a follow-up step on a
+  // generated static (or on a user-uploaded image), not a from-scratch
+  // mode. Keeping the constant as "static" so existing read sites
+  // (`if (creativeType === "animated")`) compile-out cleanly without
+  // a wide refactor of every reference.
   // User-facing creative-type toggle. "static" → PNG poster as the
   // final artifact; "animated" → after the static generation we
   // auto-open the Target (Higgsfield) animation panel on each variant
   // so the user is one click away from a video. The image-gen
   // pipeline itself is the same in both cases.
-  const [creativeType, setCreativeType] = useState<"static" | "animated">("static");
+  // Widening the type back to the union so existing comparisons against
+  // "animated" still type-check (they're now dead code that never runs).
+  // A narrower `"static" as const` would TS-error on every read site.
+  const creativeType: "static" | "animated" = "static";
+  const setCreativeType = (_t: "static" | "animated") => {}; // no-op stub
   // Animation removed in this iteration — only static. The constant
   // is kept so we don't have to gut every conditional in the file
   // (TypeScript will tree-shake the dead branches).
@@ -301,7 +311,11 @@ export default function Home() {
     | { kind: "failed"; error: string };
   const [animByCreative, setAnimByCreative] = useState<Record<string, AnimState>>({});
   const [presetByCreative, setPresetByCreative] = useState<Record<string, AnimationPresetId>>({});
-  const [durationByCreative, setDurationByCreative] = useState<Record<string, 5 | 10>>({});
+  const [durationByCreative, setDurationByCreative] = useState<Record<string, 5 | 10 | 15>>({});
+  // Optional free-text user override for the video prompt. When non-empty,
+  // appended to the preset prompt before sending to fal — lets the user
+  // steer motion in their own words ("дождь идёт назад", "медленный flicker").
+  const [customPromptByCreative, setCustomPromptByCreative] = useState<Record<string, string>>({});
   // "ambient" — fal.ai Seedance, frame-locked light/atmosphere only.
   // "promo"   — fal.ai Seedance, action preset (5 sec) + auto-chained MMAudio sound.
   // "target"  — Higgsfield DoP, cinematic camera moves for target-ad clips.
@@ -473,12 +487,13 @@ export default function Home() {
     if (existing && existing.kind !== "failed") return;
     const presetId: AnimationPresetId = presetByCreative[creativeId] ?? "subtle";
     const durationSec = durationByCreative[creativeId] ?? 5;
+    const customPrompt = customPromptByCreative[creativeId]?.trim() || undefined;
     setAnimByCreative((p) => ({ ...p, [creativeId]: { kind: "submitting" } }));
     try {
       const res = await fetch("/api/animate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ creativeId, presetId, durationSec }),
+        body: JSON.stringify({ creativeId, presetId, durationSec, customPrompt }),
       });
       const data = await res.json();
       if (!res.ok || !data.requestId) throw new Error(data?.error || `HTTP ${res.status}`);
@@ -1249,18 +1264,10 @@ export default function Home() {
           imagen: null,
           variants: data.variants as ImageVariant[],
         });
-        // If the user picked "Анимированный" creative type, pre-open the
-        // Target (Higgsfield) panel on every successful variant — they're
-        // one click away from a video-ad without hunting for the toggle.
-        if (creativeType === "animated") {
-          const targetMap: Record<string, "target"> = {};
-          for (const v of data.variants as ImageVariant[]) {
-            if (v.ok && v.creativeId) targetMap[v.creativeId] = "target";
-          }
-          if (Object.keys(targetMap).length > 0) {
-            setModeByCreative((prev) => ({ ...prev, ...targetMap }));
-          }
-        }
+        // (Removed: auto-open Target panel for "Анимированный" type.
+        // The from-scratch animated mode is gone — animation is now a
+        // follow-up on a generated/uploaded static, accessed via the
+        // per-variant mode toggle.)
       } else {
         const claudeOk = data.claude && data.claude.code && !data.claude.error;
         const geminiOk = data.gemini && data.gemini.code && !data.gemini.error;
@@ -2128,63 +2135,6 @@ export default function Home() {
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Тип креатива. Оба варианта сначала генерируют статику; разница
-              в том, что после генерации даёт пользователю. Анимированный
-              авто-открывает Target-панель под каждым вариантом, чтобы
-              сразу собрать видеоролик через Higgsfield. Статичный
-              оставляет PNG-постер как финальный артефакт. */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Video className="w-4 h-4 text-hermes-500" />
-              Тип креатива
-            </h2>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                aria-pressed={creativeType === "animated"}
-                onClick={() => setCreativeType("animated")}
-                className={clsx(
-                  "py-3 px-2 rounded-xl text-sm font-medium flex flex-col items-center gap-0.5 transition-colors",
-                  creativeType === "animated"
-                    ? "border border-neutral-900 bg-neutral-900 text-white"
-                    : "border border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-400 hover:bg-white",
-                )}
-              >
-                <span className="font-bold">Анимированный</span>
-                <span className={clsx(
-                  "text-[10px] font-medium leading-tight",
-                  creativeType === "animated" ? "text-white/70" : "text-neutral-400",
-                )}>
-                  Видеоролик для таргета
-                </span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={creativeType === "static"}
-                onClick={() => setCreativeType("static")}
-                className={clsx(
-                  "py-3 px-2 rounded-xl text-sm font-medium flex flex-col items-center gap-0.5 transition-colors",
-                  creativeType === "static"
-                    ? "border border-neutral-900 bg-neutral-900 text-white"
-                    : "border border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-400 hover:bg-white",
-                )}
-              >
-                <span className="font-bold">Статичный</span>
-                <span className={clsx(
-                  "text-[10px] font-medium leading-tight",
-                  creativeType === "static" ? "text-white/70" : "text-neutral-400",
-                )}>
-                  PNG-постер 4K
-                </span>
-              </button>
-            </div>
-            <p className="text-[10px] text-neutral-400 leading-tight">
-              {creativeType === "animated"
-                ? "Сначала сгенерим 2 статичных варианта — выберешь лучший, потом одной кнопкой превратим в видеоролик через Higgsfield (cinematic камера-моушен)."
-                : "Сейчас доступна статика — 2 варианта от двух разных ИИ. Выбери лучший — мы учтём твой голос."}
-            </p>
           </div>
 
           {/* Reference and Product Image Uploads */}
@@ -3128,12 +3078,13 @@ export default function Home() {
                                       5 сек · видео + звук одной кнопкой
                                     </p>
                                   ) : (
-                                    <div className="grid grid-cols-2 gap-1">
+                                    <div className="grid grid-cols-3 gap-1">
                                       {/* Duration toggle — Seedance v1 Pro caps at 10 sec
-                                          natively. 15-sec option will return when we
-                                          integrate a longer-duration model (Sora 2 / Veo 3
-                                          extended) — pending Q3-2026 roadmap item. */}
-                                      {([5, 10] as const).map((d) => {
+                                          natively, so a 15-sec request currently clamps
+                                          server-side to 10. Surface the 15 option in the UI
+                                          to keep the spec promise; will become a real 15
+                                          when we integrate a longer-duration model. */}
+                                      {([5, 10, 15] as const).map((d) => {
                                         const active = selectedDuration === d;
                                         const isTarget = mode === "target";
                                         return (
@@ -3155,6 +3106,27 @@ export default function Home() {
                                         );
                                       })}
                                     </div>
+                                  )}
+                                  {/* Free-text user override — optional. When filled, the
+                                      backend appends it after the preset prompt as
+                                      "User direction: …". Lets the user steer specifics
+                                      ("медленный flicker экрана", "дождь сильнее") on top
+                                      of the preset baseline. Capped server-side at 240
+                                      chars so the model doesn't drift on novella prompts. */}
+                                  {mode !== "promo" && (
+                                    <textarea
+                                      value={customPromptByCreative[v.creativeId!] ?? ""}
+                                      onChange={(e) =>
+                                        setCustomPromptByCreative((prev) => ({
+                                          ...prev,
+                                          [v.creativeId!]: e.target.value.slice(0, 240),
+                                        }))
+                                      }
+                                      placeholder="Своё описание (необязательно): «лёгкий flicker экрана», «дождь сильнее»…"
+                                      maxLength={240}
+                                      rows={2}
+                                      className="w-full text-[10px] px-2 py-1.5 rounded-lg border border-neutral-200 bg-white text-neutral-700 placeholder:text-neutral-400 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 focus:border-purple-400 leading-snug"
+                                    />
                                   )}
                                   {/* Action button — 3 branches. */}
                                   {mode === "ambient" && (

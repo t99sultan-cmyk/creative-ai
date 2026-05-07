@@ -35,6 +35,10 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const creativeId = typeof body?.creativeId === "string" ? body.creativeId : null;
     const presetId = typeof body?.presetId === "string" ? body.presetId : null;
+    // Optional free-text user override appended to the preset prompt.
+    // Capped at 240 chars so we don't drift the model with novella-length prompts.
+    const customPrompt =
+      typeof body?.customPrompt === "string" ? body.customPrompt.trim().slice(0, 240) : "";
     // Duration: 5 / 10 / 15 sec. Seedance v1 Pro caps at 10 sec
     // natively, so 15-sec requests clamp to 10 for now (longer-duration
     // model integration pending). Impulse charge stays flat at
@@ -81,8 +85,13 @@ export async function POST(req: Request) {
     // Hardcoded preset prompt + the original brief as context. The
     // preset prompt steers the motion style; the brief tells the model
     // what the creative is about (helps it animate appropriately).
+    // If the user provided their own free-text override, append it —
+    // gives them control over specifics ("дождь идёт назад", "лёгкий
+    // shake камеры на 3-й секунде") on top of the preset baseline.
     const preset = getAnimationPreset(presetId);
-    const prompt = `${preset.prompt} Original brief: ${source.prompt}`;
+    const prompt = customPrompt
+      ? `${preset.prompt} Original brief: ${source.prompt}. User direction: ${customPrompt}`
+      : `${preset.prompt} Original brief: ${source.prompt}`;
 
     const requestId = await submitFalVideo({
       imageUrl: source.imageUrl,
