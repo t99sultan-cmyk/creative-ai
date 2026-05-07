@@ -117,38 +117,47 @@ export function DeadlineBanner({
     // "бесплатно" tag, and the specific date so visitors understand
     // both *what* they get and *when it disappears*. Light theme to
     // fit the neutral-50 landing background.
+    //
+    // Mobile layout (< md, 320-767px): TWO rows — icon+text first,
+    // timer below centered. The single-row version was overflowing
+    // off-screen on iPhones (icon 48px + text + 3×42px timer + gaps
+    // exceeded the available width by ~50-80px).
+    //
+    // md+ keeps the original single-row horizontal layout.
     return (
       <div className="relative overflow-hidden rounded-2xl bg-white p-4 md:p-5 shadow-[0_20px_60px_-20px_rgba(243,112,33,0.5)] ring-1 ring-hermes-500/30">
         <span className="absolute inset-0 bg-gradient-to-br from-hermes-50 via-white to-amber-50 pointer-events-none" />
         <span className="absolute -top-10 -right-10 w-40 h-40 bg-hermes-500/15 rounded-full blur-3xl pointer-events-none" />
         <span className="absolute -bottom-10 -left-10 w-40 h-40 bg-amber-400/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative flex items-center gap-3 md:gap-4">
-          <div className="relative flex-shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-hermes-500 to-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
-            <Flame className="w-6 h-6 md:w-7 md:h-7 text-white" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-300 animate-ping" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-300" />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] md:text-[11px] font-black uppercase tracking-wider">
-                Бесплатно
-              </span>
-              <span className="text-[11px] md:text-xs text-neutral-500 font-semibold uppercase tracking-wider">
-                акция действует
-              </span>
+        <div className="relative flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+          <div className="flex items-start gap-3 md:gap-4 md:items-center md:flex-1 min-w-0">
+            <div className="relative flex-shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-hermes-500 to-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
+              <Flame className="w-6 h-6 md:w-7 md:h-7 text-white" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-300 animate-ping" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-300" />
             </div>
-            <p className="text-[15px] md:text-lg font-black text-neutral-900 leading-tight">
-              7 Импульсов в подарок —{" "}
-              <span className="text-hermes-600">до {dayLabel}, 23:59</span>
-            </p>
-            <p className="hidden md:block text-xs text-neutral-500 font-medium mt-1">
-              1 статичный + 1 анимированный креатив · без карты · без подписки
-            </p>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] md:text-[11px] font-black uppercase tracking-wider">
+                  Бесплатно
+                </span>
+                <span className="text-[11px] md:text-xs text-neutral-500 font-semibold uppercase tracking-wider">
+                  акция действует
+                </span>
+              </div>
+              <p className="text-[15px] md:text-lg font-black text-neutral-900 leading-tight break-words">
+                7 Импульсов в подарок —{" "}
+                <span className="text-hermes-600 whitespace-nowrap">до {dayLabel}, 23:59</span>
+              </p>
+              <p className="hidden md:block text-xs text-neutral-500 font-medium mt-1">
+                1 статичный + 1 анимированный креатив · без карты · без подписки
+              </p>
+            </div>
           </div>
 
-          <div className="flex-shrink-0 flex items-start gap-1 md:gap-1.5 font-mono tabular-nums">
+          <div className="flex-shrink-0 flex items-start justify-center md:justify-start gap-1 md:gap-1.5 font-mono tabular-nums">
             <HeroInlineTimeBox value={pad(h)} unit="час" />
             <span className="text-2xl md:text-3xl font-black text-hermes-400 leading-none pt-1.5">
               :

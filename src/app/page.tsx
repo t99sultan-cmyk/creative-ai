@@ -285,39 +285,39 @@ export default function LandingPage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.4 }}
-                  className="flex items-center gap-4 text-sm text-neutral-500 font-medium"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:text-sm text-neutral-500 font-medium"
                >
                   <span className="flex items-center gap-1"><Check className="w-4 h-4 text-hermes-500" /> Без карты</span>
-                  <span>•</span>
+                  <span className="text-neutral-300">•</span>
                   <span className="flex items-center gap-1"><Gift className="w-4 h-4 text-amber-500" /> 7 импульсов в подарок</span>
-                  <span className="hidden sm:inline">•</span>
+                  <span className="hidden sm:inline text-neutral-300">•</span>
                   <span className="hidden sm:flex items-center gap-1"><RefreshCw className="w-4 h-4 text-neutral-600" /> Отмена в 1 клик</span>
                </motion.div>
 
                {/* TRUST STATS */}
-               <motion.div 
+               <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 }}
-                  className="grid grid-cols-3 gap-6 pt-8 mt-4 border-t border-neutral-100"
+                  className="grid grid-cols-3 gap-3 sm:gap-6 pt-8 mt-4 border-t border-neutral-100"
                >
                   <div>
-                     <div className="text-3xl font-black text-neutral-900 tabular-nums">
+                     <div className="text-2xl sm:text-3xl font-black text-neutral-900 tabular-nums">
                         <CountUp to={2400} suffix="+" />
                      </div>
-                     <div className="text-xs text-neutral-500 mt-1 uppercase tracking-wider">Креативов<br/>за неделю</div>
+                     <div className="text-[10px] sm:text-xs text-neutral-500 mt-1 uppercase tracking-wider leading-tight">Креативов<br/>за неделю</div>
                   </div>
                   <div>
-                     <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-hermes-600 tabular-nums">
+                     <div className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-hermes-600 tabular-nums">
                         <CountUp to={47} prefix="+" suffix="%" />
                      </div>
-                     <div className="text-xs text-neutral-500 mt-1 uppercase tracking-wider">Рост CTR<br/>в среднем</div>
+                     <div className="text-[10px] sm:text-xs text-neutral-500 mt-1 uppercase tracking-wider leading-tight">Рост CTR<br/>в среднем</div>
                   </div>
                   <div>
-                     <div className="text-3xl font-black text-neutral-900 tabular-nums">
-                        <CountUp to={58} /><span className="text-xl">с</span>
+                     <div className="text-2xl sm:text-3xl font-black text-neutral-900 tabular-nums">
+                        <CountUp to={58} /><span className="text-base sm:text-xl">с</span>
                      </div>
-                     <div className="text-xs text-neutral-500 mt-1 uppercase tracking-wider">Среднее время<br/>генерации</div>
+                     <div className="text-[10px] sm:text-xs text-neutral-500 mt-1 uppercase tracking-wider leading-tight">Время<br/>генерации</div>
                   </div>
                </motion.div>
             </div>
