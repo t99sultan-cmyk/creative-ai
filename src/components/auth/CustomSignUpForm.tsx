@@ -1,72 +1,85 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-// Use the legacy hook surface: @clerk/nextjs's default useSignUp is the
-// new Signal-based API (returns { signUp, errors, fetchStatus }) which
-// doesn't expose isLoaded/setActive directly. The /legacy export keeps
-// the imperative create()/setActive() ergonomics we need here.
+// Legacy hook surface — exposes isLoaded/setActive/signUp.create() that
+// we use here. The default @clerk/nextjs export is the new Signal-based
+// API which doesn't have those.
 import { useSignUp } from "@clerk/nextjs/legacy";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Sparkles, Zap, ArrowRight, AlertCircle, Loader2, Check } from "lucide-react";
+import { Phone, Lock, Sparkles, Zap, ArrowRight, AlertCircle, Loader2, Check, Shield } from "lucide-react";
 import Link from "next/link";
 
 /**
- * Custom multi-step sign-up form. Replaces Clerk's hosted <SignUp /> modal,
- * which loads slowly inside webviews (Instagram, TikTok) and shows
- * unstyled fallback CSS on old Android browsers — both kill conversion.
+ * Custom multi-step phone-based sign-up form. Replaces Clerk's hosted
+ * <SignUp /> modal. Clerk stays as the silent auth backend (password
+ * hashing, sessions, etc.) but every visible UI element is ours.
  *
- * This form lives entirely on our domain in our DOM, no iframe. Talks
- * to Clerk via the useSignUp() hook directly. Same auth backend, same
- * users, just our UI.
+ * Flow (Clerk dashboard config: Phone enabled, SMS verification ON):
+ *   1. Phone — user enters Kazakh-format phone (+7XXX...)
+ *   2. Password — 8+ chars, with live strength meter
+ *   3. SMS code — Clerk sends a 6-digit code, user enters it
+ *   4. Success — animated +7⚡ counter, then redirect
  *
- * Flow (no verification, per Clerk dashboard config):
- *   step 1 — email
- *   step 2 — password
- *   step 3 — loading (~1-2s while Clerk creates the account)
- *   step 4 — success animation showing impulse award, then redirect
+ * Variant prop:
+ *   "page" — full-screen layout for /register route
+ *   "inline" — compact card layout for embedding in the landing hero
  *
- * Game-feel touches:
- *   - One field per screen with big inputs (no overwhelming form)
- *   - Step counter dots at top (1 ● 2 ○ 3 ○) — progress visible
- *   - Animated impulse counter on success (+1 +2 ... +7 ⚡)
- *   - framer-motion slide-in transitions between steps
- *
- * Mobile-first: full-bleed, big text, big tap targets.
+ * Mobile-first: text-base inputs (16px = no iOS zoom), py-4 buttons.
  */
 
-type Step = "email" | "password" | "loading" | "success";
+type Step = "phone" | "password" | "code" | "loading" | "success";
+type Variant = "page" | "inline";
 
-export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?: string }) {
+export function CustomSignUpForm({
+  redirectUrl = "/onboarding",
+  variant = "page",
+}: {
+  redirectUrl?: string;
+  variant?: Variant;
+}) {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
 
-  const [step, setStep] = useState<Step>("email");
-  const [email, setEmail] = useState("");
+  const [step, setStep] = useState<Step>("phone");
+  const [phone, setPhone] = useState("+7");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [impulseCount, setImpulseCount] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  const emailInputRef = useRef<HTMLInputElement>(null);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus the input on each step transition. iOS sometimes blocks
+  // Auto-focus the active input on each step. iOS will sometimes block
   // programmatic focus outside a user gesture — that's OK, the user
-  // taps the input themselves on iOS.
+  // taps the visible input themselves and the form still works.
   useEffect(() => {
-    if (step === "email") {
-      const t = setTimeout(() => emailInputRef.current?.focus(), 200);
+    if (step === "phone") {
+      const t = setTimeout(() => phoneInputRef.current?.focus(), 200);
       return () => clearTimeout(t);
     }
     if (step === "password") {
       const t = setTimeout(() => passwordInputRef.current?.focus(), 200);
       return () => clearTimeout(t);
     }
+    if (step === "code") {
+      const t = setTimeout(() => codeInputRef.current?.focus(), 200);
+      return () => clearTimeout(t);
+    }
   }, [step]);
 
-  // Success-step impulse counter — counts up 0 → 7 over ~1.5s for a
-  // small "you got rewarded" beat before redirect. Not gambling-grade,
-  // just a friendly confirmation.
+  // Resend SMS button cooldown — Clerk rate-limits SMS to once every
+  // 30s per number. We mirror that on the client so users don't spam.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  // Success-step impulse counter — 0 → 7 over ~1.5s, then auto-redirect.
   useEffect(() => {
     if (step !== "success") return;
     let cancelled = false;
@@ -84,13 +97,15 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
     };
   }, [step, redirectUrl, router]);
 
-  function handleEmailNext(e: React.FormEvent) {
+  function handlePhoneNext(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!isValidEmail(email)) {
-      setError("Введи корректный email — без него не пришлём подтверждение");
+    const cleaned = normalizePhone(phone);
+    if (!isValidKzPhone(cleaned)) {
+      setError("Введи телефон в формате +7XXXXXXXXXX (10 цифр после +7)");
       return;
     }
+    setPhone(cleaned);
     setStep("password");
   }
 
@@ -105,16 +120,12 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
 
     setStep("loading");
     try {
-      const result = await signUp.create({ emailAddress: email, password });
-      if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId });
-        setStep("success");
-      } else {
-        // Clerk requires extra verification despite our config — fall
-        // back to the hosted page so the user can finish there.
-        setError("Дополнительная проверка. Попробуй обычную форму.");
-        setStep("password");
-      }
+      // Create the SignUp resource with phone + password.
+      await signUp.create({ phoneNumber: phone, password });
+      // Trigger SMS code delivery.
+      await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+      setResendCooldown(30);
+      setStep("code");
     } catch (err: unknown) {
       const message = parseClerkError(err);
       setError(message);
@@ -122,75 +133,125 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
     }
   }
 
+  async function handleCodeSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isLoaded) return;
+    setError(null);
+    if (code.length < 4) {
+      setError("Введи код из SMS — обычно 6 цифр");
+      return;
+    }
+
+    setStep("loading");
+    try {
+      const result = await signUp.attemptPhoneNumberVerification({ code });
+      if (result.status === "complete") {
+        await setActive({ session: result.createdSessionId });
+        setStep("success");
+      } else {
+        setError("Не получилось подтвердить. Проверь код и попробуй ещё.");
+        setStep("code");
+      }
+    } catch (err: unknown) {
+      const message = parseClerkError(err);
+      setError(message);
+      setStep("code");
+    }
+  }
+
+  async function handleResendCode() {
+    if (!isLoaded || resendCooldown > 0) return;
+    setError(null);
+    try {
+      await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+      setResendCooldown(30);
+    } catch (err: unknown) {
+      setError(parseClerkError(err));
+    }
+  }
+
+  // Color tokens swap by variant: dark-on-glass for /register page,
+  // light-on-card for hero inline embedding (white card on neutral-50
+  // page background).
+  const dark = variant === "page";
+  const cls = {
+    bg: dark ? "bg-neutral-800/80 border-neutral-700" : "bg-white border-neutral-200",
+    bgHover: dark ? "focus:border-hermes-500 focus:ring-hermes-500/20" : "focus:border-hermes-500 focus:ring-hermes-500/20",
+    text: dark ? "text-white placeholder:text-neutral-500" : "text-neutral-900 placeholder:text-neutral-400",
+    label: dark ? "text-neutral-400" : "text-neutral-500",
+    title: dark ? "text-white" : "text-neutral-900",
+    subtitle: dark ? "text-neutral-400" : "text-neutral-500",
+    iconColor: dark ? "text-neutral-400" : "text-neutral-400",
+    divider: dark ? "bg-neutral-700" : "bg-neutral-200",
+  };
+
   return (
-    <div className="w-full max-w-md mx-auto px-5">
-      {/* Step dots — visual progress (1 of 3). Loading and success
-          collapse to the same active "doing the thing" indicator. */}
-      <StepDots step={step} />
+    <div className={variant === "inline" ? "w-full" : "w-full max-w-md mx-auto px-5"}>
+      <StepDots step={step} dark={dark} />
 
       <AnimatePresence mode="wait">
-        {step === "email" && (
+        {step === "phone" && (
           <motion.form
-            key="email"
+            key="phone"
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            onSubmit={handleEmailNext}
+            onSubmit={handlePhoneNext}
             className="space-y-5"
           >
-            <div className="text-center mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">
-                Готов сделать первый креатив?
-              </h1>
-              <p className="text-neutral-400 text-sm">
-                Введи свой email — это займёт меньше минуты
-              </p>
-            </div>
+            {variant === "page" && (
+              <div className="text-center mb-6">
+                <h1 className={`text-2xl sm:text-3xl font-black ${cls.title} mb-2`}>
+                  Готов сделать первый креатив?
+                </h1>
+                <p className={`${cls.subtitle} text-sm`}>
+                  Введи номер телефона — отправим SMS-код
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 ml-1">
-                Email
+              <label className={`text-xs font-bold uppercase tracking-wider ${cls.label} ml-1`}>
+                Телефон
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400 pointer-events-none" />
+                <Phone className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${cls.iconColor} pointer-events-none`} />
                 <input
-                  ref={emailInputRef}
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  value={email}
+                  ref={phoneInputRef}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
                   onChange={(e) => {
-                    setEmail(e.target.value);
+                    setPhone(e.target.value);
                     setError(null);
                   }}
-                  placeholder="ivan@example.com"
-                  className="w-full bg-neutral-800/80 backdrop-blur border border-neutral-700 focus:border-hermes-500 focus:ring-2 focus:ring-hermes-500/20 rounded-2xl pl-12 pr-4 py-4 text-base text-white placeholder:text-neutral-500 outline-none transition-all"
+                  placeholder="+77001234567"
+                  className={`w-full ${cls.bg} border ${cls.bgHover} focus:ring-2 rounded-2xl pl-12 pr-4 py-4 text-base ${cls.text} outline-none transition-all`}
                 />
               </div>
             </div>
 
-            {error && <ErrorBanner message={error} />}
+            {error && <ErrorBanner message={error} dark={dark} />}
 
             <button
               type="submit"
-              disabled={!email}
-              className="w-full bg-hermes-500 hover:bg-hermes-600 active:scale-[0.98] disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-hermes-500/20 flex items-center justify-center gap-2"
+              disabled={phone.length < 7}
+              className="w-full bg-hermes-500 hover:bg-hermes-600 active:scale-[0.98] disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-hermes-500/30 flex items-center justify-center gap-2"
             >
               Дальше
               <ArrowRight className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center justify-center gap-2 text-xs text-neutral-400">
+            <div className={`flex items-center justify-center gap-2 text-xs ${cls.subtitle}`}>
               <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
               <span className="font-semibold">7 импульсов в подарок · без карты</span>
             </div>
 
-            <p className="text-center text-xs text-neutral-500 pt-2">
+            <p className={`text-center text-xs ${cls.subtitle} pt-1`}>
               Уже есть аккаунт?{" "}
-              <Link href="/login" className="text-hermes-400 font-bold hover:text-hermes-300">
+              <Link href="/login" className="text-hermes-500 font-bold hover:text-hermes-600">
                 Войти
               </Link>
             </p>
@@ -207,28 +268,30 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
             onSubmit={handlePasswordSubmit}
             className="space-y-5"
           >
-            <div className="text-center mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">
-                Отлично! Теперь пароль
-              </h1>
-              <p className="text-neutral-400 text-sm">
-                От 8 символов — он защищает твой аккаунт и креативы
-              </p>
-            </div>
+            {variant === "page" && (
+              <div className="text-center mb-6">
+                <h1 className={`text-2xl sm:text-3xl font-black ${cls.title} mb-2`}>
+                  Придумай пароль
+                </h1>
+                <p className={`${cls.subtitle} text-sm`}>
+                  От 8 символов — он защитит твой аккаунт
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 ml-1 flex items-center justify-between">
+              <label className={`text-xs font-bold uppercase tracking-wider ${cls.label} ml-1 flex items-center justify-between`}>
                 <span>Пароль</span>
                 <button
                   type="button"
-                  onClick={() => setStep("email")}
-                  className="text-xs font-medium text-neutral-500 hover:text-neutral-300 normal-case tracking-normal"
+                  onClick={() => setStep("phone")}
+                  className={`text-xs font-medium ${cls.subtitle} hover:opacity-80 normal-case tracking-normal`}
                 >
-                  ← Изменить email
+                  ← Изменить телефон
                 </button>
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400 pointer-events-none" />
+                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${cls.iconColor} pointer-events-none`} />
                 <input
                   ref={passwordInputRef}
                   type="password"
@@ -240,39 +303,114 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
                   }}
                   placeholder="••••••••"
                   minLength={8}
-                  className="w-full bg-neutral-800/80 backdrop-blur border border-neutral-700 focus:border-hermes-500 focus:ring-2 focus:ring-hermes-500/20 rounded-2xl pl-12 pr-4 py-4 text-base text-white placeholder:text-neutral-500 outline-none transition-all"
+                  className={`w-full ${cls.bg} border ${cls.bgHover} focus:ring-2 rounded-2xl pl-12 pr-4 py-4 text-base ${cls.text} outline-none transition-all`}
                 />
               </div>
-              <PasswordStrength value={password} />
+              <PasswordStrength value={password} dark={dark} />
             </div>
 
-            {error && <ErrorBanner message={error} />}
+            {error && <ErrorBanner message={error} dark={dark} />}
 
             <button
               type="submit"
               disabled={password.length < 8}
-              className="w-full bg-hermes-500 hover:bg-hermes-600 active:scale-[0.98] disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-hermes-500/20 flex items-center justify-center gap-2"
+              className="w-full bg-hermes-500 hover:bg-hermes-600 active:scale-[0.98] disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-hermes-500/30 flex items-center justify-center gap-2"
             >
               <Sparkles className="w-5 h-5" />
               Создать аккаунт
             </button>
 
-            <p className="text-center text-xs text-neutral-500 pt-2">
+            <p className={`text-center text-xs ${cls.subtitle} pt-1`}>
               Регистрируясь, ты соглашаешься с{" "}
-              <Link href="/terms" className="text-neutral-400 underline hover:text-neutral-200">
+              <Link href="/terms" className={`underline ${dark ? "text-neutral-400 hover:text-neutral-200" : "text-neutral-600 hover:text-neutral-800"}`}>
                 условиями
               </Link>{" "}
               и{" "}
-              <Link href="/privacy" className="text-neutral-400 underline hover:text-neutral-200">
+              <Link href="/privacy" className={`underline ${dark ? "text-neutral-400 hover:text-neutral-200" : "text-neutral-600 hover:text-neutral-800"}`}>
                 политикой конфиденциальности
               </Link>
               .
             </p>
-            {/* Clerk's CAPTCHA renders inside this div on bot-suspect
-                signups. Required by Clerk; if we don't include it, the
-                bot-protection challenge has nowhere to mount and the
-                signup silently fails on suspicious traffic. */}
+            {/* Clerk's CAPTCHA mount target — bot-protection challenge
+                renders here on suspicious signups. Required by Clerk
+                even when invisible. */}
             <div id="clerk-captcha" />
+          </motion.form>
+        )}
+
+        {step === "code" && (
+          <motion.form
+            key="code"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            onSubmit={handleCodeSubmit}
+            className="space-y-5"
+          >
+            {variant === "page" && (
+              <div className="text-center mb-6">
+                <h1 className={`text-2xl sm:text-3xl font-black ${cls.title} mb-2`}>
+                  Введи код из SMS
+                </h1>
+                <p className={`${cls.subtitle} text-sm`}>
+                  Отправили на <span className={`font-bold ${cls.title}`}>{phone}</span>
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className={`text-xs font-bold uppercase tracking-wider ${cls.label} ml-1`}>
+                Код из SMS
+              </label>
+              <div className="relative">
+                <Shield className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${cls.iconColor} pointer-events-none`} />
+                <input
+                  ref={codeInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value.replace(/\D/g, ""));
+                    setError(null);
+                  }}
+                  placeholder="123456"
+                  className={`w-full ${cls.bg} border ${cls.bgHover} focus:ring-2 rounded-2xl pl-12 pr-4 py-4 text-2xl tracking-[0.4em] font-mono ${cls.text} outline-none transition-all text-center`}
+                />
+              </div>
+            </div>
+
+            {error && <ErrorBanner message={error} dark={dark} />}
+
+            <button
+              type="submit"
+              disabled={code.length < 4}
+              className="w-full bg-hermes-500 hover:bg-hermes-600 active:scale-[0.98] disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-hermes-500/30 flex items-center justify-center gap-2"
+            >
+              <Check className="w-5 h-5" />
+              Подтвердить
+            </button>
+
+            <div className="flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => setStep("password")}
+                className={`${cls.subtitle} hover:opacity-80 font-medium`}
+              >
+                ← Изменить номер
+              </button>
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={resendCooldown > 0}
+                className={`${resendCooldown > 0 ? "opacity-40 cursor-not-allowed" : "text-hermes-500 hover:text-hermes-600"} font-bold`}
+              >
+                {resendCooldown > 0 ? `Отправить заново (${resendCooldown}с)` : "Отправить код заново"}
+              </button>
+            </div>
           </motion.form>
         )}
 
@@ -288,8 +426,10 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
             <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-hermes-500 to-amber-500 flex items-center justify-center shadow-2xl shadow-hermes-500/30">
               <Loader2 className="w-10 h-10 text-white animate-spin" />
             </div>
-            <h2 className="text-2xl font-black text-white mb-2">Создаём твой аккаунт...</h2>
-            <p className="text-neutral-400 text-sm">Это займёт пару секунд</p>
+            <h2 className={`text-2xl font-black ${cls.title} mb-2`}>
+              Один момент...
+            </h2>
+            <p className={`${cls.subtitle} text-sm`}>Создаём твой аккаунт</p>
           </motion.div>
         )}
 
@@ -301,7 +441,6 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
             transition={{ duration: 0.3 }}
             className="text-center py-12"
           >
-            {/* Animated success ring with check icon */}
             <motion.div
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
@@ -315,7 +454,7 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="text-3xl font-black text-white mb-3"
+              className={`text-3xl font-black ${cls.title} mb-3`}
             >
               Готово! 🎉
             </motion.h2>
@@ -324,13 +463,11 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-neutral-400 text-sm mb-8"
+              className={`${cls.subtitle} text-sm mb-8`}
             >
               Открываем студию...
             </motion.p>
 
-            {/* Animated impulse counter — counts up 0 → 7 with a small
-                bounce per tick. Sells the value of registration. */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -344,10 +481,10 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
                 </div>
                 <motion.div
                   key={impulseCount}
-                  initial={{ scale: 1.3, color: "#fbbf24" }}
-                  animate={{ scale: 1, color: "#ffffff" }}
+                  initial={{ scale: 1.3 }}
+                  animate={{ scale: 1 }}
                   transition={{ duration: 0.2 }}
-                  className="text-3xl font-black tabular-nums"
+                  className={`text-3xl font-black tabular-nums ${dark ? "text-white" : "text-amber-700"}`}
                 >
                   +{impulseCount} ⚡
                 </motion.div>
@@ -360,11 +497,12 @@ export function CustomSignUpForm({ redirectUrl = "/onboarding" }: { redirectUrl?
   );
 }
 
-function StepDots({ step }: { step: Step }) {
-  // Email = 1, password = 2, loading/success = 3
-  const active = step === "email" ? 1 : step === "password" ? 2 : 3;
+function StepDots({ step, dark }: { step: Step; dark: boolean }) {
+  // Phone=1, password=2, code=3, loading/success collapse to "active"
+  const active = step === "phone" ? 1 : step === "password" ? 2 : step === "code" ? 3 : 4;
+  const inactiveBg = dark ? "bg-neutral-700" : "bg-neutral-200";
   return (
-    <div className="flex items-center justify-center gap-2 mb-8">
+    <div className="flex items-center justify-center gap-2 mb-6">
       {[1, 2, 3].map((n) => (
         <div
           key={n}
@@ -373,7 +511,7 @@ function StepDots({ step }: { step: Step }) {
               ? "w-8 bg-hermes-500"
               : n < active
                 ? "w-2 bg-emerald-500"
-                : "w-2 bg-neutral-700"
+                : `w-2 ${inactiveBg}`
           }`}
         />
       ))}
@@ -381,7 +519,7 @@ function StepDots({ step }: { step: Step }) {
   );
 }
 
-function PasswordStrength({ value }: { value: string }) {
+function PasswordStrength({ value, dark }: { value: string; dark: boolean }) {
   const score = strengthScore(value);
   const labels = ["Слабый", "Слабый", "Средний", "Хороший", "Сильный"];
   const colors = [
@@ -392,6 +530,8 @@ function PasswordStrength({ value }: { value: string }) {
     "bg-emerald-500",
   ];
   if (value.length === 0) return null;
+  const inactive = dark ? "bg-neutral-700" : "bg-neutral-200";
+  const labelColor = dark ? "text-neutral-400" : "text-neutral-500";
   return (
     <div className="flex items-center gap-2 px-1">
       <div className="flex-1 flex gap-1">
@@ -399,24 +539,25 @@ function PasswordStrength({ value }: { value: string }) {
           <div
             key={i}
             className={`h-1 flex-1 rounded-full transition-colors ${
-              i < score ? colors[score] : "bg-neutral-700"
+              i < score ? colors[score] : inactive
             }`}
           />
         ))}
       </div>
-      <span className="text-xs text-neutral-400 font-medium w-16 text-right">
+      <span className={`text-xs ${labelColor} font-medium w-16 text-right`}>
         {value.length < 8 ? `${value.length}/8` : labels[score]}
       </span>
     </div>
   );
 }
 
-function ErrorBanner({ message }: { message: string }) {
+function ErrorBanner({ message, dark }: { message: string; dark: boolean }) {
+  const bg = dark ? "bg-red-500/10 border-red-500/30 text-red-300" : "bg-red-50 border-red-200 text-red-700";
   return (
     <motion.div
       initial={{ opacity: 0, y: -5 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-red-300"
+      className={`flex items-start gap-2 ${bg} border rounded-xl px-4 py-3 text-sm`}
       role="alert"
     >
       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -425,8 +566,24 @@ function ErrorBanner({ message }: { message: string }) {
   );
 }
 
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+function normalizePhone(input: string): string {
+  // Strip everything that isn't a digit or leading +. KZ numbers
+  // come in many shapes — "8 700 ...", "+7 (700) ...", "77001234567" —
+  // we collapse to E.164 "+7XXXXXXXXXX".
+  const digits = input.replace(/[^\d]/g, "");
+  if (!digits) return "+7";
+  // 87001234567 → 77001234567 → +77001234567 (KZ "8" prefix → "7")
+  let body = digits;
+  if (body.startsWith("8")) body = "7" + body.slice(1);
+  if (body.startsWith("7") && body.length === 11) return "+" + body;
+  if (body.startsWith("77") && body.length === 11) return "+" + body;
+  if (!body.startsWith("7")) body = "7" + body;
+  return "+" + body;
+}
+
+function isValidKzPhone(phone: string): boolean {
+  // E.164 KZ: +7 followed by exactly 10 digits.
+  return /^\+7\d{10}$/.test(phone);
 }
 
 function strengthScore(pwd: string): number {
@@ -445,18 +602,24 @@ function parseClerkError(err: unknown): string {
     if (errors && errors.length > 0) {
       const code = errors[0].code;
       if (code === "form_identifier_exists") {
-        return "У вас уже есть аккаунт с этим email. Войди вместо регистрации.";
+        return "Этот номер уже зарегистрирован. Войди вместо регистрации.";
       }
       if (code === "form_password_pwned") {
-        return "Этот пароль попал в утечки данных. Придумай другой.";
+        return "Этот пароль попал в утечки. Придумай другой.";
       }
       if (code === "form_password_length_too_short") {
         return "Пароль слишком короткий. Минимум 8 символов.";
       }
-      if (code === "form_param_format_invalid" || code === "form_param_format_invalid_email_address") {
-        return "Email некорректный. Проверь написание.";
+      if (code === "form_param_format_invalid" || code === "form_param_format_invalid_phone_number") {
+        return "Номер некорректный. Формат: +7XXXXXXXXXX";
       }
-      return errors[0].message || "Не получилось создать аккаунт. Попробуй ещё раз.";
+      if (code === "form_code_incorrect") {
+        return "Неверный код. Проверь SMS и введи ещё раз.";
+      }
+      if (code === "verification_expired") {
+        return "Код устарел. Жми «Отправить заново».";
+      }
+      return errors[0].message || "Не получилось. Попробуй ещё раз.";
     }
   }
   return "Что-то пошло не так. Попробуй ещё раз.";

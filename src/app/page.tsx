@@ -22,6 +22,7 @@ import { CountdownLoop } from "@/components/landing/CountdownLoop";
 import { trackInitiateCheckout } from "@/lib/fb-pixel";
 import { DeadlineBanner } from "@/components/DeadlineBanner";
 import { isRegistrationOpen } from "@/lib/flags";
+import { CustomSignUpForm } from "@/components/auth/CustomSignUpForm";
 
 // --- DATA ---
 type Transformation = {
@@ -240,7 +241,7 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 }}
-                  className="flex flex-col sm:flex-row gap-4 mt-4"
+                  className="mt-4"
                >
                   {isSignedIn ? (
                      <Link href="/editor">
@@ -251,14 +252,18 @@ export default function LandingPage() {
                         </button>
                      </Link>
                   ) : registrationOpen ? (
-                     <Link
-                        href="/register"
-                        className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/30"
-                     >
-                        Начать бесплатно
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        <div className="absolute inset-0 bg-white/40 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                     </Link>
+                     // Inline phone+SMS+password registration card. Replaces
+                     // the old "Начать бесплатно" button with a working form
+                     // right in the hero — fewer clicks, no separate page.
+                     <div className="w-full sm:max-w-md bg-white rounded-3xl border-2 border-hermes-500/20 shadow-2xl shadow-hermes-500/15 p-5 sm:p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                           <Sparkles className="w-5 h-5 text-hermes-500" />
+                           <span className="text-sm font-black uppercase tracking-wider text-hermes-600">
+                              Регистрация · 30 секунд
+                           </span>
+                        </div>
+                        <CustomSignUpForm variant="inline" redirectUrl="/onboarding" />
+                     </div>
                   ) : (
                      // Maintenance: show a disabled-style stub + login link.
                      <div className="flex flex-col gap-3 w-full sm:w-auto">
