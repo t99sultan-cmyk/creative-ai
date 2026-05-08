@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { motion, AnimatePresence, useInView } from "framer-motion";
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import { PRICING_TIERS } from "@/lib/pricing";
 import { GoldParticles } from "@/components/landing/GoldParticles";
 import { TiltCard } from "@/components/landing/TiltCard";
@@ -22,7 +22,6 @@ import { CountdownLoop } from "@/components/landing/CountdownLoop";
 import { trackInitiateCheckout } from "@/lib/fb-pixel";
 import { DeadlineBanner } from "@/components/DeadlineBanner";
 import { isRegistrationOpen } from "@/lib/flags";
-import { CustomSignUpForm } from "@/components/auth/CustomSignUpForm";
 
 // --- DATA ---
 type Transformation = {
@@ -127,18 +126,14 @@ export default function LandingPage() {
                </div>
             ) : registrationOpen ? (
                <>
-                 <Link
-                   href="/login"
-                   className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
-                 >
-                   Войти
-                 </Link>
-                 <Link
-                   href="/register"
-                   className="text-sm font-bold text-white bg-hermes-500 hover:bg-hermes-600 px-5 py-2 rounded-full shadow-[0_0_20px_rgba(243,112,33,0.35)] transition-all"
-                 >
-                   Начать бесплатно
-                 </Link>
+                 <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
+                   <button className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Войти</button>
+                 </SignInButton>
+                 <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
+                   <button className="text-sm font-bold text-white bg-hermes-500 hover:bg-hermes-600 px-5 py-2 rounded-full shadow-[0_0_20px_rgba(243,112,33,0.35)] transition-all">
+                     Начать бесплатно
+                   </button>
+                 </SignInButton>
                </>
             ) : (
                // Maintenance: drop sign-up CTA, keep only login link.
@@ -173,13 +168,9 @@ export default function LandingPage() {
                {isSignedIn ? (
                  <Link href="/editor" className="mt-4 text-center text-sm font-bold text-neutral-900 bg-gradient-to-r from-hermes-500 to-amber-500 px-5 py-3 rounded-xl transition-all">Перейти в Студию</Link>
                ) : registrationOpen ? (
-                 <Link
-                   href="/register"
-                   onClick={() => setMobileMenuOpen(false)}
-                   className="mt-4 text-center text-sm font-bold text-white bg-hermes-500 px-5 py-3 rounded-xl transition-all w-full"
-                 >
-                   Начать бесплатно
-                 </Link>
+                 <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
+                   <button className="mt-4 text-center text-sm font-bold text-white bg-hermes-500 px-5 py-3 rounded-xl transition-all w-full">Начать бесплатно</button>
+                 </SignInButton>
                ) : (
                  <Link
                    href="/login"
@@ -241,7 +232,7 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 }}
-                  className="mt-4"
+                  className="flex flex-col sm:flex-row gap-4 mt-4"
                >
                   {isSignedIn ? (
                      <Link href="/editor">
@@ -252,18 +243,13 @@ export default function LandingPage() {
                         </button>
                      </Link>
                   ) : registrationOpen ? (
-                     // Inline phone+SMS+password registration card. Replaces
-                     // the old "Начать бесплатно" button with a working form
-                     // right in the hero — fewer clicks, no separate page.
-                     <div className="w-full sm:max-w-md bg-white rounded-3xl border-2 border-hermes-500/20 shadow-2xl shadow-hermes-500/15 p-5 sm:p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                           <Sparkles className="w-5 h-5 text-hermes-500" />
-                           <span className="text-sm font-black uppercase tracking-wider text-hermes-600">
-                              Регистрация · 30 секунд
-                           </span>
-                        </div>
-                        <CustomSignUpForm variant="inline" redirectUrl="/onboarding" />
-                     </div>
+                     <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
+                        <button className="group relative w-full sm:w-auto flex items-center justify-center gap-2 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-lg px-8 py-4 rounded-2xl overflow-hidden hover:scale-105 transition-all shadow-xl shadow-hermes-500/30">
+                           Начать бесплатно
+                           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                           <div className="absolute inset-0 bg-white/40 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                     </SignInButton>
                   ) : (
                      // Maintenance: show a disabled-style stub + login link.
                      <div className="flex flex-col gap-3 w-full sm:w-auto">
@@ -848,18 +834,21 @@ export default function LandingPage() {
                               {tier.btn}
                             </Link>
                           ) : registrationOpen ? (
-                            // New users hit /register, then route to /onboarding
-                            // (welcome screen captures phone + flag), then can
-                            // navigate to checkout. We don't pass checkoutHref
-                            // through the redirect — onboarding is mandatory
-                            // for the welcome flag + contact info.
-                            <Link
-                              href="/register"
-                              onClick={handlePricingClick}
-                              className={buttonClass + " inline-block text-center"}
+                            // For NEW users (sign-up path) we still route them
+                            // through /onboarding to collect phone + welcome —
+                            // skipping it leaves the user with no contact in
+                            // the DB and no welcome flag, which we found in
+                            // the audit. Existing users (sign-in path) go
+                            // straight to /checkout to keep their flow intact.
+                            <SignInButton
+                              mode="modal"
+                              forceRedirectUrl={checkoutHref}
+                              signUpForceRedirectUrl="/onboarding"
                             >
-                              {tier.btn}
-                            </Link>
+                              <button onClick={handlePricingClick} className={buttonClass}>
+                                {tier.btn}
+                              </button>
+                            </SignInButton>
                           ) : (
                             // Maintenance: no purchases by anonymous visitors —
                             // they need an account, and we're not creating new
@@ -945,13 +934,12 @@ export default function LandingPage() {
                         <Sparkles className="w-6 h-6 text-amber-500" />
                      </Link>
                   ) : registrationOpen ? (
-                     <Link
-                        href="/register"
-                        className="bg-white text-hermes-600 font-black text-xl px-12 py-6 rounded-2xl hover:scale-105 transition-transform flex items-center justify-center gap-3 shadow-2xl w-full sm:w-auto"
-                     >
-                        Начать бесплатно (7 импульсов)
-                        <Sparkles className="w-6 h-6 text-amber-500" />
-                     </Link>
+                     <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
+                        <button className="bg-white text-hermes-600 font-black text-xl px-12 py-6 rounded-2xl hover:scale-105 transition-transform flex items-center justify-center gap-3 shadow-2xl w-full sm:w-auto">
+                           Начать бесплатно (7 импульсов)
+                           <Sparkles className="w-6 h-6 text-amber-500" />
+                        </button>
+                     </SignInButton>
                   ) : (
                      <button
                         disabled
@@ -986,13 +974,16 @@ export default function LandingPage() {
                   <ArrowRight className="w-5 h-5" />
                 </Link>
               ) : (
-                <Link
-                  href="/register"
-                  className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg"
+                <SignInButton
+                  mode="modal"
+                  forceRedirectUrl="/editor"
+                  signUpForceRedirectUrl="/onboarding"
                 >
-                  Забрать 7 Импульсов
-                  <Sparkles className="w-5 h-5 text-amber-500" />
-                </Link>
+                  <button className="inline-flex items-center gap-2 bg-white text-hermes-600 font-black text-base md:text-lg px-6 md:px-8 py-3 md:py-3.5 rounded-xl hover:scale-[1.03] transition-transform shadow-lg">
+                    Забрать 7 Импульсов
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                  </button>
+                </SignInButton>
               )
             }
           />
@@ -1063,23 +1054,22 @@ export default function LandingPage() {
           sign up" tail. */}
       {!isSignedIn && registrationOpen && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-neutral-200 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
-          <Link
-            href="/register"
-            className="w-full flex items-center gap-3 active:scale-[0.98] transition-transform"
-          >
-            <div className="flex-1 min-w-0 text-left">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-hermes-600 leading-none mb-0.5">
-                🔥 Бесплатный старт
+          <SignInButton mode="modal" forceRedirectUrl="/editor" signUpForceRedirectUrl="/onboarding">
+            <button className="w-full flex items-center gap-3 active:scale-[0.98] transition-transform">
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-hermes-600 leading-none mb-0.5">
+                  🔥 Бесплатный старт
+                </div>
+                <div className="text-sm font-black text-neutral-900 leading-tight">
+                  7 импульсов в подарок · без карты
+                </div>
               </div>
-              <div className="text-sm font-black text-neutral-900 leading-tight">
-                7 импульсов в подарок · без карты
-              </div>
-            </div>
-            <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-sm px-4 py-3 rounded-xl shadow-md shadow-hermes-500/40">
-              Попробовать
-              <ArrowRight className="w-4 h-4" />
-            </span>
-          </Link>
+              <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-hermes-500 hover:bg-hermes-600 text-white font-bold text-sm px-4 py-3 rounded-xl shadow-md shadow-hermes-500/40">
+                Попробовать
+                <ArrowRight className="w-4 h-4" />
+              </span>
+            </button>
+          </SignInButton>
         </div>
       )}
     </main>
