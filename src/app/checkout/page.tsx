@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Sparkles, CheckCircle2, ArrowLeft, Receipt, CreditCard, ChevronRight, MessageCircle, QrCode, Link2 } from "lucide-react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { Suspense, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { notifyPaymentIntent } from "@/actions/notifyPaymentIntent";

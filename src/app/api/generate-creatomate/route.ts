@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@/lib/auth/clerk-compat';
 import { db } from '@/db';
 import { creatives, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { creatives } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { auth } from '@clerk/nextjs/server';
+import { auth } from '@/lib/auth/clerk-compat';
 
 // Ensure this API route is dynamic and never cached
 export const dynamic = 'force-dynamic';

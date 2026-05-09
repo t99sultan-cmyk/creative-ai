@@ -3,7 +3,7 @@
 import { db } from '@/db';
 import { creatives } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
-import { auth } from '@clerk/nextjs/server';
+import { auth } from '@/lib/auth/clerk-compat';
 
 /**
  * Серверная отмена "зависшего" рендера.

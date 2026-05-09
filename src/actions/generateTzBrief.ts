@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 
 /**
  * Builds a detailed structured Russian advertising brief from the

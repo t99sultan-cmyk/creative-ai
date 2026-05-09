@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useClerk } from "@clerk/nextjs";
+import { useClerk } from "@/lib/auth/AuthContext";
 import { ShieldAlert, LogOut } from "lucide-react";
 
 /**
@@ -59,8 +59,9 @@ export function ImpersonationBanner() {
       sessionStorage.removeItem("impersonating_email");
     } catch {}
     // Sign out fully. The admin then re-authenticates on /admin with their
-    // own email to get back into the admin panel.
-    await signOut({ redirectUrl: "/admin" });
+    // own email to get back into the admin panel. Custom signOut() takes
+    // no args; the redirect happens explicitly via router.push() below.
+    await signOut();
     router.push("/admin");
   };
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from '@clerk/nextjs/server';
+import { auth } from '@/lib/auth/clerk-compat';
 import { db } from '@/db';
 import { creatives } from '@/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';

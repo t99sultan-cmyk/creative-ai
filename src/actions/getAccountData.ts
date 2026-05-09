@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { users, promoCodes, creatives } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/auth/clerk-compat";
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 /**

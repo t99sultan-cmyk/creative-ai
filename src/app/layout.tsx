@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
-import { ruRU } from '@clerk/localizations';
+import { AuthProvider } from '@/lib/auth/AuthContext';
 import { MetaPixel } from '@/components/MetaPixel';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { RegistrationTracker } from '@/components/RegistrationTracker';
@@ -84,11 +83,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // Clerk modal/components are rendered in Russian. `ruRU` ships with
-    // Clerk's localizations package and covers every string the prebuilt
-    // SignIn/SignUp flows render — sign-in title, OAuth button labels,
-    // email/password fields, error messages, account portal, etc.
-    <ClerkProvider localization={ruRU}>
+    // AuthProvider replaces Clerk's <ClerkProvider>. Single client-side
+    // auth context, fetches /api/me on mount, exposes useAuth/useUser/
+    // useClerk shims so legacy code keeps working without Clerk.
+    <AuthProvider>
       <html lang="ru">
         <body className={`${inter.variable} font-sans antialiased`}>
           {/* Meta Pixel — global base script + SPA-aware PageView tracker */}
@@ -97,18 +95,12 @@ export default function RootLayout({
               pattern as the Meta Pixel so client-side navigations are
               logged as separate hits. */}
           <YandexMetrika />
-          {/* Fires `CompleteRegistration` exactly once when a freshly-signed
-              up Clerk user lands on any page. Mounted here so it covers the
-              full app (users often land on /editor right after Clerk's
-              redirect). */}
+          {/* Fires CompleteRegistration once per fresh-signup, watching
+              for the welcome cookie set by registerUser action. */}
           <RegistrationTracker />
-          {/* In-app-browser banner removed (May 2026): Google sign-in is
-              now disabled in Clerk, so the disallowed_useragent block
-              that affected Instagram/TikTok visitors no longer triggers.
-              Email+password registration works in any browser/webview. */}
           {children}
         </body>
       </html>
-    </ClerkProvider>
+    </AuthProvider>
   );
 }

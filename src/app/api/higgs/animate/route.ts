@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { creatives, users } from "@/db/schema";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { VIDEO_GEN_COST } from "@/lib/pricing";
 import { submitHiggsfieldVideo, type HiggsfieldModelId } from "@/lib/models/higgsfield-video";

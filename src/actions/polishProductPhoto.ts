@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 
 /**
  * Takes a user-uploaded product photo (often a phone snap with bad

@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { promoCodes, users } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/auth/clerk-compat";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { sendCapiEvent } from "@/lib/fb-capi";

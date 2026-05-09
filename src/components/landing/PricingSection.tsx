@@ -3,7 +3,7 @@
 import Link from "next/link";
 import clsx from "clsx";
 import { Star, Zap, CheckCircle2 } from "lucide-react";
-import { SignInButton, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { Reveal } from "./Reveal";
 import { PRICING_TIERS } from "@/lib/pricing";
 import { trackInitiateCheckout } from "@/lib/fb-pixel";
@@ -163,15 +163,13 @@ export function PricingSection({ theme }: { theme: LandingTheme }) {
                       {tier.btn}
                     </Link>
                   ) : registrationOpen ? (
-                    <SignInButton
-                      mode="modal"
-                      forceRedirectUrl={checkoutHref}
-                      signUpForceRedirectUrl="/onboarding"
+                    <Link
+                      href={`/register?redirect=${encodeURIComponent(checkoutHref)}`}
+                      onClick={handlePricingClick}
+                      className={buttonClass + " inline-block text-center"}
                     >
-                      <button onClick={handlePricingClick} className={buttonClass}>
-                        {tier.btn}
-                      </button>
-                    </SignInButton>
+                      {tier.btn}
+                    </Link>
                   ) : (
                     <button
                       disabled

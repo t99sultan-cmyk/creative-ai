@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Menu, X } from "lucide-react";
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { UserMenu, useAuth } from "@/lib/auth/AuthContext";
 import { isRegistrationOpen } from "@/lib/flags";
 import { LandingTheme } from "@/lib/landing-themes";
 
@@ -17,7 +17,7 @@ import { LandingTheme } from "@/lib/landing-themes";
  * page has its own #how, #pricing, #faq, etc. Pass `[]` to render
  * a blank center (e.g. for a landing without anchor sections).
  *
- * Auth: signed-in user sees their UserButton + a "перейти" link
+ * Auth: signed-in user sees their UserMenu + a "перейти" link
  * to the product's wizard/editor (`theme.ctaHref`). Signed-out
  * users get sign-in / start-free CTAs gated by isRegistrationOpen
  * (maintenance mode collapses to login-only).
@@ -79,7 +79,7 @@ export function LandingNavbar({
               >
                 {ctaLabel}
               </Link>
-              <UserButton />
+              <UserMenu />
             </div>
           ) : registrationOpen ? (
             <>

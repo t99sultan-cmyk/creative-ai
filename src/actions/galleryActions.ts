@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { creatives, users } from "@/db/schema";
 import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/admin-guard";
 

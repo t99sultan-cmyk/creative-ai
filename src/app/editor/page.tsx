@@ -20,7 +20,7 @@ import { HIGGSFIELD_PRESETS, type HiggsfieldPresetId } from "@/lib/models/higgsf
 import { CATEGORIES, getCategory, getScene, type CategoryId } from "@/lib/categories";
 import { ManualImageEditor } from "@/components/editor/ManualImageEditor";
 import clsx from "clsx";
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/AuthContext";
 import { getUserBalance } from "@/actions/getUserBalance";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
 import { trackPurchase } from "@/lib/fb-pixel";

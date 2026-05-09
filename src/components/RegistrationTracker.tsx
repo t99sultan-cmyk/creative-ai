@@ -1,29 +1,32 @@
 "use client";
 
 import { useEffect } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/AuthContext";
 import { trackRegistration } from "@/lib/fb-pixel";
 
 /**
- * Fires `CompleteRegistration` to Meta Pixel exactly once per Clerk user.
+ * Fires `CompleteRegistration` to Meta Pixel exactly once per user.
  *
- * Strategy:
- *   1. localStorage holds `fb_reg_tracked:<userId>` so we never re-fire on
- *      repeat visits from the same browser.
- *   2. On first sign-in we also check Clerk's `user.createdAt`: if it's
- *      within a "fresh" window (10 min) we fire. If it's older, the user
- *      must have registered elsewhere (e.g. a previous session / before the
- *      pixel was installed) — we still mark them as tracked so we don't
- *      report a phantom registration days/weeks late, but don't fire the
- *      event to avoid polluting campaign reports with non-conversions.
+ * Strategy (post-Clerk migration):
+ *   - The registerUser server action sets a short-lived
+ *     `fb_just_registered` cookie. This component reads it on mount,
+ *     fires the pixel, then clears the cookie.
+ *   - `localStorage.fb_reg_tracked:<userId>` is a belt-and-suspenders
+ *     dedup so even if the cookie somehow lingers we don't double-fire.
  *
- * Why client-side and not Clerk webhook:
- *   Meta Pixel is browser-side already; server-side dedup is the job of
- *   the Conversions API (separate integration). Doing CompleteRegistration
- *   in the browser at the same moment the user's first PageView fires is
- *   what Meta's matching algorithm expects.
+ * Why client-side: Meta Pixel is browser-side; the moment the user's
+ * first PageView fires after registration is what Meta's match algo
+ * expects to see CompleteRegistration paired with.
  */
-const FRESH_REGISTRATION_WINDOW_MS = 10 * 60 * 1000;
+function readFreshRegistrationCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.cookie.split(";").some((c) => c.trim().startsWith("fb_just_registered=1"));
+}
+
+function clearFreshRegistrationCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = "fb_just_registered=; Max-Age=0; path=/";
+}
 
 export function RegistrationTracker() {
   const { user, isLoaded } = useUser();
@@ -39,34 +42,23 @@ export function RegistrationTracker() {
       // rather than silently never firing.
     }
 
-    const createdAtMs = user.createdAt?.getTime?.() ?? 0;
-    const ageMs = Date.now() - createdAtMs;
-    const isFresh = createdAtMs > 0 && ageMs >= 0 && ageMs < FRESH_REGISTRATION_WINDOW_MS;
+    const isFresh = readFreshRegistrationCookie();
 
     if (isFresh) {
-      // Detect sign-up method for richer campaign segmentation. Clerk
-      // exposes `externalAccounts` — if a Google/Apple account is linked,
-      // that's the method they used.
-      const externalProvider = user.externalAccounts?.[0]?.provider;
-      const method = externalProvider
-        ? externalProvider.toLowerCase().includes("google")
-          ? ("google" as const)
-          : ("other" as const)
-        : ("email" as const);
-
-      // Pass userId so the pixel fires with eventID = `reg_<userId>`.
-      // The Clerk `user.created` webhook emits the same id via CAPI —
-      // Meta dedupes the pair (see @/lib/fb-capi).
-      trackRegistration({ method, userId: user.id });
+      // Method is always "email" now — we removed all OAuth providers
+      // when migrating off Clerk. If we add Google/Apple later, set
+      // a different cookie value (e.g. fb_just_registered=google) and
+      // branch on it here.
+      trackRegistration({ method: "email", userId: user.id });
+      clearFreshRegistrationCookie();
     }
 
     try {
       localStorage.setItem(flagKey, "1");
     } catch {
-      // If we can't persist the flag, we might re-fire on next mount — but
-      // the isFresh check above will stop reporting after 10 min, so
-      // the worst case is a single extra event for users who just signed
-      // up in incognito. Acceptable.
+      // If we can't persist the flag, we might re-fire on next mount.
+      // The cookie clears itself on first fire above, so worst case is
+      // ONE extra event for users in incognito. Acceptable.
     }
   }, [isLoaded, user]);
 

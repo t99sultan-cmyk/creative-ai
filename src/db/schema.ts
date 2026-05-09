@@ -1,9 +1,16 @@
 import { pgTable, text, timestamp, integer, boolean, real, jsonb, serial } from "drizzle-orm/pg-core";
 
 export const users = pgTable("user", {
-  id: text("id").primaryKey(), // Clerk User ID
+  // Random nanoid-style id, generated at registration. Historically this
+  // held the Clerk User ID; after migrating to in-house auth (May 2026)
+  // we generate a fresh random id ourselves on signup.
+  id: text("id").primaryKey(),
   name: text("name"),
-  email: text("email").notNull(),
+  email: text("email").notNull().unique(),
+  // bcrypt password hash. Null for users created before the in-house
+  // auth migration — they need to reset password to set one. The login
+  // flow checks for null and shows a helpful message.
+  passwordHash: text("password_hash"),
   // Internal currency. Default mirrors SIGNUP_BONUS_IMPULSES in @/lib/pricing;
   // kept literal here because drizzle schema is evaluated at migration-gen
   // time and can't import runtime constants. If the bonus changes, bump

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { adminAuditLog } from "@/db/schema";
-import { currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@/lib/auth/clerk-compat";
 import { desc, eq } from "drizzle-orm";
 
 export type AdminAction =

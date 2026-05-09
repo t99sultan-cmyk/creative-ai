@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 import { checkFalVideo } from "@/lib/models/fal-video";
 
 /**

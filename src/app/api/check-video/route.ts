@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { creatives, users } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 import { notifyAdmin, fmt } from "@/lib/admin-notify";
 
 export const maxDuration = 60;

@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/auth/clerk-compat";
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 export async function getUserBalance() {

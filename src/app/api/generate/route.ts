@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { users, creatives } from "@/db/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 import crypto from "crypto";
 import { checkGenerateRateLimit, rateLimitMessage } from "@/lib/rate-limit";
 import { isAdmin } from "@/lib/admin-guard";

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 import { checkProductsRateLimit, rateLimitMessage } from "@/lib/rate-limit-products";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { computeProductGenCost, PRODUCTS_DEFAULT_CARDS } from "@/lib/pricing";

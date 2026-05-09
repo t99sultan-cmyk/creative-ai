@@ -1,4 +1,4 @@
-import { currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@/lib/auth/clerk-compat";
 
 /**
  * Admin email allowlist from env. Comma-separated, case-insensitive.

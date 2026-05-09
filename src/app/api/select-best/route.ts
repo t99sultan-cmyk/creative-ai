@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { creatives } from "@/db/schema";
 import { and, eq, ne } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 
 /**
  * POST /api/select-best

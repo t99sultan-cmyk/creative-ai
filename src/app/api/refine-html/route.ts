@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/clerk-compat";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { REFINE_BLOCK_COST } from "@/lib/pricing";
 import { callClaude } from "@/lib/generation-models";

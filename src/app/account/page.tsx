@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useAuth, UserButton } from "@clerk/nextjs";
+import { useAuth, UserMenu } from "@/lib/auth/AuthContext";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -118,10 +118,10 @@ export default function AccountPage() {
             >
               Главная
             </Link>
-            {/* Note: `afterSignOutUrl` was removed from UserButton props in
+            {/* Note: `afterSignOutUrl` was removed from UserMenu props in
                 recent @clerk/nextjs versions. Sign-out redirect is now
                 configured at the Clerk app level or via CLERK_SIGN_OUT_URL. */}
-            <UserButton />
+            <UserMenu />
           </div>
         </div>
       </header>

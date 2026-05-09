@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { motion, AnimatePresence, useInView } from "framer-motion";
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { UserMenu, useAuth } from "@/lib/auth/AuthContext";
 import { PRICING_TIERS } from "@/lib/pricing";
 import { GoldParticles } from "@/components/landing/GoldParticles";
 import { TiltCard } from "@/components/landing/TiltCard";
@@ -122,7 +122,7 @@ export default function LandingPage() {
                  <Link href="/editor" className="text-sm font-bold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 px-4 py-2 rounded-full border border-neutral-200 backdrop-blur-md transition-all">
                    В студию
                  </Link>
-                 <UserButton />
+                 <UserMenu />
                </div>
             ) : registrationOpen ? (
                <>

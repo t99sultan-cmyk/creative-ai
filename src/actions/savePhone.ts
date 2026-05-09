@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/auth/clerk-compat";
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
 /**

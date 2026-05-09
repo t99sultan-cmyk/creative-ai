@@ -1,9 +1,6 @@
 "use client";
 
 import { useState, useTransition, useEffect, useRef } from "react";
-// Both legacy hooks at once — combined form needs both create-account
-// and create-session flows depending on detected mode.
-import { useSignUp, useSignIn } from "@clerk/nextjs/legacy";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,7 +16,7 @@ import {
   Gift,
   Sparkles,
 } from "lucide-react";
-import { savePhone } from "@/actions/savePhone";
+import { registerUser, loginUser, checkEmailExists } from "@/actions/authActions";
 import { normalizeKzPhone, formatPhoneAsTyped } from "@/lib/auth/normalize-phone";
 import { FieldStagger, ShimmerButton } from "./AuthShellAnimations";
 import { AnimatedLogo } from "./AnimatedLogo";
@@ -27,41 +24,33 @@ import { AnimatedLogo } from "./AnimatedLogo";
 type AuthMode = "register" | "login";
 
 /**
- * Unified auth form. Replaces the previous separate CustomSignUpForm
- * and CustomSignInForm with a single component that detects whether
- * the email is already registered and switches between the two flows
- * automatically — no tabs to think about, no "wait, am I on the right
- * page" friction.
+ * Unified auth form — register OR login, auto-switches based on
+ * whether the entered email is already registered. Talks directly
+ * to our in-house server actions (registerUser / loginUser /
+ * checkEmailExists). No Clerk, no useSignUp/useSignIn hooks.
  *
  * Behavior:
- *   1. By default renders in REGISTER mode (3 fields: email + phone +
- *      password) — prioritizes new-user conversion.
- *   2. As soon as the user finishes typing a valid email (800ms
- *      debounce), we ping Clerk to see if an account exists.
- *   3. If it exists → auto-switch to LOGIN mode: phone field collapses
- *      with a smooth height-animation, headline changes to
- *      "С возвращением!", submit button label changes to "Войти".
- *   4. If it doesn't exist → stay in REGISTER mode.
- *   5. User can also flip the mode manually via the small toggle below
- *      the form (in case our auto-detect is wrong).
+ *   1. Default = REGISTER mode — 3 fields visible (email + phone + password)
+ *   2. As user types email, after 800ms debounce we ping
+ *      checkEmailExists() — a tiny server action that hits the users
+ *      table for an existence check, no DB writes, no auth attempt.
+ *   3. If exists → phone field collapses, title flips to "С возвращением!",
+ *      submit button becomes "Войти".
+ *   4. User can also flip mode manually via the Войти/Зарегистрироваться
+ *      link below the title.
+ *   5. On submit, the matching server action runs. Success → it returns
+ *      a redirect path, we navigate there. Failure → inline field error.
  *
- * The probe call uses signIn.create({ identifier }) which:
- *   - Returns status="needs_first_factor" if account exists
- *   - Throws form_identifier_not_found if not
- * Each probe creates a partial sign-in attempt in Clerk; they
- * auto-expire so it's not a leak. Debounce keeps the rate sane.
+ * The whole flow lives in OUR domain — no iframes, no third-party
+ * branding visible anywhere.
  */
 export function CustomAuthForm({
   defaultMode = "register",
   redirectAfter,
 }: {
   defaultMode?: AuthMode;
-  /** Where to send the user after success. Defaults: register →
-   *  /onboarding (welcome screen), login → /editor. */
   redirectAfter?: string;
 }) {
-  const { isLoaded: signUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
-  const { isLoaded: signInLoaded, signIn, setActive: setActiveSignIn } = useSignIn();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -76,14 +65,8 @@ export function CustomAuthForm({
     password?: string;
     form?: string;
   }>({});
-  /** null = not checked yet; true = found; false = not found. Drives
-   *  the "С возвращением" hint and auto-switch behavior. */
   const [emailKnown, setEmailKnown] = useState<boolean | null>(null);
-  /** True while a probe is in flight — used to show a tiny spinner
-   *  in the email-field corner so the user knows something's happening. */
   const [probing, setProbing] = useState(false);
-  /** Latest probe token — guards against stale responses overwriting
-   *  fresh state if the user types fast. */
   const probeTokenRef = useRef(0);
 
   function clearFieldError(field: keyof typeof errors) {
@@ -93,46 +76,32 @@ export function CustomAuthForm({
   // ── Email-existence probe (800ms debounce after typing) ──
   useEffect(() => {
     const trimmed = email.trim().toLowerCase();
-    // Only probe a syntactically-valid email
     if (!trimmed || !/^\S+@\S+\.\S+$/.test(trimmed)) {
       setEmailKnown(null);
       setProbing(false);
       return;
     }
-    if (!signInLoaded || !signIn) return;
 
     const myToken = ++probeTokenRef.current;
     setProbing(true);
     const timer = setTimeout(async () => {
       try {
-        const result = await signIn.create({ identifier: trimmed });
-        // If we got here without throwing, the account exists.
+        const result = await checkEmailExists(trimmed);
         if (myToken !== probeTokenRef.current) return; // stale
-        if (result.status === "needs_first_factor" || result.status === "complete") {
-          setEmailKnown(true);
-          // Auto-switch from register → login when we recognize the email.
-          // Don't auto-switch the OTHER way (login → register) on miss
-          // because the user might be mid-typing.
+        setEmailKnown(result.exists);
+        if (result.exists) {
           setMode((m) => (m === "register" ? "login" : m));
         }
-      } catch (err: any) {
-        if (myToken !== probeTokenRef.current) return;
-        const code = err?.errors?.[0]?.code;
-        if (code === "form_identifier_not_found") {
-          setEmailKnown(false);
-        } else {
-          // Some other error — keep state unknown so we don't mislead
-          // the user. They can still submit and get a real error.
-          setEmailKnown(null);
-        }
+      } catch {
+        if (myToken === probeTokenRef.current) setEmailKnown(null);
       } finally {
         if (myToken === probeTokenRef.current) setProbing(false);
       }
     }, 800);
     return () => clearTimeout(timer);
-  }, [email, signInLoaded, signIn]);
+  }, [email]);
 
-  function validate(): { ok: boolean; normalizedPhone: string | null } {
+  function clientValidate(): { ok: boolean; normalizedPhone: string | null } {
     const next: typeof errors = {};
     const trimmedEmail = email.trim();
     if (!trimmedEmail) next.email = "Введите email";
@@ -156,96 +125,40 @@ export function CustomAuthForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isPending) return;
-    if (mode === "register" && !signUpLoaded) return;
-    if (mode === "login" && !signInLoaded) return;
-
-    const { ok, normalizedPhone } = validate();
+    const { ok, normalizedPhone } = clientValidate();
     if (!ok) return;
 
     startTransition(async () => {
       try {
-        if (mode === "register") {
-          const result = await signUp!.create({
-            emailAddress: email.trim().toLowerCase(),
-            password,
-            unsafeMetadata: { phone: normalizedPhone },
-          });
-          if (result.status === "complete" && result.createdSessionId) {
-            await setActiveSignUp!({ session: result.createdSessionId });
-            try {
-              if (normalizedPhone) await savePhone(normalizedPhone);
-            } catch (phoneErr) {
-              console.warn("[CustomAuthForm] savePhone failed:", phoneErr);
-            }
-            router.push(redirectAfter || "/onboarding");
-            return;
-          }
-          setErrors({
-            form:
-              "Регистрация требует подтверждения. Напиши нам в Telegram @voise_kz — поможем войти.",
-          });
-        } else {
-          // Login mode — fresh signIn.create with both identifier and password
-          // (the probe call we did earlier was identifier-only; password attempt
-          // happens here on submit).
-          const result = await signIn!.create({
-            identifier: email.trim().toLowerCase(),
-            password,
-          });
-          if (result.status === "complete" && result.createdSessionId) {
-            await setActiveSignIn!({ session: result.createdSessionId });
-            router.push(redirectAfter || "/editor");
-            return;
-          }
-          setErrors({
-            form:
-              "Нужна дополнительная проверка. Напиши в Telegram @voise_kz — поможем войти.",
-          });
+        const result =
+          mode === "register"
+            ? await registerUser({
+                email: email.trim().toLowerCase(),
+                password,
+                phone: normalizedPhone || undefined,
+              })
+            : await loginUser({ email: email.trim().toLowerCase(), password });
+
+        if (result.success) {
+          router.push(redirectAfter || result.redirect);
+          router.refresh();
+          return;
+        }
+
+        // Server returned a structured error — drop it on the right field
+        if (result.field === "email") setErrors({ email: result.error });
+        else if (result.field === "phone") setErrors({ phone: result.error });
+        else if (result.field === "password") setErrors({ password: result.error });
+        else setErrors({ form: result.error });
+
+        // Auto-switch heuristics: server told us the email was already
+        // taken during registration → flip to login.
+        if (mode === "register" && result.field === "email" && /уже зарегистр/i.test(result.error)) {
+          setMode("login");
+          setEmailKnown(true);
         }
       } catch (err: any) {
-        const clerkErr = err?.errors?.[0];
-        const code = clerkErr?.code;
-        const message = clerkErr?.longMessage || clerkErr?.message || "";
-
-        if (mode === "register") {
-          if (code === "form_identifier_exists") {
-            // Auto-switch to login mode — the email was already registered.
-            setEmailKnown(true);
-            setMode("login");
-            setErrors({ email: "Этот email уже зарегистрирован — введи пароль чтобы войти." });
-          } else if (code === "form_password_pwned") {
-            setErrors({
-              password: "Попробуй пароль с цифрой или символом (например, добавь !2026 к концу).",
-            });
-          } else if (code === "form_password_length_too_short") {
-            setErrors({ password: "Минимум 7 символов" });
-          } else if (
-            code === "form_param_format_invalid" &&
-            (message.toLowerCase().includes("phone") || message.toLowerCase().includes("номер"))
-          ) {
-            setErrors({ phone: "Похоже, в номере есть ошибка." });
-          } else if (code === "form_param_format_invalid") {
-            setErrors({ email: "Похоже, в email есть опечатка." });
-          } else {
-            setErrors({ form: message || "Не получилось создать аккаунт. Попробуй ещё раз." });
-          }
-        } else {
-          // Login error mapping
-          if (code === "form_password_incorrect") {
-            setErrors({ password: "Пароль неверный. Попробуй ещё раз." });
-          } else if (code === "form_identifier_not_found") {
-            // No account → flip to register mode automatically
-            setEmailKnown(false);
-            setMode("register");
-            setErrors({});
-          } else if (code === "session_exists") {
-            router.push(redirectAfter || "/editor");
-          } else if (code === "user_locked") {
-            setErrors({ form: "Слишком много попыток. Попробуй через несколько минут." });
-          } else {
-            setErrors({ form: message || "Не получилось войти. Попробуй ещё раз." });
-          }
-        }
+        setErrors({ form: err?.message || "Что-то пошло не так. Попробуй ещё раз." });
       }
     });
   }
@@ -258,8 +171,6 @@ export function CustomAuthForm({
       className="w-full max-w-md mx-auto bg-white rounded-3xl shadow-2xl shadow-black/10 ring-1 ring-neutral-200 p-6 sm:p-8 space-y-5"
     >
       <FieldStagger initialDelay={0.05}>
-        {/* Header — logo + dynamic title that shifts based on mode.
-            Keeping the logo always above keeps brand consistency. */}
         <div className="text-center mb-2 flex flex-col items-center">
           <div className="mb-3">
             <AnimatedLogo size="lg" withWordmark={false} />
@@ -303,7 +214,6 @@ export function CustomAuthForm({
           </p>
         </div>
 
-        {/* Email — always visible. Right-side icon shows probe state. */}
         <Field
           label="Email"
           icon={<Mail className="w-4 h-4 text-neutral-400" />}
@@ -335,8 +245,6 @@ export function CustomAuthForm({
           />
         </Field>
 
-        {/* Phone — only in register mode. AnimatePresence with height
-            animation = smooth collapse/expand when mode flips. */}
         <AnimatePresence initial={false}>
           {isRegister && (
             <motion.div
@@ -371,7 +279,6 @@ export function CustomAuthForm({
           )}
         </AnimatePresence>
 
-        {/* Password — always visible */}
         <Field
           label="Пароль"
           icon={<Lock className="w-4 h-4 text-neutral-400" />}
@@ -401,8 +308,6 @@ export function CustomAuthForm({
           </button>
         </Field>
 
-        {/* Bonus chips — only in register mode (they're a sign-up
-            incentive, not relevant for returning users). */}
         <AnimatePresence initial={false}>
           {isRegister && (
             <motion.div
@@ -426,13 +331,6 @@ export function CustomAuthForm({
         </AnimatePresence>
       </FieldStagger>
 
-      {/* No #clerk-captcha mount point on purpose. Removing it makes
-          Clerk fall back to **invisible** CAPTCHA — no checkbox, no
-          "confirm you're human" button shown to the user. Bot
-          protection still happens silently in the background.
-          To restore the Smart CAPTCHA checkbox add back:
-            <div id="clerk-captcha" /> */}
-
       <AnimatePresence>
         {errors.form && (
           <motion.div
@@ -449,7 +347,7 @@ export function CustomAuthForm({
       <ShimmerButton>
         <button
           type="submit"
-          disabled={isPending || (isRegister ? !signUpLoaded : !signInLoaded)}
+          disabled={isPending}
           className="relative w-full bg-gradient-to-r from-hermes-500 to-amber-500 hover:from-hermes-600 hover:to-amber-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-hermes-500/30 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isPending ? (
@@ -483,10 +381,6 @@ export function CustomAuthForm({
   );
 }
 
-/**
- * Field wrapper — adds optional `rightIcon` slot that lives at the
- * far right of the input row (used for probe-state indicators).
- */
 function Field({
   label,
   icon,
