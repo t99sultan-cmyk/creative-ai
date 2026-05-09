@@ -89,9 +89,13 @@ export function CustomAuthForm({
         const result = await checkEmailExists(trimmed);
         if (myToken !== probeTokenRef.current) return; // stale
         setEmailKnown(result.exists);
-        if (result.exists) {
-          setMode((m) => (m === "register" ? "login" : m));
-        }
+        // Bidirectional auto-switch:
+        //   exists  → login (no need to ask phone again)
+        //   missing → register (need phone for the new account)
+        // The phone field collapses/expands smoothly in either direction
+        // via AnimatePresence. User can still flip manually via the
+        // header link if our heuristic is wrong.
+        setMode(result.exists ? "login" : "register");
       } catch {
         if (myToken === probeTokenRef.current) setEmailKnown(null);
       } finally {
