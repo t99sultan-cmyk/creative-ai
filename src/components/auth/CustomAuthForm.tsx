@@ -15,7 +15,10 @@ import {
   ArrowRight,
   Gift,
   Sparkles,
+  HelpCircle,
+  Send,
 } from "lucide-react";
+import { SUPPORT_CONTACTS } from "@/lib/constants";
 import { registerUser, loginUser, checkEmailExists } from "@/actions/authActions";
 import { normalizeKzPhone, formatPhoneAsTyped } from "@/lib/auth/normalize-phone";
 import { FieldStagger, ShimmerButton } from "./AuthShellAnimations";
@@ -341,9 +344,23 @@ export function CustomAuthForm({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            className="rounded-xl bg-rose-50 border border-rose-200 px-3 py-2.5 text-sm text-rose-700"
+            className="rounded-xl bg-rose-50 border border-rose-200 px-3 py-2.5"
           >
-            {errors.form}
+            <p className="text-sm text-rose-700 mb-2">{errors.form}</p>
+            {/* Surface support button right next to the error so the
+                user has an immediate escape hatch instead of just
+                staring at the failure. */}
+            <a
+              href={`https://t.me/${SUPPORT_CONTACTS.TG_USERNAME}?text=${encodeURIComponent(
+                "Здравствуйте! Не получается зарегистрироваться на AICreative.kz — выходит ошибка. Помогите пожалуйста войти.",
+              )}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-[#2AABEE] hover:bg-[#1e95d5] px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Написать в Telegram — поможем войти
+            </a>
           </motion.div>
         )}
       </AnimatePresence>
@@ -367,6 +384,27 @@ export function CustomAuthForm({
           )}
         </button>
       </ShimmerButton>
+
+      {/* Always-visible support link at the bottom. Not just when an
+          error happens — sometimes users get stuck without seeing a
+          visible error (timeout, modal closes, etc.) and need a way
+          out. Pre-fills a Telegram message so the support team has
+          immediate context. */}
+      <div className="pt-2 border-t border-neutral-100 -mx-6 sm:-mx-8 px-6 sm:px-8">
+        <a
+          href={`https://t.me/${SUPPORT_CONTACTS.TG_USERNAME}?text=${encodeURIComponent(
+            isRegister
+              ? "Здравствуйте! Не получается зарегистрироваться на AICreative.kz. Помогите пожалуйста."
+              : "Здравствуйте! Не получается войти на AICreative.kz. Помогите пожалуйста.",
+          )}`}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="flex items-center justify-center gap-2 text-sm text-neutral-500 hover:text-hermes-600 font-bold transition-colors py-1"
+        >
+          <HelpCircle className="w-4 h-4" />
+          Не получается? Написать в Telegram
+        </a>
+      </div>
 
       {isRegister && (
         <p className="text-xs text-neutral-400 text-center leading-relaxed">

@@ -8,6 +8,7 @@ import { signSessionToken, setSessionCookie, clearSessionCookie } from "@/lib/au
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 import { notifyAdmin, fmt } from "@/lib/admin-notify";
 import { isRegistrationOpen } from "@/lib/flags";
+import { cookies } from "next/headers";
 
 /**
  * In-house auth server actions. Replace Clerk's useSignUp/useSignIn
@@ -162,16 +163,20 @@ export async function registerUser(input: {
 
   // Short-lived "fresh registration" cookie. Read by the client-side
   // RegistrationTracker on next mount → fires Meta Pixel
-  // CompleteRegistration → clears the cookie. Path "/" so it's visible
-  // wherever the tracker happens to mount first.
-  const cookieJar = await import("next/headers").then((m) => m.cookies());
-  cookieJar.set("fb_just_registered", "1", {
-    httpOnly: false, // pixel is browser-side; needs JS access
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 5, // 5 min — the tracker fires on the very next page load
-  });
+  // CompleteRegistration → clears the cookie.
+  try {
+    const cookieJar = await cookies();
+    cookieJar.set("fb_just_registered", "1", {
+      httpOnly: false, // pixel is browser-side; needs JS access
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 5,
+    });
+  } catch (cookieErr) {
+    // Cookie write failures shouldn't block the user from getting in.
+    console.warn("[registerUser] fb_just_registered cookie set failed:", cookieErr);
+  }
 
   // Telegram notification — fire-and-forget so a slow Telegram API
   // doesn't block the redirect.
