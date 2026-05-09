@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Menu, X } from "lucide-react";
-import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
+import { UserButton, useAuth } from "@clerk/nextjs";
 import { isRegistrationOpen } from "@/lib/flags";
 import { LandingTheme } from "@/lib/landing-themes";
 
@@ -83,18 +83,18 @@ export function LandingNavbar({
             </div>
           ) : registrationOpen ? (
             <>
-              <SignInButton mode="modal" forceRedirectUrl={theme.ctaHref} signUpForceRedirectUrl="/onboarding">
-                <button className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors">
-                  Войти
-                </button>
-              </SignInButton>
-              <SignInButton mode="modal" forceRedirectUrl={theme.ctaHref} signUpForceRedirectUrl="/onboarding">
-                <button
-                  className={`text-sm font-bold text-white ${theme.accentBg} ${theme.accentBgHover} px-5 py-2 rounded-full shadow-md transition-all`}
-                >
-                  Начать бесплатно
-                </button>
-              </SignInButton>
+              <Link
+                href="/login"
+                className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
+              >
+                Войти
+              </Link>
+              <Link
+                href="/register"
+                className={`text-sm font-bold text-white ${theme.accentBg} ${theme.accentBgHover} px-5 py-2 rounded-full shadow-md transition-all`}
+              >
+                Начать бесплатно
+              </Link>
             </>
           ) : (
             <Link
@@ -141,13 +141,13 @@ export function LandingNavbar({
                 {ctaLabel}
               </Link>
             ) : registrationOpen ? (
-              <SignInButton mode="modal" forceRedirectUrl={theme.ctaHref} signUpForceRedirectUrl="/onboarding">
-                <button
-                  className={`mt-4 text-center text-sm font-bold text-white ${theme.accentBg} px-5 py-3 rounded-xl transition-all w-full`}
-                >
-                  Начать бесплатно
-                </button>
-              </SignInButton>
+              <Link
+                href="/register"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`mt-4 text-center text-sm font-bold text-white ${theme.accentBg} px-5 py-3 rounded-xl transition-all w-full`}
+              >
+                Начать бесплатно
+              </Link>
             ) : (
               <Link
                 href="/login"

@@ -7,15 +7,11 @@ import {
   Phone,
   ArrowRight,
   PartyPopper,
-  Image as ImageIcon,
-  Pencil,
-  Palette,
   Zap,
   Smartphone,
   Laptop,
   Check,
   Clock,
-  Download,
   Send,
   Link as LinkIcon,
   AlertCircle,
@@ -26,6 +22,8 @@ import { savePhone } from "@/actions/savePhone";
 import { DeadlineBanner } from "@/components/DeadlineBanner";
 import { Confetti } from "@/components/Confetti";
 import { SUPPORT_CONTACTS } from "@/lib/constants";
+import { HowItWorksSteps } from "@/components/onboarding/HowItWorksSteps";
+import { PricingCheatsheet } from "@/components/onboarding/PricingCheatsheet";
 
 /**
  * One-shot post-signup welcome screen.
@@ -199,37 +197,20 @@ export function WelcomeOnboarding() {
           </p>
         </section>
 
-        {/* ---------------- HOW IT WORKS ---------------- */}
-        <section className="mb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-both">
-          <h2 className="text-white text-sm font-bold uppercase tracking-wider mb-4 text-center opacity-80">
-            Как это работает
-          </h2>
-          <div className="space-y-2.5">
-            <HowStep
-              num={1}
-              icon={<ImageIcon className="w-5 h-5" />}
-              title="Загрузи фото товара или услуги"
-              desc="Продукт, упаковка, блюдо, оборудование, интерьер салона — что угодно, о чём хочешь рассказать. Снимок со смартфона подойдёт: ИИ сам уберёт лишнее и доведёт до рекламного качества."
-            />
-            <HowStep
-              num={2}
-              icon={<Pencil className="w-5 h-5" />}
-              title="Опиши идею одной фразой"
-              desc="«Яркая реклама кофейни для Reels», «Скидка 50% на стоматологию», «Запуск нового курса английского». Чем конкретнее про целевую аудиторию и оффер — тем точнее попадёт в запрос."
-            />
-            <HowStep
-              num={3}
-              icon={<Palette className="w-5 h-5" />}
-              title="Выбери формат и стиль"
-              desc="9:16 для Stories и Reels, 1:1 для Instagram-ленты, 16:9 для YouTube и Facebook. Можно добавить референс — картинку стиля, под который ИИ соберёт креатив."
-            />
-            <HowStep
-              num={4}
-              icon={<Download className="w-5 h-5" />}
-              title="Скачай и запусти в рекламу"
-              desc="PNG-постер или MP4 с motion-анимацией в 4K без водяных знаков. Это не видеосъёмка и не stock — это умный рекламный пост, готовый к запуску в Meta Ads, TikTok, Яндекс.Директ и Kaspi."
-            />
-          </div>
+        {/* ---------------- HOW IT WORKS (visual mocks) ---------------- */}
+        {/* White card on the dark background — creates strong contrast
+            and lets the icon-mocks pop. Replaces the previous text-only
+            HowStep list with a more visual 4-step instruction. */}
+        <section className="mb-10 bg-white rounded-3xl p-5 sm:p-7 shadow-2xl shadow-black/30 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-both">
+          <HowItWorksSteps />
+        </section>
+
+        {/* ---------------- PRICING CHEATSHEET ---------------- */}
+        {/* Quick reference for what costs how many impulses. Lives right
+            after the steps so the user reads "how to do it" → "how much
+            it costs" in sequence, before the welcome bonus block below. */}
+        <section className="mb-10 bg-white rounded-3xl p-5 sm:p-7 shadow-2xl shadow-black/30 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-[350ms] fill-mode-both">
+          <PricingCheatsheet />
         </section>
 
         {/* ---------------- FEATURES ---------------- */}
