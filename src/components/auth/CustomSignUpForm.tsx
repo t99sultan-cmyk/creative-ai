@@ -9,9 +9,11 @@ import { useSignUp } from "@clerk/nextjs/legacy";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Eye, EyeOff, Mail, Phone, Lock, Loader2, Check, ArrowRight, Gift } from "lucide-react";
+import { Eye, EyeOff, Mail, Phone, Lock, Loader2, Check, ArrowRight, Gift } from "lucide-react";
 import { savePhone } from "@/actions/savePhone";
 import { normalizeKzPhone, formatPhoneAsTyped } from "@/lib/auth/normalize-phone";
+import { FieldStagger, ShimmerButton } from "./AuthShellAnimations";
+import { AnimatedLogo } from "./AnimatedLogo";
 
 /**
  * Custom sign-up form. Replaces Clerk's hosted <SignUp /> modal/embed
@@ -157,20 +159,21 @@ export function CustomSignUpForm({
       onSubmit={handleSubmit}
       className="w-full max-w-md mx-auto bg-white rounded-3xl shadow-2xl shadow-black/10 ring-1 ring-neutral-200 p-6 sm:p-8 space-y-5"
     >
-      <div className="text-center mb-2">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-hermes-500 to-amber-500 mb-3 shadow-lg shadow-hermes-500/30">
-          <Sparkles className="w-7 h-7 text-white" />
+      <FieldStagger initialDelay={0.05}>
+        <div className="text-center mb-2 flex flex-col items-center">
+          <div className="mb-3">
+            <AnimatedLogo size="lg" withWordmark={false} />
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-neutral-900 mb-1">
+            Регистрация — за 30 секунд
+          </h1>
+          <p className="text-sm text-neutral-500">
+            Уже есть аккаунт?{" "}
+            <Link href="/login" className="font-bold text-hermes-600 hover:underline">
+              Войти
+            </Link>
+          </p>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-neutral-900 mb-1">
-          Регистрация — за 30 секунд
-        </h1>
-        <p className="text-sm text-neutral-500">
-          Уже есть аккаунт?{" "}
-          <Link href="/login" className="font-bold text-hermes-600 hover:underline">
-            Войти
-          </Link>
-        </p>
-      </div>
 
       {/* Email */}
       <Field
@@ -248,15 +251,16 @@ export function CustomSignUpForm({
         </button>
       </Field>
 
-      {/* Bonus chips — light reinforcement of "free start" right before the CTA */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs sm:text-sm text-neutral-500 font-medium">
-        <span className="inline-flex items-center gap-1">
-          <Gift className="w-4 h-4 text-amber-500" /> 7 импульсов в подарок
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Check className="w-4 h-4 text-emerald-500" /> Без карты
-        </span>
-      </div>
+        {/* Bonus chips — light reinforcement of "free start" right before the CTA */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs sm:text-sm text-neutral-500 font-medium">
+          <span className="inline-flex items-center gap-1">
+            <Gift className="w-4 h-4 text-amber-500" /> 7 импульсов в подарок
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Check className="w-4 h-4 text-emerald-500" /> Без карты
+          </span>
+        </div>
+      </FieldStagger>
 
       {/* Clerk CAPTCHA mount point. Required when using a custom sign-up
           flow (useSignUp + signUp.create). Clerk renders Smart CAPTCHA
@@ -279,23 +283,25 @@ export function CustomSignUpForm({
         )}
       </AnimatePresence>
 
-      <button
-        type="submit"
-        disabled={isPending || !isLoaded}
-        className="w-full bg-gradient-to-r from-hermes-500 to-amber-500 hover:from-hermes-600 hover:to-amber-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-hermes-500/30 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {isPending ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Создаём аккаунт…
-          </>
-        ) : (
-          <>
-            Создать аккаунт
-            <ArrowRight className="w-5 h-5" />
-          </>
-        )}
-      </button>
+      <ShimmerButton>
+        <button
+          type="submit"
+          disabled={isPending || !isLoaded}
+          className="relative w-full bg-gradient-to-r from-hermes-500 to-amber-500 hover:from-hermes-600 hover:to-amber-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-hermes-500/30 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {isPending ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Создаём аккаунт…
+            </>
+          ) : (
+            <>
+              Создать аккаунт
+              <ArrowRight className="w-5 h-5" />
+            </>
+          )}
+        </button>
+      </ShimmerButton>
 
       <p className="text-xs text-neutral-400 text-center leading-relaxed">
         Регистрируясь, ты соглашаешься с{" "}
@@ -335,8 +341,10 @@ function Field({
         {label}
       </label>
       <div
-        className={`flex items-center gap-2.5 px-4 py-3 rounded-xl bg-neutral-50 border transition-colors ${
-          error ? "border-rose-300 bg-rose-50" : "border-neutral-200 focus-within:border-hermes-500 focus-within:bg-white"
+        className={`flex items-center gap-2.5 px-4 py-3 rounded-xl bg-neutral-50 border transition-all ${
+          error
+            ? "border-rose-300 bg-rose-50"
+            : "border-neutral-200 focus-within:border-hermes-500 focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(243,112,33,0.08)]"
         }`}
       >
         {icon}

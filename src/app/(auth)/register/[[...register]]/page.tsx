@@ -1,8 +1,10 @@
-import { Sparkles, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { isRegistrationOpen } from "@/lib/flags";
 import { MaintenanceView } from "@/components/MaintenanceView";
 import { CustomSignUpForm } from "@/components/auth/CustomSignUpForm";
+import { AnimatedLogo } from "@/components/auth/AnimatedLogo";
+import { AuthBackground } from "@/components/auth/AuthShellAnimations";
 
 /**
  * Sign-up page. Renders our own <CustomSignUpForm /> instead of Clerk's
@@ -42,12 +44,11 @@ export default async function RegisterPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-neutral-50 relative overflow-hidden">
-      {/* Soft background decorations to lift the form off the flat bg.
-          pointer-events-none so they never intercept taps on the form. */}
-      <div className="absolute top-[-10%] left-[-15%] w-[500px] h-[500px] bg-hermes-500/15 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-15%] right-[-10%] w-[400px] h-[400px] bg-amber-400/15 rounded-full blur-[100px] pointer-events-none" />
+      {/* Floating ambient blobs — depth without distraction.
+          Animated gentle drift via framer-motion, pointer-events-none. */}
+      <AuthBackground />
 
-      {/* Top Header — back-to-home + brand mark, on every device */}
+      {/* Top Header — back-to-home + animated brand mark */}
       <div className="px-6 py-5 flex items-center justify-between z-10 w-full max-w-md mx-auto">
         <Link
           href="/"
@@ -56,13 +57,8 @@ export default async function RegisterPage({
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-hermes-500 to-amber-500 flex items-center justify-center shadow-lg shadow-hermes-500/30">
-            <Sparkles className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-bold text-xl text-neutral-900 tracking-tight">AICreative</span>
-        </div>
-        <div className="w-10" /> {/* Spacer to keep brand mark centered */}
+        <AnimatedLogo size="sm" />
+        <div className="w-10" /> {/* Spacer to keep logo centered */}
       </div>
 
       {/* Form fills the rest of the viewport. flex-1 + items-center keeps
