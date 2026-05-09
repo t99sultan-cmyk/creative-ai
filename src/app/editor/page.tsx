@@ -11,12 +11,10 @@ import { refineImage } from "@/actions/refineImage";
 import { analyzeProductForBrief } from "@/actions/analyzeProductForBrief";
 import { getIsAdmin } from "@/actions/getIsAdmin";
 import {
-  ANIMATION_PRESETS,
-  AMBIENT_PRESETS,
   ACTION_PRESETS,
   type AnimationPresetId,
 } from "@/lib/models/animation-presets";
-import { HIGGSFIELD_PRESETS, type HiggsfieldPresetId } from "@/lib/models/higgsfield-presets";
+import { type HiggsfieldPresetId } from "@/lib/models/higgsfield-presets";
 import { CATEGORIES, getCategory, getScene, type CategoryId } from "@/lib/categories";
 import { ManualImageEditor } from "@/components/editor/ManualImageEditor";
 import clsx from "clsx";
@@ -2885,8 +2883,9 @@ export default function Home() {
             {(["gpt-image-2"] as const).map((m) => {
               const row = pair.variants!.filter((v) => v.model === m);
               if (row.length === 0) return null;
-              const technicalName = "GPT Image 2 (OpenAI)";
-              const label = isAdminUser ? `Результат · ${technicalName}` : "Результат";
+              // Brand-only label; never reveal the underlying model name
+              // (was "GPT Image 2 (OpenAI)" in admin view).
+              const label = "Результат · AICreative";
               const accent = "bg-neutral-900";
               return (
                 <div key={m} className="flex flex-col gap-3">
@@ -3144,184 +3143,112 @@ export default function Home() {
 
                               const failed = anim?.kind === "failed";
                               const mode: AnimMode = modeByCreative[v.creativeId] ?? "ambient";
-                              // Pick which preset list applies to the active mode.
-                              // Target uses Higgsfield presets which have their own
-                              // ID union, so we keep selection state separate.
-                              const animPresets =
-                                mode === "promo" ? ACTION_PRESETS :
-                                mode === "ambient" ? AMBIENT_PRESETS :
-                                null;
-                              const stored = presetByCreative[v.creativeId];
-                              const selectedAnimPreset = animPresets && animPresets.some((p) => p.id === stored)
-                                ? (stored as AnimationPresetId)
-                                : animPresets?.[0].id;
-                              const storedHiggs = higgsPresetByCreative[v.creativeId];
-                              const selectedHiggsPreset: HiggsfieldPresetId =
-                                HIGGSFIELD_PRESETS.some((p) => p.id === storedHiggs)
-                                  ? storedHiggs
-                                  : "cinematic";
                               const selectedDuration = durationByCreative[v.creativeId] ?? 5;
                               const promoCost = VIDEO_GEN_COST + 5; // animate + MMAudio
                               return (
                                 <>
-                                  {/* 3-mode toggle: Атмосфера (Seedance ambient) /
-                                      Промо со звуком (Seedance action + MMAudio) /
-                                      Таргет-ролик (Higgsfield DoP). */}
-                                  <div className="grid grid-cols-3 gap-1 p-0.5 bg-neutral-100 rounded-xl">
-                                    {(["ambient", "promo", "target"] as const).map((mk) => {
-                                      const active = mode === mk;
-                                      const label =
-                                        mk === "ambient" ? "Атмосфера" :
-                                        mk === "promo"   ? "🎬 Промо" :
-                                        "🎯 Таргет";
+                                  {/* Simplified animation panel (May 2026):
+                                      removed the 3-mode toggle (Атмосфера/Промо/Таргет)
+                                      and preset chips. Now: free-text prompt +
+                                      duration + sound checkbox + one button. The
+                                      hardcoded FRAME_LOCK base prompt keeps text/
+                                      composition perfectly still — only ambient
+                                      visual motion is generated.
+
+                                      Sound checkbox toggles the `mode` between
+                                      "ambient" (no sound) and "promo" (auto-
+                                      chains MMAudio after video). Using existing
+                                      mode states under the hood so polling/auto-
+                                      chain logic doesn't need to change. */}
+                                  <textarea
+                                    value={customPromptByCreative[v.creativeId!] ?? ""}
+                                    onChange={(e) =>
+                                      setCustomPromptByCreative((prev) => ({
+                                        ...prev,
+                                        [v.creativeId!]: e.target.value.slice(0, 240),
+                                      }))
+                                    }
+                                    placeholder="Опиши, что должно происходить в видео: «дым из чашки», «свет мерцает», «капли воды на упаковке». Текст и кадр останутся неподвижными."
+                                    maxLength={240}
+                                    rows={3}
+                                    className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 bg-white text-neutral-700 placeholder:text-neutral-400 resize-none focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400 leading-snug"
+                                  />
+
+                                  {/* Duration picker. Mode "promo" used to lock at
+                                      5s; we keep that lock by hiding 10/15 when
+                                      sound is on (MMAudio's quality drops past 5s). */}
+                                  <div className="grid grid-cols-3 gap-1">
+                                    {([5, 10, 15] as const).map((d) => {
+                                      const active = selectedDuration === d;
+                                      const disabled = mode === "promo" && d !== 5;
                                       return (
                                         <button
-                                          key={mk}
+                                          key={d}
                                           type="button"
+                                          disabled={disabled}
                                           onClick={() =>
-                                            setModeByCreative((prev) => ({ ...prev, [v.creativeId!]: mk }))
+                                            setDurationByCreative((prev) => ({ ...prev, [v.creativeId!]: d }))
                                           }
                                           className={clsx(
-                                            "py-1.5 px-1 rounded-lg text-xs font-bold transition-colors leading-tight",
-                                            active ? "bg-white text-purple-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700",
+                                            "py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors leading-tight",
+                                            disabled
+                                              ? "bg-neutral-100 text-neutral-300 cursor-not-allowed"
+                                              : active
+                                              ? "bg-purple-600 text-white"
+                                              : "bg-purple-50 text-purple-700 hover:bg-purple-100",
                                           )}
+                                          title={disabled ? "С озвучкой доступно только 5 сек" : undefined}
                                         >
-                                          {label}
+                                          {d} сек
                                         </button>
                                       );
                                     })}
                                   </div>
-                                  {/* Preset picker — different list per mode. */}
-                                  {mode === "target" ? (
-                                    <div className="grid grid-cols-2 gap-1">
-                                      {HIGGSFIELD_PRESETS.map((p) => {
-                                        const active = selectedHiggsPreset === p.id;
-                                        return (
-                                          <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() =>
-                                              setHiggsPresetByCreative((prev) => ({ ...prev, [v.creativeId!]: p.id }))
-                                            }
-                                            title={p.description}
-                                            className={clsx(
-                                              "py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors leading-tight",
-                                              active ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700 hover:bg-rose-100",
-                                            )}
-                                          >
-                                            {p.label}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : animPresets ? (
-                                    <div className="grid grid-cols-2 gap-1">
-                                      {animPresets.map((p) => {
-                                        const active = selectedAnimPreset === p.id;
-                                        return (
-                                          <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() =>
-                                              setPresetByCreative((prev) => ({ ...prev, [v.creativeId!]: p.id }))
-                                            }
-                                            title={p.description}
-                                            className={clsx(
-                                              "py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors leading-tight",
-                                              active ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-700 hover:bg-purple-100",
-                                            )}
-                                          >
-                                            {p.label}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : null}
-                                  {/* Duration picker — ambient and target support 5/10,
-                                      promo is locked at 5 sec (paired with sound). */}
-                                  {mode === "promo" ? (
-                                    <p className="text-xs text-neutral-500 leading-tight px-1">
-                                      5 сек · видео + звук одной кнопкой
-                                    </p>
-                                  ) : (
-                                    <div className="grid grid-cols-3 gap-1">
-                                      {/* Duration toggle — Seedance v1 Pro caps at 10 sec
-                                          natively, so a 15-sec request currently clamps
-                                          server-side to 10. Surface the 15 option in the UI
-                                          to keep the spec promise; will become a real 15
-                                          when we integrate a longer-duration model. */}
-                                      {([5, 10, 15] as const).map((d) => {
-                                        const active = selectedDuration === d;
-                                        const isTarget = mode === "target";
-                                        return (
-                                          <button
-                                            key={d}
-                                            type="button"
-                                            onClick={() =>
-                                              setDurationByCreative((prev) => ({ ...prev, [v.creativeId!]: d }))
-                                            }
-                                            className={clsx(
-                                              "py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors leading-tight",
-                                              active
-                                                ? (isTarget ? "bg-rose-600 text-white" : "bg-purple-600 text-white")
-                                                : (isTarget ? "bg-rose-50 text-rose-700 hover:bg-rose-100" : "bg-purple-50 text-purple-700 hover:bg-purple-100"),
-                                            )}
-                                          >
-                                            {d} сек
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                  {/* Free-text user override — optional. When filled, the
-                                      backend appends it after the preset prompt as
-                                      "User direction: …". Lets the user steer specifics
-                                      ("медленный flicker экрана", "дождь сильнее") on top
-                                      of the preset baseline. Capped server-side at 240
-                                      chars so the model doesn't drift on novella prompts. */}
-                                  {mode !== "promo" && (
-                                    <textarea
-                                      value={customPromptByCreative[v.creativeId!] ?? ""}
-                                      onChange={(e) =>
-                                        setCustomPromptByCreative((prev) => ({
+
+                                  {/* Sound checkbox. Toggles mode ambient ↔ promo
+                                      under the hood — when promo, the post-anim
+                                      effect auto-fires MMAudio sound generation. */}
+                                  <label className="flex items-center gap-2 px-1 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={mode === "promo"}
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setModeByCreative((prev) => ({
                                           ...prev,
-                                          [v.creativeId!]: e.target.value.slice(0, 240),
-                                        }))
-                                      }
-                                      placeholder="Своё описание (необязательно): «лёгкий flicker экрана», «дождь сильнее»…"
-                                      maxLength={240}
-                                      rows={2}
-                                      className="w-full text-xs px-2 py-1.5 rounded-lg border border-neutral-200 bg-white text-neutral-700 placeholder:text-neutral-400 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 focus:border-purple-400 leading-snug"
+                                          [v.creativeId!]: checked ? "promo" : "ambient",
+                                        }));
+                                        // Promo locks duration at 5 — coerce if needed
+                                        if (checked && selectedDuration !== 5) {
+                                          setDurationByCreative((prev) => ({ ...prev, [v.creativeId!]: 5 }));
+                                        }
+                                      }}
+                                      className="w-4 h-4 accent-purple-600"
                                     />
-                                  )}
-                                  {/* Action button — 3 branches. */}
-                                  {mode === "ambient" && (
-                                    <button
-                                      onClick={() => startAnimate(v.creativeId!)}
-                                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                      <Video className="w-3.5 h-3.5" />
-                                      {failed ? "Ошибка — повторить" : `Анимировать ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
-                                    </button>
-                                  )}
-                                  {mode === "promo" && (
-                                    <button
-                                      onClick={() => startPromo(v.creativeId!)}
-                                      className="w-full bg-gradient-to-r from-emerald-600 to-purple-600 hover:from-emerald-700 hover:to-purple-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                      <Sparkles className="w-3.5 h-3.5" />
-                                      {failed ? "Ошибка — повторить" : `Промо со звуком (${promoCost}⚡)`}
-                                    </button>
-                                  )}
-                                  {mode === "target" && (
-                                    <button
-                                      onClick={() => startTarget(v.creativeId!)}
-                                      className="w-full bg-gradient-to-r from-rose-600 to-amber-500 hover:from-rose-700 hover:to-amber-600 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                      <Video className="w-3.5 h-3.5" />
-                                      {failed ? "Ошибка — повторить" : `Таргет-ролик ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
-                                    </button>
-                                  )}
+                                    <span className="text-xs text-neutral-700 leading-tight">
+                                      Озвучить{" "}
+                                      <span className="text-neutral-400">(+5 ⚡, только 5 сек)</span>
+                                    </span>
+                                  </label>
+
+                                  {/* Single Animate button. Branches to startPromo
+                                      (with sound, fixed 5s) or startAnimate (no sound,
+                                      user-picked duration). */}
+                                  <button
+                                    onClick={() =>
+                                      mode === "promo"
+                                        ? startPromo(v.creativeId!)
+                                        : startAnimate(v.creativeId!)
+                                    }
+                                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                    {failed
+                                      ? "Ошибка — повторить"
+                                      : mode === "promo"
+                                      ? `Анимировать со звуком 5с (${promoCost}⚡)`
+                                      : `Анимировать ${selectedDuration}с (${VIDEO_GEN_COST}⚡)`}
+                                  </button>
                                 </>
                               );
                             })()}
