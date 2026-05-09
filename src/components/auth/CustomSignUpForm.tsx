@@ -133,7 +133,12 @@ export function CustomSignUpForm({
         if (code === "form_identifier_exists") {
           setErrors({ email: "Этот email уже зарегистрирован. Попробуй войти." });
         } else if (code === "form_password_pwned") {
-          setErrors({ password: "Этот пароль слишком распространён, попробуй другой." });
+          // Clerk's HaveIBeenPwned check is enabled in Dashboard. We can't
+          // bypass it from code. Soft-prompt the user to slightly vary
+          // their password instead of accusing them of a "weak" choice.
+          setErrors({
+            password: "Попробуй пароль с цифрой или символом (например, добавь !2026 к концу).",
+          });
         } else if (code === "form_password_length_too_short") {
           setErrors({ password: "Минимум 7 символов" });
         } else if (code === "form_param_format_invalid" && (message.toLowerCase().includes("phone") || message.toLowerCase().includes("номер"))) {
