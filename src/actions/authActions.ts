@@ -76,23 +76,58 @@ export async function registerUser(input: {
     return { success: false, error: "Минимум 7 символов", field: "password" };
   }
 
-  // Uniqueness check: hit the unique index. If a row already exists
-  // we tell the caller so the form can flip to login mode.
+  // Uniqueness check + legacy-account upgrade.
+  // If the email already exists, two cases:
+  //   (a) row has password_hash → real account, owner should sign in
+  //       not register again
+  //   (b) row has NO password_hash → legacy Clerk-era account, the
+  //       user can't recover the original password. Treat this signup
+  //       as "set my password and adopt this row" — preserves their
+  //       existing creatives/impulses.
   const existing = await db
-    .select({ id: users.id })
+    .select({ id: users.id, passwordHash: users.passwordHash })
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
+
+  const passwordHash = await hashPassword(password);
+
   if (existing.length > 0) {
-    return {
-      success: false,
-      error: "Этот email уже зарегистрирован — введи пароль чтобы войти.",
-      field: "email",
-    };
+    const row = existing[0];
+    if (row.passwordHash) {
+      return {
+        success: false,
+        error: "Этот email уже зарегистрирован — введи пароль чтобы войти.",
+        field: "email",
+      };
+    }
+    // Legacy upgrade — set password on the orphaned row, also (re)set
+    // phone if the form provided one. We DON'T touch impulses, name,
+    // image, welcomeShown — keep all the user's existing state.
+    try {
+      await db
+        .update(users)
+        .set({
+          passwordHash,
+          phone: input.phone || null,
+        })
+        .where(eq(users.id, row.id));
+    } catch (err) {
+      console.error("[registerUser] legacy upgrade failed:", err);
+      return { success: false, error: "Не получилось обновить аккаунт. Попробуй ещё раз." };
+    }
+
+    const token = await signSessionToken({ uid: row.id, email });
+    await setSessionCookie(token);
+
+    void notifyAdmin(
+      `🔄 *Legacy upgrade* (Clerk → in-house)\n\n*Email:* ${fmt.esc(email)}\n*ID:* \`${fmt.esc(row.id)}\``,
+    ).catch(() => {});
+
+    return { success: true, redirect: "/editor" };
   }
 
   const userId = generateUserId();
-  const passwordHash = await hashPassword(password);
   const name = email.split("@")[0];
 
   try {
