@@ -426,9 +426,12 @@ export function CustomAuthForm({
         </AnimatePresence>
       </FieldStagger>
 
-      {/* Clerk CAPTCHA mount point — required when using useSignUp.create
-          via custom flow. Hidden until challenged. */}
-      <div id="clerk-captcha" />
+      {/* No #clerk-captcha mount point on purpose. Removing it makes
+          Clerk fall back to **invisible** CAPTCHA — no checkbox, no
+          "confirm you're human" button shown to the user. Bot
+          protection still happens silently in the background.
+          To restore the Smart CAPTCHA checkbox add back:
+            <div id="clerk-captcha" /> */}
 
       <AnimatePresence>
         {errors.form && (
