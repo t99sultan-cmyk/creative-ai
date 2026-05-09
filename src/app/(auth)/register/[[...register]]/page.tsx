@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { isRegistrationOpen } from "@/lib/flags";
 import { MaintenanceView } from "@/components/MaintenanceView";
-import { CustomSignUpForm } from "@/components/auth/CustomSignUpForm";
+import { CustomAuthForm } from "@/components/auth/CustomAuthForm";
 import { AnimatedLogo } from "@/components/auth/AnimatedLogo";
 import { AuthBackground } from "@/components/auth/AuthShellAnimations";
 
@@ -66,7 +66,7 @@ export default async function RegisterPage({
           screens (< form height) the form becomes scrollable naturally
           via the parent's column flow. */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 z-10">
-        <CustomSignUpForm redirectAfter={safeRedirect} />
+        <CustomAuthForm defaultMode="register" redirectAfter={safeRedirect} />
       </div>
     </div>
   );

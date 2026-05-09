@@ -1,6 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { CustomSignInForm } from "@/components/auth/CustomSignInForm";
+import { CustomAuthForm } from "@/components/auth/CustomAuthForm";
 import { AnimatedLogo } from "@/components/auth/AnimatedLogo";
 import { AuthBackground } from "@/components/auth/AuthShellAnimations";
 
@@ -49,7 +49,7 @@ export default async function LoginPage({
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 z-10">
-        <CustomSignInForm redirectAfter={safeRedirect} />
+        <CustomAuthForm defaultMode="login" redirectAfter={safeRedirect} />
       </div>
     </div>
   );
