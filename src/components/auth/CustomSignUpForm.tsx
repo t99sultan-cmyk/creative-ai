@@ -253,6 +253,13 @@ export function CustomSignUpForm({
         </span>
       </div>
 
+      {/* Clerk CAPTCHA mount point. Required when using a custom sign-up
+          flow (useSignUp + signUp.create). Clerk renders Smart CAPTCHA
+          here when needed; without this div Clerk silently falls back
+          to invisible CAPTCHA which is less reliable. The div has zero
+          visible footprint until Clerk decides to challenge a session. */}
+      <div id="clerk-captcha" />
+
       {/* Form-level error (network failure, unexpected Clerk response, etc.) */}
       <AnimatePresence>
         {errors.form && (
