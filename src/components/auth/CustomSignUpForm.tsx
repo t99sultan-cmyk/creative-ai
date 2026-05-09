@@ -69,7 +69,7 @@ export function CustomSignUpForm({
     else if (!normalizedPhone) next.phone = "Похоже, в номере есть ошибка. Должно быть 11 цифр (например, +7 707 ...)";
 
     if (!password) next.password = "Введите пароль";
-    else if (password.length < 6) next.password = "Минимум 6 символов";
+    else if (password.length < 7) next.password = "Минимум 7 символов";
 
     setErrors(next);
     return { ok: Object.keys(next).length === 0, normalizedPhone };
@@ -135,7 +135,7 @@ export function CustomSignUpForm({
         } else if (code === "form_password_pwned") {
           setErrors({ password: "Этот пароль слишком распространён, попробуй другой." });
         } else if (code === "form_password_length_too_short") {
-          setErrors({ password: "Минимум 6 символов" });
+          setErrors({ password: "Минимум 7 символов" });
         } else if (code === "form_param_format_invalid" && (message.toLowerCase().includes("phone") || message.toLowerCase().includes("номер"))) {
           setErrors({ phone: "Похоже, в номере есть ошибка." });
         } else if (code === "form_param_format_invalid") {
@@ -218,7 +218,7 @@ export function CustomSignUpForm({
         label="Пароль"
         icon={<Lock className="w-4 h-4 text-neutral-400" />}
         error={errors.password}
-        helper="Минимум 6 символов"
+        helper="Минимум 7 символов"
       >
         <input
           type={showPassword ? "text" : "password"}
