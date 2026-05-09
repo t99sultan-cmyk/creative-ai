@@ -148,7 +148,11 @@ export async function registerUser(input: {
       `*Бонус:* +${SIGNUP_BONUS_IMPULSES} ⚡`,
   ).catch(() => {});
 
-  return { success: true, redirect: "/onboarding" };
+  // Skip /onboarding — the user already gave us email + phone in the
+  // signup form, so the welcome wizard's only purpose (capturing those
+  // contacts) is moot. Send them straight to the editor where they
+  // can spend their welcome impulses.
+  return { success: true, redirect: "/editor" };
 }
 
 /**

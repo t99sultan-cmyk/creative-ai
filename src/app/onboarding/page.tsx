@@ -1,32 +1,16 @@
-import { auth } from "@/lib/auth/clerk-compat";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { WelcomeOnboarding } from "./WelcomeOnboarding";
 
 /**
- * Post-signup welcome + phone capture.
+ * /onboarding — historically rendered the welcome wizard for first-time
+ * users (confetti + impulse counter + 4-step instructions + phone form).
+ * Removed May 2026: registration now collects email+phone in one step,
+ * so the welcome screen's main purpose (contact capture) was redundant.
  *
- * Server-component gate: if the user has already completed the welcome
- * flow (flag set by savePhone on submit), we bounce them straight to the
- * editor. This keeps /onboarding idempotent — bookmarking it or hitting
- * back later does not re-show the greeting.
- *
- * If the Clerk webhook hasn't yet landed and the DB row is missing,
- * we fall through to the welcome view; savePhone will create the row
- * on submit with welcomeShown=true.
+ * The route is kept as a permanent redirect to /editor so:
+ *   - Any old bookmarked link doesn't 404
+ *   - Any old payment-flow that used `?redirect=/onboarding` still works
+ *   - Search engines that indexed the URL get a clean redirect
  */
-export default async function OnboardingPage() {
-  const { userId } = await auth();
-  if (!userId) redirect("/register");
-
-  const row = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: { welcomeShown: true },
-  });
-
-  if (row?.welcomeShown) redirect("/editor");
-
-  return <WelcomeOnboarding />;
+export default function OnboardingPage() {
+  redirect("/editor");
 }
