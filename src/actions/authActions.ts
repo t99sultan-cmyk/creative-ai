@@ -8,7 +8,8 @@ import { signSessionToken, setSessionCookie, clearSessionCookie } from "@/lib/au
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 import { notifyAdmin, fmt } from "@/lib/admin-notify";
 import { isRegistrationOpen } from "@/lib/flags";
-import { cookies } from "next/headers";
+import { sendCapiEvent } from "@/lib/fb-capi";
+import { cookies, headers } from "next/headers";
 
 /**
  * In-house auth server actions. Replace Clerk's useSignUp/useSignIn
@@ -187,6 +188,40 @@ export async function registerUser(input: {
       `*ID:* \`${fmt.esc(userId)}\`\n` +
       `*Бонус:* +${SIGNUP_BONUS_IMPULSES} ⚡`,
   ).catch(() => {});
+
+  // Meta CAPI fire — server-side conversion. Same event_id as the
+  // browser pixel (`reg_<userId>`) so Meta dedupes them; CAPI alone
+  // catches users with ad-blockers / Safari ITP / iOS ATT where the
+  // browser pixel is silently dropped.
+  try {
+    const hdrs = await headers();
+    const cookieJar2 = await cookies();
+    const xff = hdrs.get("x-forwarded-for") || "";
+    const clientIp = xff.split(",")[0]?.trim() || undefined;
+    const clientUserAgent = hdrs.get("user-agent") || undefined;
+    const fbp = cookieJar2.get("_fbp")?.value;
+    const fbc = cookieJar2.get("_fbc")?.value;
+    void sendCapiEvent({
+      eventName: "CompleteRegistration",
+      eventId: `reg_${userId}`,
+      eventSourceUrl: "https://aicreative.kz/register",
+      user: {
+        email,
+        externalId: userId,
+        clientIp,
+        clientUserAgent,
+        fbp,
+        fbc,
+      },
+      customData: {
+        content_name: "AICreative account",
+        status: "completed",
+        registration_method: "email",
+      },
+    }).catch(() => {});
+  } catch (capiErr) {
+    console.warn("[registerUser] CAPI dispatch failed:", capiErr);
+  }
 
   // Skip /onboarding — the user already gave us email + phone in the
   // signup form, so the welcome wizard's only purpose (capturing those

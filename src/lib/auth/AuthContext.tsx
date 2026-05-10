@@ -126,13 +126,17 @@ function useCtx(): AuthContextValue {
  * fields the codebase actually destructures.
  */
 export function useAuth() {
-  const { user, isLoaded, isSignedIn, signOut } = useCtx();
+  const { user, isLoaded, isSignedIn, signOut, refresh } = useCtx();
   return {
     isLoaded,
     isSignedIn,
     userId: user?.userId ?? null,
     sessionId: user ? "session" : null,
     signOut,
+    /** Re-fetch /api/me — call after a server-side login/register so the
+     *  client-side context picks up the new session cookie immediately
+     *  (e.g. so RegistrationTracker can see the freshly-set user). */
+    refresh,
   };
 }
 

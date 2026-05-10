@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/lib/auth/AuthContext";
 import {
   Eye,
   EyeOff,
@@ -55,6 +56,7 @@ export function CustomAuthForm({
   redirectAfter?: string;
 }) {
   const router = useRouter();
+  const { refresh: refreshAuth } = useAuth();
   const [isPending, startTransition] = useTransition();
 
   const [mode, setMode] = useState<AuthMode>(defaultMode);
@@ -147,6 +149,11 @@ export function CustomAuthForm({
             : await loginUser({ email: email.trim().toLowerCase(), password });
 
         if (result.success) {
+          // Re-fetch /api/me so AuthContext picks up the freshly-set
+          // session cookie BEFORE we navigate. Without this, the client
+          // <RegistrationTracker /> sees `user = null` on the new page
+          // and the Meta-Pixel CompleteRegistration event never fires.
+          await refreshAuth();
           router.push(redirectAfter || result.redirect);
           router.refresh();
           return;
