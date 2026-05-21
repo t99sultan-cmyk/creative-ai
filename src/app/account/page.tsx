@@ -16,6 +16,9 @@ import {
   Receipt,
   Film,
   Image as ImageIcon,
+  Smartphone,
+  Clock,
+  XCircle,
 } from "lucide-react";
 import { getAccountData } from "@/actions/getAccountData";
 import { redeemPromoCode } from "@/actions/redeemPromoCode";
@@ -98,7 +101,7 @@ export default function AccountPage() {
     );
   }
 
-  const { balance, profile, promoHistory, generationStats } = data;
+  const { balance, profile, promoHistory, kaspiHistory, generationStats } = data;
 
   return (
     <main className="min-h-screen bg-neutral-50 selection:bg-hermes-200">
@@ -255,11 +258,110 @@ export default function AccountPage() {
           </div>
         </section>
 
+        {/* Kaspi push payments */}
+        <section className="bg-white rounded-3xl shadow-sm border border-neutral-100 overflow-hidden">
+          <div className="p-6 sm:p-8 border-b border-neutral-100 flex items-center gap-3">
+            <Smartphone className="w-5 h-5 text-neutral-400" />
+            <h2 className="text-lg font-black">Биллинг — оплаты Kaspi</h2>
+            <span className="text-sm text-neutral-400 font-mono">({kaspiHistory.length})</span>
+          </div>
+
+          {kaspiHistory.length === 0 ? (
+            <div className="p-8 text-center text-neutral-500">
+              <p className="text-sm">
+                Здесь будут появляться ваши оплаты через Kaspi push.{" "}
+                <Link href="/#pricing" className="font-bold text-hermes-600 hover:underline">
+                  Выбрать тариф
+                </Link>
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-neutral-100">
+              {kaspiHistory.map((tx) => {
+                const isSuccess = tx.type === "topup";
+                const isPending = tx.type === "pending" || tx.type === "topup_in_progress";
+                const isFailed = tx.type === "failed" || tx.type === "expired";
+                return (
+                  <li
+                    key={tx.id}
+                    className="px-6 sm:px-8 py-4 flex items-center justify-between gap-4"
+                  >
+                    <div className="min-w-0 flex items-start gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                          isSuccess
+                            ? "bg-green-100 text-green-700"
+                            : isPending
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {isSuccess ? (
+                          <CheckCircle2 className="w-5 h-5" />
+                        ) : isPending ? (
+                          <Clock className="w-5 h-5" />
+                        ) : (
+                          <XCircle className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-neutral-800 truncate">
+                          Тариф {tx.tierName} — {tx.amountKzt.toLocaleString("ru-RU")} ₸
+                        </p>
+                        <p className="text-xs text-neutral-500">
+                          {new Date(tx.createdAt).toLocaleString("ru-RU", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          {" · "}
+                          {isSuccess
+                            ? "Оплачено"
+                            : isPending
+                              ? "Ожидаем подтверждение"
+                              : tx.type === "expired"
+                                ? "Push истёк"
+                                : "Не прошло"}
+                          {tx.receiptUrl && isSuccess && (
+                            <>
+                              {" · "}
+                              <a
+                                href={tx.receiptUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-hermes-600 hover:underline font-bold"
+                              >
+                                Чек
+                              </a>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-extrabold shrink-0 ${
+                        isSuccess
+                          ? "bg-green-50 text-green-700"
+                          : "bg-neutral-100 text-neutral-500"
+                      }`}
+                    >
+                      {isSuccess ? `+${tx.impulses}` : tx.impulses}
+                      <Zap className="w-4 h-4" />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
         {/* Promo history */}
         <section className="bg-white rounded-3xl shadow-sm border border-neutral-100 overflow-hidden">
           <div className="p-6 sm:p-8 border-b border-neutral-100 flex items-center gap-3">
             <Receipt className="w-5 h-5 text-neutral-400" />
-            <h2 className="text-lg font-black">История пополнений</h2>
+            <h2 className="text-lg font-black">Промокоды</h2>
             <span className="text-sm text-neutral-400 font-mono">({promoHistory.length})</span>
           </div>
 

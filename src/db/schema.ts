@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, integer, boolean, real, jsonb, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, boolean, real, jsonb, serial, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const users = pgTable("user", {
   // Random nanoid-style id, generated at registration. Historically this
@@ -113,6 +114,56 @@ export const promoCodes = pgTable("promo_code", {
  * table during the new product flow (sites/presentations/products write
  * straight to this table when user clicks Publish).
  */
+/**
+ * Каждый Kaspi push-платёж: pending → topup (или failed/expired).
+ *
+ * Создаётся при выставлении счёта (POST /api/kaspi/create-invoice),
+ * финализируется в /api/kaspi/webhook когда микросервис kaspi-pos-automation
+ * сообщает об изменении статуса в Kaspi. Источник правды для финансовой
+ * отчётности — не trust users.impulses (там копится лайфтайм), а sum по
+ * этой таблице, где type='topup'.
+ *
+ * Хранит amountKzt и tierName денормализованно — тарифы могут со временем
+ * переименовываться/меняться по цене, а в истории должно остаться название
+ * и цена ровно на момент платежа.
+ *
+ * Идемпотентность вебхука: unique partial index на external_id (Kaspi
+ * operationId) гарантирует одну строку на одну операцию. Повторный
+ * webhook ретрая ловится через двухшаговый claim: UPDATE … WHERE
+ * type='pending' RETURNING — кто первый, тот и начислил.
+ */
+export const billingTransactions = pgTable(
+  "billing_transaction",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    // pending | topup_in_progress | topup | failed | expired
+    type: text("type").notNull(),
+    impulses: integer("impulses").notNull(),
+    amountKzt: integer("amount_kzt").notNull(),
+    tierName: text("tier_name").notNull(),
+    // Заполняется только при успешном topup (баланс после начисления).
+    balanceAfter: integer("balance_after"),
+    description: text("description"),
+    // Kaspi operationId (он же paymentId в webhook payload). NULL только
+    // в теории — в реальности после успешного POST в микросервис всегда есть.
+    externalId: text("external_id"),
+    phoneNumber: text("phone_number"),
+    receiptUrl: text("receipt_url"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    // История платежей юзера на /account.
+    index("idx_billing_tx_user").on(t.userId),
+    // Идемпотентность вебхука: одна Kaspi-операция = одна строка.
+    // Partial index, NULL не блокируется.
+    uniqueIndex("idx_billing_tx_external_unique")
+      .on(t.externalId)
+      .where(sql`${t.externalId} IS NOT NULL`),
+  ],
+);
+
 export const publishedPages = pgTable("published_page", {
   slug: text("slug").primaryKey(), // short slug, used in /s/{slug} or /p/{slug}
   kind: text("kind").notNull(), // "site" | "presentation"
