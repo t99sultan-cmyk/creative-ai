@@ -201,6 +201,17 @@ export type PricingTier = {
 //   Студия: 24 700 / 520  = 47.5 ₸ / импульс  (~14% scale discount)
 //   Бизнес: 49 980 / 1200 = 41.7 ₸ / импульс  (~25% scale discount)
 export const PRICING_TIERS: PricingTier[] = [
+  // TODO: убрать после end-to-end теста (добавлен временно 2026-05-22 для проверки webhook).
+  {
+    name: "Тест",
+    desc: "Проверка Kaspi push за 10 ₸",
+    priceKzt: 10,
+    priceLabel: "10 ₸",
+    impulses: 1,
+    features: ["Тестовая покупка"],
+    btn: "Тест 10 ₸",
+    action: "buy",
+  },
   {
     name: "Старт",
     desc: "Попробовать на одной нише",
