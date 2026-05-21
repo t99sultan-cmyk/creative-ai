@@ -11,7 +11,8 @@ export type AdminAction =
   | "delete_user"
   | "admin_download_creative"
   | "impersonate_user"
-  | "sync_clerk_users";
+  | "sync_clerk_users"
+  | "kaspi_payment";
 
 export type AdminAuditMeta = Record<string, unknown>;
 

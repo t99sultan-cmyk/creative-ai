@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { users, promoCodes, creatives } from "@/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { users, promoCodes, creatives, billingTransactions } from "@/db/schema";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { auth, currentUser } from "@/lib/auth/clerk-compat";
 import { SIGNUP_BONUS_IMPULSES } from "@/lib/pricing";
 
@@ -50,6 +50,30 @@ export async function getAccountData() {
       .orderBy(desc(promoCodes.usedAt))
       .limit(50);
 
+    // Kaspi push payment history. Включаем все важные статусы — юзер
+    // должен видеть и pending (в процессе оплаты), и failed/expired
+    // (понять что push не сработал и попробовать ещё раз).
+    const kaspiHistory = await db
+      .select({
+        id: billingTransactions.id,
+        type: billingTransactions.type,
+        impulses: billingTransactions.impulses,
+        amountKzt: billingTransactions.amountKzt,
+        tierName: billingTransactions.tierName,
+        balanceAfter: billingTransactions.balanceAfter,
+        receiptUrl: billingTransactions.receiptUrl,
+        createdAt: billingTransactions.createdAt,
+      })
+      .from(billingTransactions)
+      .where(
+        and(
+          eq(billingTransactions.userId, userId),
+          inArray(billingTransactions.type, ["pending", "topup_in_progress", "topup", "failed", "expired"]),
+        ),
+      )
+      .orderBy(desc(billingTransactions.createdAt))
+      .limit(50);
+
     // Aggregate: total generations so the user sees their activity.
     const genStats = await db
       .select({
@@ -69,6 +93,7 @@ export async function getAccountData() {
         isBanned: userRecord?.isBanned ?? false,
       },
       promoHistory: usedPromos,
+      kaspiHistory,
       generationStats: {
         total: genStats[0]?.total ?? 0,
         animated: genStats[0]?.animated ?? 0,

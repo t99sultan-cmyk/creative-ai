@@ -47,10 +47,16 @@ export const ANIMATED_DUAL_COST = 10;
  *   NB Pro ≈ $0.24, GPT-Image-2 medium ≈ $0.04. Total ≈ $0.28 ≈ 135 ₸.
  *   We charge 4 imp ≈ 210 ₸ → ~35% margin. Tuning is for later.
  */
-export const STATIC_IMAGE_PER_VARIANT_COST = 2;
-export const STATIC_IMAGE_MODEL_COUNT = 2;
+// Базовая стоимость одного креатива (1 вариант) — 5⚡.
+// При выборе 2 или 3 вариантов цена линейно растёт.
+//
+// Старая модель была 4⚡ за креатив; перешли на 5⚡ ради ровной арифметики
+// тарифов: Старт 45⚡ → 9 креативов (≈ "до 10"), Креатор 150⚡ → 30,
+// Студия 520⚡ → 104, Бизнес 1200⚡ → 240.
+export const STATIC_IMAGE_PER_VARIANT_COST = 5;
+export const STATIC_IMAGE_MODEL_COUNT = 1;
 export function staticImageTrioCost(variantCount: 1 | 2 | 3): number {
-  return variantCount * STATIC_IMAGE_MODEL_COUNT * STATIC_IMAGE_PER_VARIANT_COST;
+  return variantCount * STATIC_IMAGE_PER_VARIANT_COST;
 }
 
 /**
@@ -180,18 +186,20 @@ export type PricingTier = {
   action: "buy" | "free";
 };
 
-// Sanity math — v2 single-model pipeline:
-// 1 креатив (GPT Image 2) = 4⚡  (was 8 with dual Gemini+GPT)
-// 1 сайт / презентация / карточки (Claude) = 30⚡ base + 3⚡/extra element
+// Sanity math:
+// 1 креатив (1 вариант) = 5⚡
+// 1 сайт / презентация / карточки = 30⚡ base + 3⚡/extra element
 // 1 видео (Seedance) = 50⚡, 1 refine = 2-5⚡
-// Per-impulse price (unchanged):
+// Креативов на тариф (1 вариант):
+//   Старт:   45⚡   →  9 креативов
+//   Креатор: 150⚡  → 30 креативов
+//   Студия:  520⚡  → 104 креативов
+//   Бизнес:  1200⚡ → 240 креативов
+// Per-impulse price:
 //   Старт:   2 490 / 45   = 55.3 ₸ / импульс
 //   Креатор: 7 980 / 150  = 53.2 ₸ / импульс
 //   Студия: 24 700 / 520  = 47.5 ₸ / импульс  (~14% scale discount)
 //   Бизнес: 49 980 / 1200 = 41.7 ₸ / импульс  (~25% scale discount)
-// Real API cost (single-model GPT Image 2) is ~$0.04 ≈ 20 ₸ per
-// креатив. Margin ~85%. Sites/presentations/products at default count
-// ≈ $0.30 ≈ 150 ₸ → 80% margin at retail 30⚡ × 52 = 1560 ₸.
 export const PRICING_TIERS: PricingTier[] = [
   {
     name: "Старт",
@@ -200,7 +208,7 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~2 490 ₸ / месяц",
     impulses: 45,
     features: [
-      "~10 креативов в месяц (4 ⚡ каждый)",
+      "9 креативов в месяц (5 ⚡ каждый)",
       "Кнопка «Улучшить» (vision-loop, 2 ⚡)",
       "Качество 4K, без водяных знаков",
       "Обновление баланса каждый месяц",
@@ -215,7 +223,7 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~7 980 ₸ / месяц",
     impulses: 150,
     features: [
-      "~37 креативов в месяц",
+      "30 креативов в месяц",
       "Всё из Старта",
       "Все форматы (9:16, 1:1, 16:9)",
       "Видео-анимация 5 / 10 / 15 сек (50 ⚡)",
@@ -231,7 +239,7 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~24 700 ₸ / месяц",
     impulses: 520,
     features: [
-      "~130 креативов в месяц",
+      "104 креатива в месяц",
       "Всё из Креатора",
       "Приоритет в очереди (в 3× быстрее)",
       "Согласованность стиля между креативами",
@@ -246,7 +254,7 @@ export const PRICING_TIERS: PricingTier[] = [
     priceLabel: "~49 980 ₸ / месяц",
     impulses: 1200,
     features: [
-      "~300 креативов в месяц",
+      "240 креативов в месяц",
       "Всё из Студии",
       "Управление командой (до 5 пользователей)",
       "Бренд-кит: единый стиль для всей команды",

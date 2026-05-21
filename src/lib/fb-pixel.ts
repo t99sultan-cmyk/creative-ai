@@ -100,6 +100,35 @@ export function trackInitiateCheckout(tier: {
  * pricing table the landing shows, so FB campaign ROAS numbers line up
  * with what the admin dashboard reports.
  */
+/**
+ * Fire Purchase from a successful Kaspi push payment. Mirrors the
+ * server-side CAPI fire in /api/kaspi/webhook — both use `kaspi_<opId>`
+ * as event_id so Meta dedupes browser + server events for the same
+ * payment.
+ *
+ * Called by KaspiPushButton when polling sees status='topup'.
+ */
+export function trackKaspiPurchase(opts: {
+  impulses: number;
+  operationId: string;
+  amountKzt?: number;
+  tierName?: string;
+}): void {
+  const value = opts.amountKzt ?? estimateRevenueKztFromImpulses(opts.impulses);
+  trackFbEvent(
+    "Purchase",
+    {
+      value,
+      currency: FB_CURRENCY,
+      content_name: opts.tierName ? `Тариф ${opts.tierName}` : `+${opts.impulses} impulses`,
+      content_ids: opts.tierName ? [opts.tierName] : [opts.operationId],
+      content_category: "kaspi_push_payment",
+      num_items: 1,
+    },
+    `kaspi_${opts.operationId}`,
+  );
+}
+
 export function trackPurchase(opts: { impulses: number; code?: string }): void {
   const value = estimateRevenueKztFromImpulses(opts.impulses);
   // Event id matches the server-side CAPI fire in `redeemPromoCode` so
