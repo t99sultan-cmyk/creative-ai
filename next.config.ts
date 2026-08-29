@@ -29,6 +29,14 @@ const nextConfig: NextConfig = {
     deviceSizes: [375, 640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
   },
+  // Сайт студии Zeus живёт отдельным проектом и отдаётся по пути /app.
+  // Проксируем сюда, чтобы у него был адрес на основном домене.
+  async rewrites() {
+    return [
+      { source: '/app', destination: 'https://chameleon-studio-three.vercel.app/app' },
+      { source: '/app/:path*', destination: 'https://chameleon-studio-three.vercel.app/app/:path*' },
+    ];
+  },
   async headers() {
     return [
       {
